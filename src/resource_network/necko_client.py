@@ -78,7 +78,17 @@ def _donor_paths():
         if packaged is not None:
             binary = packaged
         elif repo is not None:
-            binary = repo.parent / "firefox-159" / "obj-necko" / "dist" / "bin" / "xpcshell"
+            candidates = [
+                repo.parent / "firefox-src" / "firefox-159.0" / "obj-necko" / "dist" / "bin" / "xpcshell",
+                repo.parent / "firefox-159" / "obj-necko" / "dist" / "bin" / "xpcshell",
+                repo.parent / "firefox-159.0" / "obj-necko" / "dist" / "bin" / "xpcshell",
+            ]
+            for candidate in candidates:
+                if candidate.is_file():
+                    binary = candidate
+                    break
+            else:
+                binary = repo.parent / "firefox-159" / "obj-necko" / "dist" / "bin" / "xpcshell"
         else:
             raise NeckoError("Necko donor xpcshell was not found")
     return binary, script
@@ -106,7 +116,7 @@ class _Raw:
 class NeckoResponse:
     def __init__(self, status: int, payload: bytes, version: int, headers: list[tuple[str, str]]):
         self.status_code = status
-        self.headers = {}
+        self.headers = {k: v for k, v in headers}
         self.raw = _Raw(payload, version, headers)
 
     def close(self) -> None:

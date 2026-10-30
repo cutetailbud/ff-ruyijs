@@ -129,7 +129,7 @@ function fetchOne(method, url, headers, body, budgetMs) {
     contentPolicyType: Ci.nsIContentPolicy.TYPE_OTHER,
   }).QueryInterface(Ci.nsIHttpChannel);
   if (channel instanceof Ci.nsIEncodedChannel) channel.applyConversion = false;
-  channel.redirectionLimit = 0;
+  channel.redirectionLimit = 20;
   channel.loadFlags |= Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_CACHING;
   channel.requestMethod = method;
   for (const [name, value] of headers) channel.setRequestHeader(name, value, false);
