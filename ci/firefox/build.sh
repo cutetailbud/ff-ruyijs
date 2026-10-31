@@ -30,7 +30,8 @@ case "$part" in
     # configure wrote. Consecutive directories go to one mach call; "DIR TARGET"
     # steps link just that library (building all of security/ would recurse
     # into the rest of Gecko's security code).
-    python3 "$here/deps.py" "$root/obj/browser" > "$root/obj/browser-steps.txt"
+    # (Windows' Python prints CRLF; bash would keep the  in the last field.)
+    python3 "$here/deps.py" "$root/obj/browser" | tr -d '' > "$root/obj/browser-steps.txt"
     cat "$root/obj/browser-steps.txt"
     batch=()
     flush() { if [ ${#batch[@]} -gt 0 ]; then mach build --allow-subdirectory-build "${batch[@]}"; batch=(); fi; }
