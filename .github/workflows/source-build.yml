@@ -32,13 +32,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # keyfiles: what the cached build depends on besides the Firefox commit.
           - part: js
             path: obj/js
-            keyfiles: ci/firefox/mozconfig.js-windows
           - part: browser
             path: obj/firefox-parts
-            keyfiles: ci/firefox/**
     steps:
       - name: Prepare runner
         run: |
@@ -72,7 +69,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.path }}
-          key: firefox-${{ matrix.part }}-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles(matrix.keyfiles) }}
+          # Besides the Firefox commit, SpiderMonkey depends only on its mozconfig;
+          # the browser parts also on the shared build scripts.
+          key: firefox-${{ matrix.part }}-windows-${{ steps.firefox.outputs.sha }}-${{ matrix.part == 'js' && hashFiles('ci/firefox/windows/mozconfig.js') || hashFiles('ci/firefox/windows/mozconfig.browser', 'ci/firefox/*') }}
 
       - name: Install MozillaBuild
         if: steps.cache.outputs.cache-hit != 'true'
@@ -149,14 +148,14 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: obj/js
-          key: firefox-js-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/mozconfig.js-windows') }}
+          key: firefox-js-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/windows/mozconfig.js') }}
           fail-on-cache-miss: true
 
       - name: Restore Skia and NSS
         uses: actions/cache/restore@v4
         with:
           path: obj/firefox-parts
-          key: firefox-browser-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/**') }}
+          key: firefox-browser-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/windows/mozconfig.browser', 'ci/firefox/*') }}
           fail-on-cache-miss: true
 
       - name: Install MozillaBuild
@@ -186,21 +185,40 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-ChildItem dist | Format-Table Name, Length
 
-      - name: Smoke test with the pinned Necko runtime
+      - name: Assemble the runtime archive
         run: |
-          python -c "import sys; sys.path.insert(0, 'tools'); from pathlib import Path; from wheel_runtime import obtain_runtime; print(obtain_runtime(Path('.')))"
-          Copy-Item build/pinned-runtime/vendor -Destination . -Recurse -Force
-          $env:PYTHONPATH = "$PWD\python"
-          python ci/smoke_test.py
+          python ci/package/runtime.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Upload binaries
+      - name: Build the wheel
+        run: |
+          python -m pip install --quiet "setuptools>=77" wheel
+          $env:RUYIJS_BUILD_RUNTIME_ARCHIVE = (Get-ChildItem build/ci-runtime/*.zip).FullName
+          python -m pip wheel --no-deps --no-build-isolation -w wheelhouse .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem wheelhouse | Format-Table Name, Length
+
+      - name: Test the installed wheel
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -m venv wheel-test
+          $wheel = (Get-ChildItem "$env:GITHUB_WORKSPACE\wheelhouse\*.whl").FullName
+          wheel-test\Scripts\python.exe -m pip install --quiet --no-index $wheel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+          wheel-test\Scripts\python.exe -c "import ruyijs; print(ruyijs.__version__, ruyijs.get_runtime_path())"
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\smoke_test.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload the wheel and runtime
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ruyijs-windows
           path: |
-            dist/js.exe
-            dist/ruyijs_client.dll
+            wheelhouse/*.whl
+            build/ci-runtime/*.zip
+            build/ci-runtime/runtime.json
             artifacts/build-runtime.json
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 14

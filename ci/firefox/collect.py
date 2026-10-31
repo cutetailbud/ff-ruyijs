@@ -2,12 +2,13 @@
 
 usage: collect.py OBJDIR OUTPUT
 
-OUTPUT receives:
-  gfx/skia/*.obj (or *.o)  Firefox's compiled Skia (tools/build.py --firefox-gfx-obj OUTPUT)
+OUTPUT keeps the objdir layout, so it can stand in for the browser objdir
+(tools/build.py --firefox-gfx-obj OUTPUT):
+  gfx/skia/*.obj (or *.o)  Firefox's compiled Skia
   config/autoconf.mk       records the Firefox version of those objects
-  nss-sdk/bin              nss3, softokn3, freebl3 and mozglue as Firefox ships them
-  nss-sdk/lib              their import libraries
-  nss-sdk/include/{nss,nspr}
+  dist/bin                 nss3, softokn3, freebl3 and mozglue as Firefox ships them
+  dist/lib                 their import libraries (Windows)
+  dist/include/{nss,nspr}  the NSS and NSPR headers
 """
 import shutil
 import sys
@@ -41,19 +42,19 @@ else:
     binaries = [f"lib{name}{suffix}" for name in ("nss3", "softokn3", "freebl3", "mozglue")]
     libraries = []
 for name in binaries:
-    copy(objdir / "dist/bin" / name, output / "nss-sdk/bin" / name)
+    copy(objdir / "dist/bin" / name, output / "dist/bin" / name)
 # A partial build does not run the tier that installs import libraries into
 # dist/lib; they are taken from the directory that linked them.
 LINKED_IN = {"nss3.lib": "security", "mozglue.lib": "mozglue/build"}
 for name in libraries:
     installed = objdir / "dist/lib" / name
     copy(installed if installed.is_file() else objdir / LINKED_IN[name] / name,
-         output / "nss-sdk/lib" / name)
+         output / "dist/lib" / name)
 for name in ("nss", "nspr"):
     source = objdir / "dist/include" / name
     if not source.is_dir():
         raise SystemExit(f"missing: {source}")
-    shutil.copytree(source, output / "nss-sdk/include" / name)
+    shutil.copytree(source, output / "dist/include" / name)
 
 files = [p for p in output.rglob("*") if p.is_file()]
 size = sum(p.stat().st_size for p in files)

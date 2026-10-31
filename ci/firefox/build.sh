@@ -15,7 +15,7 @@ case "$(uname -s)" in
   Darwin) platform=macos ;;
   *) platform=linux ;;
 esac
-export MOZCONFIG="$here/mozconfig.$part-$platform"
+export MOZCONFIG="$here/$platform/mozconfig.$part"
 [ -f "$MOZCONFIG" ] || { echo "no $MOZCONFIG" >&2; exit 1; }
 export MACH_NO_TERMINAL_FOOTER=1
 cd "$root/firefox"
@@ -26,14 +26,17 @@ case "$part" in
   browser)
     mach configure
     mach build pre-export export
-    # Only the directories that make Skia, NSS/NSPR and mozglue, in link order.
-    # Consecutive plain directories go to one mach call; "DIR TARGET" lines
-    # build just that make target in DIR.
+    # Only what makes Skia, NSS/NSPR and mozglue: deps.py reads the link lists
+    # configure wrote. Consecutive directories go to one mach call; "DIR TARGET"
+    # steps link just that library (building all of security/ would recurse
+    # into the rest of Gecko's security code).
+    python3 "$here/deps.py" "$root/obj/browser" > "$root/obj/browser-steps.txt"
+    cat "$root/obj/browser-steps.txt"
     batch=()
     flush() { if [ ${#batch[@]} -gt 0 ]; then mach build --allow-subdirectory-build "${batch[@]}"; batch=(); fi; }
     while read -r dir target; do
       if [ -n "$target" ]; then flush; mach build --directory "$dir" "$target"; else batch+=("$dir"); fi
-    done < <(grep -Ev '^[[:space:]]*(#|$)' "$here/browser-dirs.$platform")
+    done < "$root/obj/browser-steps.txt"
     flush
     python3 "$here/collect.py" "$root/obj/browser" "$root/obj/firefox-parts" ;;
   toolchain)
