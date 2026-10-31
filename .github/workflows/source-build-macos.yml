@@ -66,6 +66,13 @@ jobs:
           # the browser parts also on the shared build scripts.
           key: firefox-${{ matrix.part }}-macos-${{ steps.firefox.outputs.sha }}-${{ matrix.part == 'js' && hashFiles('ci/firefox/macos/mozconfig.js') || hashFiles('ci/firefox/macos/mozconfig.browser', 'ci/firefox/*') }}
 
+      # mach's virtualenvs build rtoml with PyO3, which does not support the
+      # runner's default Python 3.15 yet.
+      - uses: actions/setup-python@v5
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          python-version: "3.12"
+
       - name: Build ${{ matrix.part }}
         if: steps.cache.outputs.cache-hit != 'true'
         run: bash ci/firefox/build.sh ${{ matrix.part }}
