@@ -42,8 +42,13 @@ else:
     libraries = []
 for name in binaries:
     copy(objdir / "dist/bin" / name, output / "nss-sdk/bin" / name)
+# A partial build does not run the tier that installs import libraries into
+# dist/lib; they are taken from the directory that linked them.
+LINKED_IN = {"nss3.lib": "security", "mozglue.lib": "mozglue/build"}
 for name in libraries:
-    copy(objdir / "dist/lib" / name, output / "nss-sdk/lib" / name)
+    installed = objdir / "dist/lib" / name
+    copy(installed if installed.is_file() else objdir / LINKED_IN[name] / name,
+         output / "nss-sdk/lib" / name)
 for name in ("nss", "nspr"):
     source = objdir / "dist/include" / name
     if not source.is_dir():

@@ -1,4 +1,5 @@
 # Objdir directories built after the export tier, in link order (Windows).
+# A line "DIR TARGET" builds only that make target in DIR.
 # NSPR, folded into nss3 on Windows
 config/external/nspr/ds
 config/external/nspr/libc
@@ -30,8 +31,9 @@ security/nss/lib/pki/pki_nsspki
 security/nss/lib/smime/smime_smime
 security/nss/lib/ssl/ssl_ssl
 security/nss/lib/util/util_nssutil
-# nss3.dll
-security
+# nss3.dll only: building all of security/ would recurse into security/rlbox,
+# security/manager and the rest of Gecko's security code.
+security ../dist/bin/nss3.dll
 # freebl3.dll and softokn3.dll link nss3.lib
 security/nss/lib/freebl/freebl_crux
 security/nss/lib/freebl/freebl_hw-acc-crypto-avx

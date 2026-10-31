@@ -19,7 +19,7 @@ export MOZCONFIG="$here/mozconfig.$part-$platform"
 [ -f "$MOZCONFIG" ] || { echo "no $MOZCONFIG" >&2; exit 1; }
 export MACH_NO_TERMINAL_FOOTER=1
 cd "$root/firefox"
-mach() { ./mach --no-interactive "$@"; }
+mach() { ./mach --no-interactive "$@" </dev/null; }
 case "$part" in
   js)
     mach build ;;
@@ -27,8 +27,14 @@ case "$part" in
     mach configure
     mach build pre-export export
     # Only the directories that make Skia, NSS/NSPR and mozglue, in link order.
-    mapfile -t dirs < <(grep -Ev '^[[:space:]]*(#|$)' "$here/browser-dirs.$platform")
-    mach build --allow-subdirectory-build "${dirs[@]}"
+    # Consecutive plain directories go to one mach call; "DIR TARGET" lines
+    # build just that make target in DIR.
+    batch=()
+    flush() { if [ ${#batch[@]} -gt 0 ]; then mach build --allow-subdirectory-build "${batch[@]}"; batch=(); fi; }
+    while read -r dir target; do
+      if [ -n "$target" ]; then flush; mach build --directory "$dir" "$target"; else batch+=("$dir"); fi
+    done < <(grep -Ev '^[[:space:]]*(#|$)' "$here/browser-dirs.$platform")
+    flush
     python3 "$here/collect.py" "$root/obj/browser" "$root/obj/firefox-parts" ;;
   toolchain)
     mach configure ;;
