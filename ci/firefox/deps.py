@@ -63,22 +63,23 @@ if missing:
     raise SystemExit(f"no backend.mk links {missing} under {objdir}")
 
 link_dirs = {info["dir"] for info in libraries.values()}
-object_dirs = []
+emitted = set()
+# Per library, in link order: its object directories, then its link step.
+# Building an object directory may link a sibling library whose directory
+# name extends it (freebl_freebl -> freebl_freebl3 on macOS), so nothing of
+# a later library is built before the libraries it links exist.
 for name in WANTED:
     info = libraries[name]
-    for path in info["objects"]:
-        d = rel(path.parent)
-        if d not in link_dirs and d not in object_dirs:
-            object_dirs.append(d)
-    for path in info["linked"]:
-        # A static library such as pure_virtual is built by its own directory;
-        # the import libraries of the wanted DLLs come from their link step.
-        d = rel(path.parent)
-        if library_name(path) not in WANTED and d not in object_dirs:
-            object_dirs.append(d)
-
-for d in sorted(object_dirs):
-    print(d)
-for name in WANTED:
-    print(libraries[name]["dir"], libraries[name]["target"])
+    needed = [rel(path.parent) for path in info["objects"]]
+    # A static library such as pure_virtual is built by its own directory;
+    # the import libraries of the wanted DLLs come from their link step.
+    needed += [rel(path.parent) for path in info["linked"] if library_name(path) not in WANTED]
+    # A directory that prefixes a link directory goes last in its group: by
+    # then every object of the library it may link is built.
+    prefixes = lambda d: any(other != d and other.startswith(d) for other in link_dirs)
+    for d in sorted(set(needed), key=lambda d: (prefixes(d), d)):
+        if d not in link_dirs and d not in emitted:
+            print(d)
+            emitted.add(d)
+    print(info["dir"], info["target"])
 print("gfx/skia")
