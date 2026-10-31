@@ -35,10 +35,30 @@ def donor_bin(project: Path) -> Path:
     return project.parent / "firefox-159" / "obj-necko" / "dist" / "bin"
 
 
+# Firefox's NSS beside libnecko_core.dylib and libnecko_quic.dylib (both have
+# an @loader_path rpath); tools/build.py --necko-core-only links them into
+# dist/necko_tls.
+NSS_FILES = ("libnss3.dylib", "libmozglue.dylib", "libfreebl3.dylib", "libsoftokn3.dylib")
+
+
 def stage_necko(dest: Path, donor: Path, script: Path) -> None:
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
+    tls_dist = script.parents[2] / "dist" / "necko_tls"
+    if not (donor / "xpcshell").is_file():
+        # No browser build with xpcshell (e.g. CI, where XUL does not fit the
+        # runners): direct HTTPS, HTTP/3 and cleartext use the Necko libraries;
+        # a proxy request raises NeckoError("Necko donor xpcshell was not found").
+        for name in ("libnecko_core.dylib", *NSS_FILES):
+            if not (tls_dist / name).exists():
+                raise FileNotFoundError(f"dist/necko_tls is missing {name}")
+            shutil.copy2(tls_dist / name, dest / name)
+        quic = tls_dist / "libnecko_quic.dylib"
+        if quic.is_file():
+            shutil.copy2(quic, dest / "libnecko_quic.dylib")
+        print("macOS wheel: no xpcshell donor; proxies are not available")
+        return
     for name in NECKO_FILES:
         source = donor / name
         if not source.is_file():
@@ -52,7 +72,6 @@ def stage_necko(dest: Path, donor: Path, script: Path) -> None:
     if not script.is_file():
         raise FileNotFoundError("Necko fetch script is missing")
     shutil.copy2(script, dest / "necko_fetch.js")
-    tls_dist = script.parents[2] / "dist" / "necko_tls"
     core = tls_dist / "libnecko_core.dylib"
     if core.is_file():
         shutil.copy2(core, dest / "libnecko_core.dylib")

@@ -33,6 +33,10 @@ if not objects:
 for path in objects:
     copy(path, output / "gfx/skia" / path.name)
 copy(objdir / "config/autoconf.mk", output / "config/autoconf.mk")
+# The vendored-crates source replacement configure wrote; the macOS HTTP/3
+# library (tools/build_necko_quic.py) builds Neqo offline with it.
+if (objdir / ".cargo/config.toml").is_file():
+    copy(objdir / ".cargo/config.toml", output / ".cargo/config.toml")
 
 if windows:
     binaries = ["nss3.dll", "softokn3.dll", "freebl3.dll", "mozglue.dll"]

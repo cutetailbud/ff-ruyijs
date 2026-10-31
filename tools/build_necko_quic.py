@@ -46,6 +46,18 @@ _FIXTURE_BLOCK = re.compile(
 )
 
 
+def firefox_source(root: Path) -> Path:
+    """The Firefox 159 source tree: RUYIJS_FIREFOX_SRC, the firefox/ submodule,
+    or the sibling firefox-159 checkout of the maintainer layout."""
+    override = os.environ.get("RUYIJS_FIREFOX_SRC", "")
+    if override:
+        return Path(override)
+    submodule = root / "firefox"
+    if (submodule / "config" / "milestone.txt").is_file():
+        return submodule
+    return root.parent / "firefox-159"
+
+
 def _donor(root: Path) -> Path:
     override = os.environ.get("RUYIJS_DONOR_OBJ", "")
     if override:
@@ -129,7 +141,7 @@ def _patches(root: Path) -> str:
         raise SystemExit("crate patch table is missing")
     end = text.find('\n[patch."', start + 1)
     section = text[start:] if end < 0 else text[start:end]
-    firefox = (root.parent / "firefox-159").resolve().as_posix()
+    firefox = firefox_source(root).resolve().as_posix()
     return section.replace("../../../firefox-159", firefox).rstrip() + "\n"
 
 
@@ -286,7 +298,7 @@ def main() -> None:
     donor = _donor(root)
     if not (donor / "dist" / "bin" / "libnss3.dylib").is_file():
         raise SystemExit("donor NSS library is missing")
-    donor_rust = root.parent / "firefox-159" / "third_party" / "rust"
+    donor_rust = firefox_source(root) / "third_party" / "rust"
     nss_crate = (donor_rust / "nss-rs").resolve()
     if not (nss_crate / "Cargo.toml").is_file():
         raise SystemExit("vendored nss-rs crate is missing")
@@ -595,7 +607,7 @@ def _patch_transport(crate: Path) -> None:
 
 
 def _build_zstd(root: Path) -> Path:
-    lib = root.parent / "firefox-159" / "third_party" / "zstd" / "lib"
+    lib = firefox_source(root) / "third_party" / "zstd" / "lib"
     out = Path("/tmp/neqo-hello-zstd")
     if out.exists():
         shutil.rmtree(out)
@@ -654,7 +666,7 @@ def build_library() -> None:
     donor = _donor(root)
     if not (donor / "dist" / "bin" / "libnss3.dylib").is_file():
         raise SystemExit("donor NSS library is missing")
-    donor_rust = root.parent / "firefox-159" / "third_party" / "rust"
+    donor_rust = firefox_source(root) / "third_party" / "rust"
     nss_crate = (donor_rust / "nss-rs").resolve()
     if not (nss_crate / "Cargo.toml").is_file():
         raise SystemExit("vendored nss-rs crate is missing")

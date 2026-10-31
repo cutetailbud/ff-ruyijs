@@ -82,7 +82,10 @@ def build_necko_core(root, necko_obj):
     necko_obj = Path(necko_obj)
     libdir = necko_obj / "dist" / "bin"
     include = necko_obj / "dist" / "include"
+    # NSPR's source headers: the tree the objdir sits in, else the firefox/ submodule.
     nspr_source = necko_obj.parent / "nsprpub" / "pr" / "include"
+    if not nspr_source.is_dir():
+        nspr_source = root / "firefox" / "nsprpub" / "pr" / "include"
     sources = [
         root / "native" / "necko_tls" / "necko_tls.c",
         root / "native" / "necko_tls" / "necko_exchange.c",

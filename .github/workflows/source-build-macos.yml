@@ -1,0 +1,175 @@
+name: Source build (macOS)
+
+# Builds ruyijs for Apple Silicon from the official Firefox release in the
+# firefox/ submodule: SpiderMonkey, Skia and NSS come from that source tree,
+# libnecko_core/libnecko_quic from native/ against that NSS. The wheel has no
+# xpcshell (XUL does not fit the runners), so proxies are not available.
+on:
+  push:
+    branches: [ci/macos]
+  workflow_dispatch:
+
+concurrency:
+  group: source-build-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  firefox-macos:
+    name: Firefox ${{ matrix.part }} (macOS)
+    runs-on: macos-26
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: js
+            path: obj/js
+          - part: browser
+            path: obj/firefox-parts
+    steps:
+      - name: Runner facts
+        run: |
+          echo "CPUs: $(sysctl -n hw.ncpu)  RAM: $(( $(sysctl -n hw.memsize) / 1073741824 )) GB"
+          df -h "$GITHUB_WORKSPACE"
+          xcodebuild -version
+          xcrun --show-sdk-path
+
+      - uses: actions/checkout@v4
+
+      - name: Fetch Firefox (the submodule commit only)
+        id: firefox
+        run: |
+          sha=$(git ls-tree HEAD firefox | awk '{print $3}')
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          git init -q firefox
+          git -C firefox remote add origin https://github.com/mozilla-firefox/firefox.git
+          for attempt in 1 2 3; do
+            git -C firefox fetch --depth 1 --no-tags origin "$sha" && break
+            sleep 30
+          done
+          git -C firefox -c checkout.workers=0 checkout -q --detach FETCH_HEAD
+          git -C firefox log -1 --format='%H %cI'
+
+      - name: Restore ${{ matrix.part }} build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.path }}
+          # Besides the Firefox commit, SpiderMonkey depends only on its mozconfig;
+          # the browser parts also on the shared build scripts.
+          key: firefox-${{ matrix.part }}-macos-${{ steps.firefox.outputs.sha }}-${{ matrix.part == 'js' && hashFiles('ci/firefox/macos/mozconfig.js') || hashFiles('ci/firefox/macos/mozconfig.browser', 'ci/firefox/*') }}
+
+      - name: Build ${{ matrix.part }}
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: bash ci/firefox/build.sh ${{ matrix.part }}
+
+      - name: Disk after build
+        if: always()
+        run: |
+          df -h "$GITHUB_WORKSPACE"
+          du -sh obj/* "$HOME/.mozbuild" 2>/dev/null || true
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firefox-${{ matrix.part }}-macos-logs
+          path: obj/*/config.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ruyijs-macos:
+    name: ruyijs (macOS)
+    needs: firefox-macos
+    runs-on: macos-26
+    timeout-minutes: 240
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "26.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch Firefox (the submodule commit only)
+        id: firefox
+        run: |
+          sha=$(git ls-tree HEAD firefox | awk '{print $3}')
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          git init -q firefox
+          git -C firefox remote add origin https://github.com/mozilla-firefox/firefox.git
+          for attempt in 1 2 3; do
+            git -C firefox fetch --depth 1 --no-tags origin "$sha" && break
+            sleep 30
+          done
+          git -C firefox -c checkout.workers=0 checkout -q --detach FETCH_HEAD
+
+      - name: Restore SpiderMonkey build
+        uses: actions/cache/restore@v4
+        with:
+          path: obj/js
+          key: firefox-js-macos-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/macos/mozconfig.js') }}
+          fail-on-cache-miss: true
+
+      - name: Restore Skia and NSS
+        uses: actions/cache/restore@v4
+        with:
+          path: obj/firefox-parts
+          key: firefox-browser-macos-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/macos/mozconfig.browser', 'ci/firefox/*') }}
+          fail-on-cache-miss: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bootstrap the SpiderMonkey toolchains
+        run: bash ci/firefox/build.sh toolchain
+
+      - name: Necko helper venv
+        run: |
+          mkdir -p vendor/necko-derived/wheels
+          python3.12 -m pip download --quiet -d vendor/necko-derived/wheels \
+            requests brotli zstandard h2 cryptography backports.zstd publicsuffixlist
+          python3.12 -B tools/bootstrap_macos_helper.py
+
+      - name: Build dist/js and libruyijs_client.dylib
+        run: python3.12 -B tools/build.py --donor-obj obj/js --toolchain-bin "$HOME/.mozbuild/clang/bin" --firefox-gfx-obj obj/firefox-parts
+
+      - name: Build libnecko_core.dylib
+        run: python3.12 -B tools/build.py --necko-core-only --firefox-gfx-obj obj/firefox-parts
+
+      - name: Build libnecko_quic.dylib
+        env:
+          RUYIJS_DONOR_OBJ: ${{ github.workspace }}/obj/firefox-parts
+        run: python3.12 -B tools/build_necko_quic.py library
+
+      - name: Build the wheel
+        run: |
+          python3.12 -m pip install --quiet "setuptools>=77" wheel
+          python3.12 -m pip wheel --no-deps --no-build-isolation -w wheelhouse .
+          ls -la wheelhouse
+
+      - name: Test the installed wheel
+        working-directory: ${{ runner.temp }}
+        run: |
+          python3.12 -m venv wheel-test
+          wheel-test/bin/python -m pip install --quiet "$GITHUB_WORKSPACE"/wheelhouse/*.whl
+          unset PYTHONPATH
+          wheel-test/bin/python -c "import ruyijs; print(ruyijs.__version__, ruyijs.get_runtime_path())"
+          wheel-test/bin/python "$GITHUB_WORKSPACE/ci/smoke_test.py"
+          wheel-test/bin/python "$GITHUB_WORKSPACE/ci/network_smoke.py"
+
+      - name: Upload the wheel
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruyijs-macos
+          path: |
+            wheelhouse/*.whl
+            artifacts/build-runtime.json
+          if-no-files-found: ignore
+          retention-days: 14
