@@ -1,0 +1,2 @@
+# Shell scripts run under bash on every platform, including Windows checkouts.
+*.sh text eol=lf

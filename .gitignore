@@ -1,4 +1,6 @@
 /build/
+# Firefox objdirs of the source build (ci/firefox/build.sh).
+/obj/
 /dist/
 /dist-*/
 /result/

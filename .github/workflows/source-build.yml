@@ -1,0 +1,201 @@
+name: Source build
+
+# Builds ruyijs from the official Firefox release in the firefox/ submodule:
+# SpiderMonkey, Skia and NSS come from that source tree, built on the runner.
+on:
+  push:
+    branches: [ci/source-build]
+  workflow_dispatch:
+
+concurrency:
+  group: source-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  MOZILLABUILD_VERSION: "4.2.1"
+  # mach keeps its bootstrapped toolchains here; tools/build.py uses the same clang.
+  MOZBUILD_STATE_PATH: C:\mozbuild
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  firefox-windows:
+    name: Firefox ${{ matrix.part }} (Windows)
+    runs-on: windows-2025
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: js
+            path: obj/js
+          - part: browser
+            path: obj/firefox-parts
+    steps:
+      - name: Prepare runner
+        run: |
+          Write-Host "CPUs: $env:NUMBER_OF_PROCESSORS"
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name, @{n='UsedGB';e={[math]::Round($_.Used/1GB,1)}}, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}}
+          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v4
+
+      - name: Fetch Firefox (the submodule commit only)
+        id: firefox
+        run: |
+          $sha = ((git ls-tree HEAD firefox) -split '\s+')[2]
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          git init -q firefox
+          foreach ($attempt in 1..3) {
+            git -C firefox fetch --depth 1 --no-tags https://github.com/mozilla-firefox/firefox.git $sha
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds 30
+          }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          git -C firefox -c checkout.workers=0 checkout -q --detach FETCH_HEAD
+          git -C firefox log -1 --format="%H %cI"
+          Get-Content firefox/config/milestone.txt -Tail 1
+
+      - name: Restore ${{ matrix.part }} build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.path }}
+          key: firefox-${{ matrix.part }}-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/**') }}
+
+      - name: Install MozillaBuild
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $setup = "$env:RUNNER_TEMP\MozillaBuildSetup.exe"
+          Invoke-WebRequest "https://ftp.mozilla.org/pub/mozilla/libraries/win32/MozillaBuildSetup-$env:MOZILLABUILD_VERSION.exe" -OutFile $setup
+          Start-Process $setup -ArgumentList '/S' -Wait
+          if (-not (Test-Path C:\mozilla-build\msys2\usr\bin\bash.exe)) { throw "MozillaBuild was not installed" }
+
+      - name: Build ${{ matrix.part }}
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          MOZILLABUILD: C:\mozilla-build\
+          MSYS2_PATH_TYPE: inherit
+          CHERE_INVOKING: "1"
+        run: |
+          $env:PATH = "C:\mozilla-build\bin;C:\mozilla-build\python3;C:\mozilla-build\msys2\usr\bin;$env:PATH"
+          & C:\mozilla-build\msys2\usr\bin\bash.exe --login -eo pipefail -c "bash ci/firefox/build.sh ${{ matrix.part }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Disk after build
+        if: always()
+        run: |
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name, @{n='UsedGB';e={[math]::Round($_.Used/1GB,1)}}, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}}
+          foreach ($dir in 'obj/js', 'obj/browser', 'obj/firefox-parts', $env:MOZBUILD_STATE_PATH) {
+            if (Test-Path $dir) {
+              $bytes = (Get-ChildItem $dir -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+              Write-Host ("{0,-28} {1,8:N2} GB" -f $dir, ($bytes / 1GB))
+            }
+          }
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firefox-${{ matrix.part }}-windows-logs
+          path: |
+            obj/*/config.log
+            obj/*/.mozbuild/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ruyijs-windows:
+    name: ruyijs (Windows)
+    needs: firefox-windows
+    runs-on: windows-2025
+    timeout-minutes: 240
+    steps:
+      - name: Prepare runner
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v4
+
+      - name: Fetch Firefox (the submodule commit only)
+        id: firefox
+        run: |
+          $sha = ((git ls-tree HEAD firefox) -split '\s+')[2]
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          git init -q firefox
+          foreach ($attempt in 1..3) {
+            git -C firefox fetch --depth 1 --no-tags https://github.com/mozilla-firefox/firefox.git $sha
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds 30
+          }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          git -C firefox -c checkout.workers=0 checkout -q --detach FETCH_HEAD
+
+      - name: Restore SpiderMonkey build
+        uses: actions/cache/restore@v4
+        with:
+          path: obj/js
+          key: firefox-js-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/**') }}
+          fail-on-cache-miss: true
+
+      - name: Restore Skia and NSS
+        uses: actions/cache/restore@v4
+        with:
+          path: obj/firefox-parts
+          key: firefox-browser-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/**') }}
+          fail-on-cache-miss: true
+
+      - name: Install MozillaBuild
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $setup = "$env:RUNNER_TEMP\MozillaBuildSetup.exe"
+          Invoke-WebRequest "https://ftp.mozilla.org/pub/mozilla/libraries/win32/MozillaBuildSetup-$env:MOZILLABUILD_VERSION.exe" -OutFile $setup
+          Start-Process $setup -ArgumentList '/S' -Wait
+
+      - name: Bootstrap the SpiderMonkey toolchains
+        env:
+          MOZILLABUILD: C:\mozilla-build\
+          MSYS2_PATH_TYPE: inherit
+          CHERE_INVOKING: "1"
+        run: |
+          $env:PATH = "C:\mozilla-build\bin;C:\mozilla-build\python3;C:\mozilla-build\msys2\usr\bin;$env:PATH"
+          & C:\mozilla-build\msys2\usr\bin\bash.exe --login -eo pipefail -c "bash ci/firefox/build.sh toolchain"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build js.exe and ruyijs_client.dll
+        run: |
+          python tools/build.py --donor-obj obj/js --toolchain-bin "$env:MOZBUILD_STATE_PATH\clang\bin" --firefox-gfx-obj obj/firefox-parts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem dist | Format-Table Name, Length
+
+      - name: Smoke test with the pinned Necko runtime
+        run: |
+          python -c "import sys; sys.path.insert(0, 'tools'); from pathlib import Path; from wheel_runtime import obtain_runtime; print(obtain_runtime(Path('.')))"
+          Copy-Item build/pinned-runtime/vendor -Destination . -Recurse -Force
+          $env:PYTHONPATH = "$PWD\python"
+          python ci/smoke_test.py
+
+      - name: Upload binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruyijs-windows
+          path: |
+            dist/js.exe
+            dist/ruyijs_client.dll
+            artifacts/build-runtime.json
+          if-no-files-found: ignore
+          retention-days: 7

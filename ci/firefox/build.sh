@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Build the Firefox parts ruyijs takes from the firefox/ submodule, the
+# official Firefox release it targets. Run from MozillaBuild's shell on
+# Windows, or any shell on macOS/Linux.
+#
+#   build.sh js         SpiderMonkey standalone objdir          -> obj/js
+#   build.sh browser    Skia objects and the NSS/NSPR SDK       -> obj/firefox-parts
+#   build.sh toolchain  configure only: bootstrap the toolchains into ~/.mozbuild
+set -euo pipefail
+part="${1:?usage: build.sh js|browser|toolchain}"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root="$(cd "$here/../.." && pwd)"
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) platform=windows ;;
+  Darwin) platform=macos ;;
+  *) platform=linux ;;
+esac
+export MOZCONFIG="$here/mozconfig.$part-$platform"
+[ -f "$MOZCONFIG" ] || { echo "no $MOZCONFIG" >&2; exit 1; }
+export MACH_NO_TERMINAL_FOOTER=1
+cd "$root/firefox"
+mach() { ./mach --no-interactive "$@"; }
+case "$part" in
+  js)
+    mach build ;;
+  browser)
+    mach configure
+    mach build pre-export export
+    mach build --allow-subdirectory-build gfx/skia security mozglue
+    python3 "$here/collect.py" "$root/obj/browser" "$root/obj/firefox-parts" ;;
+  toolchain)
+    mach configure ;;
+  *)
+    echo "unknown part: $part" >&2; exit 1 ;;
+esac

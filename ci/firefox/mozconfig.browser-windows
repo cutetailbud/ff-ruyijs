@@ -1,0 +1,17 @@
+# Firefox release configuration (non-PGO, no LTO), built only as far as
+# ruyijs needs it: the export tier, then gfx/skia (canvas), security (NSS and
+# NSPR) and mozglue. Nothing else of the browser is compiled.
+mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/../obj/browser
+
+export MOZILLA_OFFICIAL=1
+export RUSTFLAGS=-Clto=off
+
+ac_add_options --enable-bootstrap
+ac_add_options --target=x86_64-pc-windows-msvc
+ac_add_options --enable-optimize
+ac_add_options --disable-debug
+ac_add_options --disable-tests
+ac_add_options --enable-rust-simd
+ac_add_options --enable-release
+ac_add_options --enable-update-channel=release
+ac_add_options --enable-official-branding

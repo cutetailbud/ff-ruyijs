@@ -1,0 +1,56 @@
+"""Collect what ruyijs links from a partial Firefox browser build.
+
+usage: collect.py OBJDIR OUTPUT
+
+OUTPUT receives:
+  gfx/skia/*.obj (or *.o)  Firefox's compiled Skia (tools/build.py --firefox-gfx-obj OUTPUT)
+  config/autoconf.mk       records the Firefox version of those objects
+  nss-sdk/bin              nss3, softokn3, freebl3 and mozglue as Firefox ships them
+  nss-sdk/lib              their import libraries
+  nss-sdk/include/{nss,nspr}
+"""
+import shutil
+import sys
+from pathlib import Path
+
+objdir, output = Path(sys.argv[1]), Path(sys.argv[2])
+windows = sys.platform == "win32" or (objdir / "dist/bin/nss3.dll").is_file()
+if output.exists():
+    shutil.rmtree(output)
+
+
+def copy(source, target):
+    if not source.is_file():
+        raise SystemExit(f"missing: {source}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+
+
+objects = sorted((objdir / "gfx/skia").glob("*.obj" if windows else "*.o"))
+if not objects:
+    raise SystemExit(f"no Skia objects under {objdir / 'gfx/skia'}")
+for path in objects:
+    copy(path, output / "gfx/skia" / path.name)
+copy(objdir / "config/autoconf.mk", output / "config/autoconf.mk")
+
+if windows:
+    binaries = ["nss3.dll", "softokn3.dll", "freebl3.dll", "mozglue.dll"]
+    libraries = ["nss3.lib", "mozglue.lib"]
+else:
+    suffix = ".dylib" if sys.platform == "darwin" else ".so"
+    binaries = [f"lib{name}{suffix}" for name in ("nss3", "softokn3", "freebl3", "mozglue")]
+    libraries = []
+for name in binaries:
+    copy(objdir / "dist/bin" / name, output / "nss-sdk/bin" / name)
+for name in libraries:
+    copy(objdir / "dist/lib" / name, output / "nss-sdk/lib" / name)
+for name in ("nss", "nspr"):
+    source = objdir / "dist/include" / name
+    if not source.is_dir():
+        raise SystemExit(f"missing: {source}")
+    shutil.copytree(source, output / "nss-sdk/include" / name)
+
+files = [p for p in output.rglob("*") if p.is_file()]
+size = sum(p.stat().st_size for p in files)
+print(f"collected {len(objects)} Skia objects, {len(binaries)} NSS binaries; "
+      f"{len(files)} files, {size / 2**20:.1f} MiB in {output}")

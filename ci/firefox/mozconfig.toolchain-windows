@@ -1,0 +1,4 @@
+# Configure-only objdir: bootstraps the same toolchains as the SpiderMonkey
+# build into ~/.mozbuild on a runner that restored obj/js from the cache.
+. "$topsrcdir/../ci/firefox/mozconfig.js-windows"
+mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/../obj/toolchain
