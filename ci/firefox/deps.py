@@ -17,6 +17,9 @@ import sys
 from pathlib import Path
 
 objdir = Path(sys.argv[1]).resolve()
+# One step per LF-terminated line on every platform (Windows' Python would
+# print CRLF, and bash keeps the CR in the last field).
+sys.stdout.reconfigure(newline=chr(10))
 WANTED = ("mozglue", "nss3", "freebl3", "softokn3")
 
 
@@ -37,7 +40,10 @@ for backend in objdir.rglob("backend.mk"):
         continue
     directory = backend.parent
     target = match.group(1).replace("$(DEPTH)", os.path.relpath(objdir, directory).replace(os.sep, "/"))
-    listing = re.search(r"^\S+_OBJS := @(\S+)$", text, re.M)
+    # The object list file, referenced per the platform's EXPAND_LIBS_LIST_STYLE:
+    # "@f.list" (list), "-Wl,@f.list" (linkerlist), "-Wl,-filelist,f.list"
+    # (filelist). A library linking only its own directory's objects has none.
+    listing = re.search(r"^\S+_OBJS := (?:-Wl,-filelist,|-Wl,@|@)(\S+\.list)$", text, re.M)
     objects = []
     if listing:
         list_file = Path(listing.group(1))
