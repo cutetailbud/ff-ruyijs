@@ -87,8 +87,12 @@ bool SetNonblock(int fd) {
   return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 void IgnoreSigPipe(int fd) {
+#ifdef SO_NOSIGPIPE
   int one = 1;
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+#else
+  (void)fd;
+#endif
 }
 }  // namespace
 
@@ -153,7 +157,7 @@ bool Pipe::Transfer(void* data, unsigned length, bool writing) {
   const int fd = PipeFd(handle_);
   auto* bytes = static_cast<char*>(data);
   while (length) {
-    const ssize_t count = writing ? send(fd, bytes, length, 0) : recv(fd, bytes, length, 0);
+    const ssize_t count = writing ? send(fd, bytes, length, kPipeSendFlags) : recv(fd, bytes, length, 0);
     if (count <= 0) return false;
     bytes += count;
     length -= static_cast<unsigned>(count);

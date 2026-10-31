@@ -40,6 +40,15 @@ class Donor:
             self.rust_target = "aarch64-apple-darwin"
             self.object_suffix = ".o"
             self.static_suffix = ".a"
+        elif self.os_arch == "Linux":
+            if not self.target_triple.startswith("x86_64-"):
+                raise ValueError("Linux donor must target x86_64")
+            self.windows = False
+            self.shell_name = "js"
+            self.glue_name = "libmozglue.so"
+            self.rust_target = str(self.substs.get("RUST_TARGET", "x86_64-unknown-linux-gnu"))
+            self.object_suffix = ".o"
+            self.static_suffix = ".a"
         else:
             raise ValueError(f"donor OS_ARCH is not supported: {self.os_arch}")
 

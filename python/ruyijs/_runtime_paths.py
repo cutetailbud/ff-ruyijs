@@ -10,13 +10,19 @@ def macos_arm64():
     return sys.platform == "darwin" and platform.machine().lower() in ("arm64", "aarch64")
 
 
+def linux_x64():
+    return sys.platform == "linux" and platform.machine().lower() in ("amd64", "x86_64")
+
+
 def shell_filename():
     """Basename of the SpiderMonkey shell this host launches."""
-    return "js" if macos_arm64() else "js.exe"
+    return "js" if macos_arm64() or linux_x64() else "js.exe"
 
 
 def glue_filename():
     """Donor glue library copied beside the shell."""
+    if linux_x64():
+        return "libmozglue.so"
     return "libmozglue.dylib" if macos_arm64() else "mozglue.dll"
 
 
@@ -27,8 +33,8 @@ def get_runtime_path():
     root. Otherwise prefer a source checkout's shell to the runtime bundled in
     the installed package. This function never downloads files.
     """
-    if not macos_arm64() and (os.name != "nt" or platform.machine().lower() not in ("amd64", "x86_64")):
-        raise OSError("ruyijs requires Windows x64 or macOS arm64")
+    if not (macos_arm64() or linux_x64()) and (os.name != "nt" or platform.machine().lower() not in ("amd64", "x86_64")):
+        raise OSError("ruyijs requires Windows x64, macOS arm64 or Linux x64")
 
     override = os.environ.get("RUYIJS_SHELL")
     if override:

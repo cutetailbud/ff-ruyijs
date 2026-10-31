@@ -44,6 +44,9 @@ class BuildPython(build_py):
                     raise ValueError(f"Build directory contains another runtime version: {target}")
             else:
                 shutil.copytree(runtime, target)
+        elif tag == "linux_x86_64":
+            from bundle_linux import bundle
+            bundle(project, target)
         else:
             runtime = project / "dist"
             if not (runtime / "js").is_file() or not (runtime / "libmozglue.dylib").is_file():
@@ -122,7 +125,9 @@ def _platform_tag():
         return "win_amd64"
     if sys.platform == "darwin" and machine in ("arm64", "aarch64"):
         return "macosx_26_0_arm64"
-    raise RuntimeError("ruyijs wheels are built for Windows x64 or macOS arm64")
+    if sys.platform == "linux" and machine in ("amd64", "x86_64"):
+        return "linux_x86_64"
+    raise RuntimeError("ruyijs wheels are built for Windows x64, macOS arm64 or Linux x64")
 
 
 class PlatformWheel(bdist_wheel):

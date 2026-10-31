@@ -151,6 +151,14 @@ bool FillCanvasText(State& state, JS::HandleObject context, const std::u16string
   if (!detail::Fonts(state).BuildCanvasGlyphMasks(text, input, text_matrix, straight, &masks))
     return false;
   for (const auto& mask : masks) {
+#if defined(__linux__)
+    if (!mask.rgba.empty()) {
+      auto blend = paint;
+      blend.rgba[3] = uint8_t(unsigned(global) * (straight[3] ? straight[3] : 255) / 255);
+      raster::BlitSprite(surface, blend, mask.left, mask.top, mask.rgba.data(), mask.width, mask.height);
+      continue;
+    }
+#endif
     if (mask.layers.empty()) {
       raster::BlitMask(surface, paint, mask.left, mask.top, mask.coverage.data(), mask.width,
                        mask.height);

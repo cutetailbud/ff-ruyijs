@@ -94,6 +94,12 @@ def _quic_library_path():
         candidate = Path(core).with_name(name)
         if candidate.is_file():
             return candidate
+    if os.name != "nt":
+        for parent in Path(__file__).resolve().parents:
+            for directory in (parent / "dist/necko_tls", parent / "dist/necko"):
+                candidate = directory / name
+                if candidate.is_file():
+                    return candidate
     root = Path(__file__).resolve().parents[2]
     for directory in (root / "dist" / "necko_tls", root / "dist" / "necko"):
         candidate = directory / name
@@ -460,6 +466,9 @@ def _milliseconds(value):
 
 
 def _core_library_path():
+    if os.name != "nt":
+        from necko.core_client import library_path
+        return library_path()
     override = os.environ.get("NECKO_CORE_LIBRARY", "")
     if override:
         return Path(override)

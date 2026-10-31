@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "web_geometry/glyph_mask.h"
+#include "runtime/font_face.h"
 
 namespace ruyijs::web_geometry {
 struct FontInput {
@@ -56,6 +57,9 @@ struct CanvasTextMetrics {
 struct CanvasGlyphRun {
   IDWriteFontFace* face = nullptr;
   bool syntheticItalic = false;
+#if defined(__linux__)
+  bool syntheticBold = false;
+#endif
   // gfxDWriteFont::GetScaledFont's useEmbeddedBitmap without the rendering
   // mode test: a CJK font (OS/2 code pages) with an EBLC strike at the size.
   bool cjkBitmapStrike = false;

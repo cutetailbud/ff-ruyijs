@@ -13,6 +13,7 @@ import json
 import os
 import socket
 import ssl
+import sys
 import warnings
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -66,14 +67,15 @@ def library_path() -> Path | None:
         path = Path(override)
         return path if path.is_file() else None
     here = Path(__file__).resolve()
+    name = "libnecko_core.so" if sys.platform == "linux" else "libnecko_core.dylib"
     for parent in here.parents:
-        preferred = parent / "dist" / "necko_tls" / "libnecko_core.dylib"
-        staged = parent / "dist" / "necko" / "libnecko_core.dylib"
+        preferred = parent / "dist" / "necko_tls" / name
+        staged = parent / "dist" / "necko" / name
         if preferred.is_file():
             return preferred
         if staged.is_file():
             return staged
-    sibling = here.parent / "libnecko_core.dylib"
+    sibling = here.parent / name
     if sibling.is_file():
         return sibling
     return None
@@ -352,7 +354,9 @@ class CoreClient:
                     pass
                 _reraise(error)
             return _Lane(tls, connection, version)
-        if tls.alpn == "http/1.1":
+        # Servers predating ALPN still speak HTTP/1.1 over the verified TLS
+        # connection. An empty ALPN does not require the xpcshell fallback.
+        if tls.alpn in ("http/1.1", ""):
             return _Lane(tls, None, version)
         try:
             tls.close()

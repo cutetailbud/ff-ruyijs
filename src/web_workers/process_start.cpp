@@ -86,15 +86,24 @@ StartResult Process::Start(std::wstring_view executable, std::string initial, Wo
     if (posix_spawn_file_actions_init(&actions) != 0) return fail(StartError::Job, static_cast<unsigned>(errno));
     // Match CreateProcess bInheritHandles=FALSE: keep stdio, close the RPC socket.
     // environ is still the parent's, so RUYIJS_HTTP_PROXY reaches the worker.
+#if defined(__linux__)
+    bool armed = posix_spawn_file_actions_addclosefrom_np(&actions, STDERR_FILENO + 1) == 0;
+#else
     bool armed = posix_spawn_file_actions_addinherit_np(&actions, STDIN_FILENO) == 0 &&
                  posix_spawn_file_actions_addinherit_np(&actions, STDOUT_FILENO) == 0 &&
                  posix_spawn_file_actions_addinherit_np(&actions, STDERR_FILENO) == 0;
+#endif
     posix_spawnattr_t attr;
     if (posix_spawnattr_init(&attr) != 0) {
       posix_spawn_file_actions_destroy(&actions);
       return fail(StartError::Job, static_cast<unsigned>(errno));
     }
-    armed = armed && posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT) == 0 &&
+#if defined(__linux__)
+    constexpr short spawnFlags = POSIX_SPAWN_SETPGROUP;
+#else
+    constexpr short spawnFlags = POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT;
+#endif
+    armed = armed && posix_spawnattr_setflags(&attr, spawnFlags) == 0 &&
                      posix_spawnattr_setpgroup(&attr, 0) == 0;
     pid_t child = 0;
     const int spawned = armed ? posix_spawn(&child, program.c_str(), &actions, &attr, argv.data(), environ) : -1;

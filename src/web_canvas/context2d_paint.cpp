@@ -462,6 +462,9 @@ bool StrokeRecordedText(State& state, JS::HandleObject context, const std::u16st
       skia::TextRun r;
       r.face = run.face;
       r.syntheticItalic = run.syntheticItalic;
+#if defined(__linux__)
+      r.syntheticBold = run.syntheticBold;
+#endif
       r.cjkBitmapStrike = run.cjkBitmapStrike;
       r.originX = run.origin_x;
       r.originY = run.origin_y;
@@ -537,6 +540,9 @@ bool FillRecordedText(State& state, JS::HandleObject context, const std::u16stri
       skia::TextRun r;
       r.face = run.face;
       r.syntheticItalic = run.syntheticItalic;
+#if defined(__linux__)
+      r.syntheticBold = run.syntheticBold;
+#endif
       r.cjkBitmapStrike = run.cjkBitmapStrike;
       r.originX = run.origin_x;
       r.originY = run.origin_y;

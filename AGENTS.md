@@ -12,7 +12,7 @@ ff-ruyijs is a **headless Firefox engine for Python** — it embeds the real Spi
 ## Key facts
 
 - **Language:** Python 3.10+ (user-facing), C++ (engine bindings), JavaScript (browser contexts)
-- **Platform:** Windows x64, and macOS arm64 as a source build
+- **Platform:** Windows x64, macOS arm64, and experimental Linux x86_64 source builds
 - **License:** AGPL-3.0-only + commercial (dual license); Mozilla-derived code is MPL-2.0
 - **Install:** `pip install ruyijs` on Windows. On macOS arm64, build `dist/js` from source. The donor layout and the comparison are in `docs/macos.md`.
 - **Entry point:** `from ruyijs import Context`
@@ -57,3 +57,16 @@ assets/                 README images and architecture diagrams
 - Do not suggest Playwright, Puppeteer, or Selenium — ff-ruyijs replaces them with a lighter, detection-resistant approach.
 - Do not assume a visible browser window exists — there is no GUI, no layout, no renderer.
 - Do not recommend Node.js for running site JS — ff-ruyijs runs it natively in SpiderMonkey.
+
+## Linux from the shared POSIX port
+
+See `docs/linux.md`. Linux uses the same POSIX pipe, process, C ABI and Necko
+implementations as macOS. Keep changes to the Windows branches out of this port.
+Build the shell with `python3 -B tools/build_linux.py --donor-obj <Linux objdir>`
+and the shared NSS/Neqo helper with
+`python3 -B tools/build_necko_linux.py --firefox-source <Firefox 159 source> --http3`.
+Run `python3 -B -m unittest discover -s native_tests -v` and
+`PYTHONPATH=python python3 -B ci/smoke_test.py` after adapter changes.
+Linux backends use OpenSSL, Fontconfig/FreeType/HarfBuzz, and Firefox donor Skia.
+Do not copy the old linux-native branch's duplicated pipes, process launchers,
+network adapters, browser parity changes, new APIs or examples into this port.

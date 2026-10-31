@@ -1,6 +1,16 @@
 // Original zlib-rs C ABI; private prefix leaves existing MOZ_Z_ users unchanged.
 #include "web_platform/compression_codec.h"
+#if defined(__linux__)
+#include <zlib.h>
+#define RUYIJS_CS_Z_deflateInit2_ deflateInit2_
+#define RUYIJS_CS_Z_inflateInit2_ inflateInit2_
+#define RUYIJS_CS_Z_deflate deflate
+#define RUYIJS_CS_Z_inflate inflate
+#define RUYIJS_CS_Z_deflateEnd deflateEnd
+#define RUYIJS_CS_Z_inflateEnd inflateEnd
+#else
 #include "../../vendor/compression-native/zlib-headers/zlib.h"
+#endif
 #include <new>
 #include <limits>
 
@@ -17,6 +27,8 @@ namespace ruyijs::web_platform {
 static_assert(sizeof(z_stream)==88,"MSVC x64 original z_stream ABI");
 #elif defined(__APPLE__)
 static_assert(sizeof(z_stream)==112,"Darwin LP64 z_stream ABI");
+#elif defined(__linux__)
+static_assert(sizeof(z_stream)==112,"Linux LP64 z_stream ABI");
 #else
 #error unsupported z_stream ABI
 #endif

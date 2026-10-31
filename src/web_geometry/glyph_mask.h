@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-struct IDWriteFontFace;
+#include "runtime/font_face.h"
 struct DWRITE_GLYPH_RUN;
 
 namespace ruyijs::web_geometry {
@@ -44,6 +44,9 @@ struct CanvasTextPath {
 struct CanvasGlyphMask {
   int left = 0, top = 0, width = 0, height = 0;
   std::vector<uint8_t> coverage;  // width*height, gamma-corrected A8
+#if defined(__linux__)
+  std::vector<uint8_t> rgba;  // Native colour glyph, premultiplied RGBA.
+#endif
   // A COLR glyph is painted the way gfxFont::RenderColorGlyph paints it: each
   // palette layer is an ordinary grayscale glyph mask in its palette colour.
   // `sampled` glyphs (adjusted size <= 256) are drawn into a 2x snapshot whose

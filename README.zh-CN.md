@@ -257,7 +257,7 @@ Windows x64（64 位）上的 Python 3.10 及以上版本，已测试至 Python 
 <details>
 <summary><b>支持 macOS 或 Linux 吗？</b></summary>
 
-macOS arm64 可以用源码构建，也可以打 `macosx_26_0_arm64` wheel。这个 wheel 不上传到 PyPI。维护者 fork 的 Release `v0.2.1` 放着这份 wheel 和 `ruyijs-runtime-macos-arm64.zip`。和 Windows 的比对以及后续计划写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。Linux 尚未支持。
+macOS arm64 可以用源码构建，也可以打 `macosx_26_0_arm64` wheel。这个 wheel 不上传到 PyPI。维护者 fork 的 Release `v0.2.1` 放着这份 wheel 和 `ruyijs-runtime-macos-arm64.zip`。和 Windows 的比对以及后续计划写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。Linux x86_64 提供实验性源码构建，直接复用 macOS 的 POSIX 层；见 [docs/linux.md](docs/linux.md)。
 
 JS 引擎是 Mozilla 官方的 **SpiderMonkey**，网络库是 Mozilla 官方的 **Necko**。两者都从 Firefox 源码树编译，并且放在本仓库外面。
 </details>

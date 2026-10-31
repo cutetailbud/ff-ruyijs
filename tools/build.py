@@ -122,7 +122,7 @@ def build_necko_core(root, necko_obj):
 def install_network_helper(root, deployed):
     """Copy owned Necko helper sources into an existing venv.
 
-    Windows receives oneshot.py only. Darwin also receives the xpcshell
+    Windows receives oneshot.py only. POSIX also receives the shared library/xpcshell
     adapter. A missing venv is reported and does not create a release package.
     """
     oneshot_source = root / "src/resource_network/necko_oneshot.py"
@@ -133,7 +133,7 @@ def install_network_helper(root, deployed):
         package_dirs.append(windows_package)
     package_dirs += [path for path in sorted(venv.glob("lib/python*/site-packages/ruyijs_necko"))
                      if path.is_dir()]
-    if sys.platform == "darwin":
+    if sys.platform in ("darwin", "linux"):
         for site in sorted(venv.glob("lib/python*/site-packages")):
             if not site.is_dir():
                 continue
@@ -155,7 +155,7 @@ def install_network_helper(root, deployed):
               "deployed": str(deployed_oneshot) if deployed_oneshot else None}
     if deployed_oneshot is not None:
         report["sha256"] = digest(deployed_oneshot)
-    if sys.platform != "darwin":
+    if sys.platform not in ("darwin", "linux"):
         return report
     sites = []
     for package in package_dirs:
@@ -221,7 +221,7 @@ def install_network_helper(root, deployed):
                 copied.write_bytes(source.read_bytes())
                 deployed.append(copied)
                 installed.append(copied)
-    report["darwin"] = [str(path) for path in installed]
+    report[sys.platform] = [str(path) for path in installed]
     return report
 
 

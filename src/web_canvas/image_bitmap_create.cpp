@@ -100,6 +100,10 @@ bool Source(State& s, JS::HandleValue value, Pixels* out) {
       return Invalid(s, "The source image could not be decoded");
     const auto& frame = decoded.frames.front();
     out->width = frame.width; out->height = frame.height; out->bytes = frame.pixels;
+#if defined(__linux__)
+    for (size_t i = 0; i < out->bytes.size(); i += 4)
+      std::swap(out->bytes[i], out->bytes[i + 2]);
+#endif
     return true;
   }
   if (clasp == &kImageDataClass) {

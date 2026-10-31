@@ -10,7 +10,7 @@
 
 // Windows: the DirectWrite COM face. Darwin: font_backend.h defines this
 // same global name as the Core Text shim. It is not a namespaced type.
-struct IDWriteFontFace;
+#include "runtime/font_face.h"
 
 namespace ruyijs::web_canvas::skia {
 // A colour as gfx::DeviceColor: straight (non-premultiplied) floats.
@@ -124,6 +124,9 @@ bool StrokeRect(const Surface& surface, const double transform[6], const double 
 struct TextRun {
   ::IDWriteFontFace* face = nullptr;
   bool syntheticItalic = false;
+#if defined(__linux__)
+  bool syntheticBold = false;
+#endif
   bool cjkBitmapStrike = false;
   double originX = 0, originY = 0;
   const uint16_t* glyphs = nullptr;

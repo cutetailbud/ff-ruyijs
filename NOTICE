@@ -33,6 +33,11 @@ own license:
       (h2, hpack, hyperframe, cryptography, cffi, pycparser, certifi, idna,
        charset-normalizer, publicsuffixlist, brotli, requests, urllib3, zstandard)
   - Microsoft Visual C++ runtime                   Microsoft Visual Studio redistribution terms
+  - Linux adapters: OpenSSL, FreeType, Fontconfig,
+    LittleCMS2, libavif, WebP and stb              their respective licenses
+
+Linux bundles collect donor license texts and the copyright files for copied
+system libraries under licenses/. Source-build details are in docs/linux.md.
 
 ruyijs is not affiliated with or endorsed by Mozilla. "Firefox" is a trademark of the
 Mozilla Foundation.

@@ -15,7 +15,7 @@
 #include "js/Realm.h"
 #ifdef _WIN32
 #include <windows.h>
-#else
+#elif defined(__APPLE__)
 #include <mach-o/dyld.h>
 #include <cstdint>
 #endif
@@ -36,6 +36,9 @@ std::wstring WorkerExecutable() {
   if (!size || size >= path.size()) return {};
   path.resize(size);
   return path;
+#elif defined(__linux__)
+  // The procfs link follows this executable even in a Unicode installation path.
+  return L"/proc/self/exe";
 #else
   char buffer[4096];
   uint32_t size = sizeof(buffer);

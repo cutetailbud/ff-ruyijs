@@ -48,6 +48,11 @@ PipeResult PipeWrite(HANDLE pipe, PipeAsync& state);
 #include <unistd.h>
 
 namespace ruyijs {
+#ifdef MSG_NOSIGNAL
+inline constexpr int kPipeSendFlags = MSG_NOSIGNAL;
+#else
+inline constexpr int kPipeSendFlags = 0;
+#endif
 inline int PipeFd(void* handle) {
   return static_cast<int>(reinterpret_cast<intptr_t>(handle)) - 1;
 }

@@ -293,7 +293,7 @@ def main() -> None:
     config = _vendor_config(donor)
     nss_dir = _link_tree(donor)
     overlay = _overlay(donor_rust, nss_crate)
-    workspace = _workspace(root, nss_crate)
+    workspace = _workspace(root, nss_crate, overlay)
     out = root / "dist" / "necko_tls"
     out.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
@@ -374,6 +374,9 @@ def _replace_once(path: Path, old: str, new: str) -> None:
 
 def _unwrap_src(crate: Path) -> None:
     src = crate / "src"
+    # Linux overlays already own their source directory.
+    if src.is_dir() and not src.is_symlink():
+        return
     if not src.is_symlink():
         raise SystemExit(f"{crate.name} src is not a symlink")
     target = src.resolve()

@@ -257,7 +257,7 @@ Python 3.10 and above on Windows x64 (64-bit), tested up to Python 3.14. The mac
 <details>
 <summary><b>Does it work on macOS or Linux?</b></summary>
 
-macOS arm64 is supported as a source build and as a `macosx_26_0_arm64` wheel. That wheel is not uploaded to PyPI. The maintainer fork release `v0.2.1` carries the wheel and `ruyijs-runtime-macos-arm64.zip`. The Windows comparison and the follow-up plan are in [docs/macos.md](docs/macos.md). Linux is not supported.
+macOS arm64 is supported as a source build and as a `macosx_26_0_arm64` wheel. That wheel is not uploaded to PyPI. The maintainer fork release `v0.2.1` carries the wheel and `ruyijs-runtime-macos-arm64.zip`. The Windows comparison and the follow-up plan are in [docs/macos.md](docs/macos.md). Experimental Linux x86_64 source builds reuse the macOS POSIX layer; see [docs/linux.md](docs/linux.md).
 
 The JS engine is Mozilla's official **SpiderMonkey** and the networking stack is Mozilla's official **Necko** — both are built from the Firefox source tree and kept outside this repository.
 </details>

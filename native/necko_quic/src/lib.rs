@@ -141,10 +141,13 @@ fn apply_profile(profile: &Value) -> (ConnectionParameters, bool) {
     (params, datagrams)
 }
 
+#[cfg(target_os = "macos")]
 const APPLE_COMPRESSION_ZLIB: u32 = 0x205;
+#[cfg(target_os = "macos")]
 const APPLE_COMPRESSION_BROTLI: u32 = 0xB02;
 
 unsafe extern "C" {
+    #[cfg(target_os = "macos")]
     fn compression_decode_buffer(
         dst: *mut u8,
         dst_size: usize,
@@ -168,6 +171,7 @@ fn compression_rejected() -> nss::Res<()> {
     Err(nss::Error::CertificateDecoding)
 }
 
+#[cfg(target_os = "macos")]
 fn decode_apple(algorithm: u32, input: &[u8], output: &mut [u8]) -> nss::Res<()> {
     if input.is_empty() || output.is_empty() {
         return compression_rejected();
@@ -209,6 +213,40 @@ fn decode_zstd(input: &[u8], output: &mut [u8]) -> nss::Res<()> {
     }
 }
 
+#[cfg(target_os = "linux")]
+unsafe extern "C" {
+    fn uncompress(dst: *mut u8, size: *mut libc::c_ulong,
+                  src: *const u8, src_size: libc::c_ulong) -> c_int;
+    fn BrotliDecoderDecompress(src_size: usize, src: *const u8,
+                               dst_size: *mut usize, dst: *mut u8) -> c_int;
+}
+
+fn decode_zlib(input: &[u8], output: &mut [u8]) -> nss::Res<()> {
+    #[cfg(target_os = "macos")]
+    { decode_apple(APPLE_COMPRESSION_ZLIB, input, output) }
+    #[cfg(target_os = "linux")]
+    {
+        let mut size = output.len() as libc::c_ulong;
+        let status = unsafe { uncompress(output.as_mut_ptr(), &mut size,
+                                        input.as_ptr(), input.len() as libc::c_ulong) };
+        if status == 0 && size as usize == output.len() { Ok(()) }
+        else { compression_rejected() }
+    }
+}
+
+fn decode_brotli(input: &[u8], output: &mut [u8]) -> nss::Res<()> {
+    #[cfg(target_os = "macos")]
+    { decode_apple(APPLE_COMPRESSION_BROTLI, input, output) }
+    #[cfg(target_os = "linux")]
+    {
+        let mut size = output.len();
+        let status = unsafe { BrotliDecoderDecompress(input.len(), input.as_ptr(),
+                                                      &mut size, output.as_mut_ptr()) };
+        if status == 1 && size == output.len() { Ok(()) }
+        else { compression_rejected() }
+    }
+}
+
 struct ZlibCertDecoder;
 struct BrotliCertDecoder;
 struct ZstdCertDecoder;
@@ -218,7 +256,7 @@ impl CertificateCompressor for ZlibCertDecoder {
     const NAME: &CStr = c"zlib";
 
     fn decode(input: &[u8], output: &mut [u8]) -> nss::Res<()> {
-        decode_apple(APPLE_COMPRESSION_ZLIB, input, output)
+        decode_zlib(input, output)
     }
 }
 
@@ -227,7 +265,7 @@ impl CertificateCompressor for BrotliCertDecoder {
     const NAME: &CStr = c"brotli";
 
     fn decode(input: &[u8], output: &mut [u8]) -> nss::Res<()> {
-        decode_apple(APPLE_COMPRESSION_BROTLI, input, output)
+        decode_brotli(input, output)
     }
 }
 
