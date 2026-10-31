@@ -54,6 +54,12 @@ def arguments():
     parser.add_argument("--necko-core-only", action="store_true",
                         help="build dist/necko_tls/libnecko_core.dylib and skip the shell")
     args = parser.parse_args()
+    # The compilers, linkers and librarians run inside the build directories,
+    # so a relative path given here means relative to where build.py started.
+    for name in ("donor_obj", "toolchain_bin", "vs_root", "runtime_dll_dir",
+                 "firefox_font_prefs", "firefox_bindings", "firefox_gfx_obj"):
+        if getattr(args, name):
+            setattr(args, name, os.path.abspath(getattr(args, name)))
     if args.necko_core_only:
         if not args.firefox_gfx_obj:
             parser.error("--firefox-gfx-obj (or RUYIJS_FIREFOX_GFX_OBJ) is required")
