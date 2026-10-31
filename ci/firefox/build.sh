@@ -26,7 +26,9 @@ case "$part" in
   browser)
     mach configure
     mach build pre-export export
-    mach build --allow-subdirectory-build gfx/skia security mozglue
+    # Only the directories that make Skia, NSS/NSPR and mozglue, in link order.
+    mapfile -t dirs < <(grep -Ev '^[[:space:]]*(#|$)' "$here/browser-dirs.$platform")
+    mach build --allow-subdirectory-build "${dirs[@]}"
     python3 "$here/collect.py" "$root/obj/browser" "$root/obj/firefox-parts" ;;
   toolchain)
     mach configure ;;

@@ -32,10 +32,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # keyfiles: what the cached build depends on besides the Firefox commit.
           - part: js
             path: obj/js
+            keyfiles: ci/firefox/mozconfig.js-windows
           - part: browser
             path: obj/firefox-parts
+            keyfiles: ci/firefox/**
     steps:
       - name: Prepare runner
         run: |
@@ -53,8 +56,9 @@ jobs:
           $sha = ((git ls-tree HEAD firefox) -split '\s+')[2]
           "sha=$sha" >> $env:GITHUB_OUTPUT
           git init -q firefox
+          git -C firefox remote add origin https://github.com/mozilla-firefox/firefox.git
           foreach ($attempt in 1..3) {
-            git -C firefox fetch --depth 1 --no-tags https://github.com/mozilla-firefox/firefox.git $sha
+            git -C firefox fetch --depth 1 --no-tags origin $sha
             if ($LASTEXITCODE -eq 0) { break }
             Start-Sleep -Seconds 30
           }
@@ -68,7 +72,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.path }}
-          key: firefox-${{ matrix.part }}-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/**') }}
+          key: firefox-${{ matrix.part }}-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles(matrix.keyfiles) }}
 
       - name: Install MozillaBuild
         if: steps.cache.outputs.cache-hit != 'true'
@@ -132,8 +136,9 @@ jobs:
           $sha = ((git ls-tree HEAD firefox) -split '\s+')[2]
           "sha=$sha" >> $env:GITHUB_OUTPUT
           git init -q firefox
+          git -C firefox remote add origin https://github.com/mozilla-firefox/firefox.git
           foreach ($attempt in 1..3) {
-            git -C firefox fetch --depth 1 --no-tags https://github.com/mozilla-firefox/firefox.git $sha
+            git -C firefox fetch --depth 1 --no-tags origin $sha
             if ($LASTEXITCODE -eq 0) { break }
             Start-Sleep -Seconds 30
           }
@@ -144,7 +149,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: obj/js
-          key: firefox-js-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/**') }}
+          key: firefox-js-windows-${{ steps.firefox.outputs.sha }}-${{ hashFiles('ci/firefox/mozconfig.js-windows') }}
           fail-on-cache-miss: true
 
       - name: Restore Skia and NSS
