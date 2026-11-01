@@ -1,5 +1,5 @@
 // One Necko/NSS session. Frames on stdin/stdout. Diagnostics stay on stderr.
-// Redirects are not followed: redirectionLimit is 0 and the 3xx is the response.
+// Necko follows up to 20 redirects and returns the final response.
 
 const { NetUtil } = ChromeUtils.importESModule("resource://gre/modules/NetUtil.sys.mjs");
 const { ctypes } = ChromeUtils.importESModule("resource://gre/modules/ctypes.sys.mjs");
@@ -159,8 +159,10 @@ function fetchOne(method, url, headers, body, budgetMs) {
         failure = new Error("necko " + (status >>> 0).toString(16));
         return;
       }
+      // A redirect replaces the channel passed to the listener.
+      const responseChannel = request.QueryInterface(Ci.nsIHttpChannel);
       const pairs = [];
-      channel.visitResponseHeaders({
+      responseChannel.visitResponseHeaders({
         visitHeader(name, value) {
           pairs.push([name, value]);
         },
@@ -178,10 +180,10 @@ function fetchOne(method, url, headers, body, budgetMs) {
         at += part.length;
       }
       result = {
-        status: channel.responseStatus,
+        status: responseChannel.responseStatus,
         headers: pairs,
         body: merged,
-        version: versionCode(channel),
+        version: versionCode(responseChannel),
       };
     },
   };
