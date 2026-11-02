@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] - 2026-11-02
+
+### Fixed
+
+- `Engine`: sessions no longer wait for each other's memory allocations. Each session thread allocates from a
+  jemalloc arena of its own, as Firefox's main thread does, and gives its free pages back when it ends. 32
+  sessions loading a page at once took 8.0 s and 156 CPU-seconds, now 2.2 s and 17 (32 Contexts: 1.8 s). Linux
+  builds use glibc's allocator, which already gives each thread an arena.
+
+### Changed
+
+- Windows: `js.exe`, its Necko helpers and worker processes start without a console (`DETACHED_PROCESS`), so
+  none of them brings a `conhost.exe` of its own (about 6 MiB each). A Context now runs in 3 processes instead of
+  6 and uses about 17 MiB less; an engine session uses one process and about 6 MiB less.
+  `ci/engine_check.py` checks it.
+
 ## [0.3.1] - 2026-11-01
 
 ### Added

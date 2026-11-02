@@ -75,8 +75,9 @@ bool ruyijs_context::Connect(const char* shell, const char* mode, std::string* e
   STARTUPINFOW startup{};
   startup.cb = sizeof(startup);
   PROCESS_INFORMATION information{};
+  // DETACHED_PROCESS, as Python starts it: no console and no conhost.exe.
   if (!CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr, FALSE,
-                       CREATE_NO_WINDOW, nullptr, nullptr, &startup, &information)) {
+                       DETACHED_PROCESS, nullptr, nullptr, &startup, &information)) {
     *error = "Shell process creation failed: " + std::to_string(GetLastError());
     return false;
   }

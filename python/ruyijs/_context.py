@@ -164,7 +164,9 @@ def start_shell(shell, arguments, child_environment, stderr):
         "env": child_environment,
     }
     if os.name == "nt":
-        popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        # No console: a CREATE_NO_WINDOW child gets a hidden console and a
+        # conhost.exe of its own (about 6 MiB); its stdio is redirected anyway.
+        popen_kwargs["creationflags"] = subprocess.DETACHED_PROCESS
     return subprocess.Popen([str(shell), *arguments], **popen_kwargs)
 
 

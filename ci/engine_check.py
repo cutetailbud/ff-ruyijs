@@ -8,6 +8,7 @@ closing or timing out one session must leave the others working. Runs offline;
 local CONNECT proxy, and checks that only that session used the proxy.
 Exit status is non-zero on the first failed check.
 """
+import os
 import socket
 import socketserver
 import sys
@@ -35,6 +36,50 @@ def steady_depth(context):
     return min(context.eval(DEPTH) for _ in range(3))
 
 
+def descendants():
+    """Names of this process's descendants (Windows), from a Toolhelp snapshot."""
+    import ctypes
+    import ctypes.wintypes as wt
+
+    class Entry(ctypes.Structure):  # PROCESSENTRY32W
+        _fields_ = [("size", wt.DWORD), ("usage", wt.DWORD), ("pid", wt.DWORD),
+                    ("heap", ctypes.c_void_p), ("module", wt.DWORD), ("threads", wt.DWORD),
+                    ("parent", wt.DWORD), ("priority", ctypes.c_long), ("flags", wt.DWORD),
+                    ("exe", ctypes.c_wchar * 260)]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateToolhelp32Snapshot.restype = wt.HANDLE
+    snapshot = kernel32.CreateToolhelp32Snapshot(0x2, 0)  # TH32CS_SNAPPROCESS
+    entry = Entry()
+    entry.size = ctypes.sizeof(entry)
+    children = {}
+    more = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+    while more:
+        children.setdefault(entry.parent, []).append((entry.pid, entry.exe.lower()))
+        more = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+    kernel32.CloseHandle(snapshot)
+    names, todo, seen = [], [os.getpid()], {os.getpid()}
+    while todo:
+        for pid, name in children.get(todo.pop(), []):
+            if pid not in seen:
+                seen.add(pid)
+                names.append(name)
+                todo.append(pid)
+    return names
+
+
+def check_no_console_hosts(label):
+    """A CREATE_NO_WINDOW child would bring a conhost.exe of its own (Windows)."""
+    if os.name != "nt":
+        return
+    deadline = time.monotonic() + 20
+    while "python.exe" not in descendants() and time.monotonic() < deadline:
+        time.sleep(0.2)  # wait for a prewarmed Necko helper
+    names = descendants()
+    counts = {name: names.count(name) for name in sorted(set(names))}
+    check(label, "conhost.exe" not in counts and "python.exe" in counts, counts)
+
+
 def page(context, url, marker):
     context.load_page(url, f"<!doctype html><title>{marker}</title><p id=p>{marker}</p>")
 
@@ -42,9 +87,11 @@ def page(context, url, marker):
 def offline():
     with Context(timeout=60) as alone:
         alone_depth = steady_depth(alone)
+        check_no_console_hosts("a Context and its helpers start without a console")
     with Engine(timeout=60) as engine:
         a, b, c = (engine.context(timeout=60) for _ in range(3))
         check("three sessions in one engine", len(engine.contexts) == 3 and a.engine is engine)
+        check_no_console_hosts("an engine, its sessions and helpers start without a console")
         page(a, "https://a.example/", "A")
         page(b, "https://b.example/", "B")
         page(c, "https://c.example/", "C")

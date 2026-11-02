@@ -62,6 +62,11 @@ The process, the engine's code, SpiderMonkey's self-hosted runtime data and
 helper threads, and operating-system caches such as fonts. With `network=`,
 sessions also share Necko helper processes and connections.
 
+Memory is not one of them: each session thread allocates from an arena of its
+own, as Firefox's main thread does, so sessions building pages at the same time
+do not wait for each other, and a session's free pages go back to the system
+when it ends.
+
 ## Resource controls
 
 | Option | Effect |
@@ -74,14 +79,19 @@ Measured on Windows with a simple page, four contexts:
 
 | | Processes | Private memory |
 | --- | --- | --- |
-| four `Context`s | 12 (4 `js.exe`, 8 helpers) | 385 MiB |
-| one `Engine`, `prewarm=2` | 9 (1 `js.exe`, 8 helpers) | 356 MiB |
-| one `Engine` (default `prewarm=1`) | 5 (1 `js.exe`, 4 helpers) | 219 MiB |
+| four `Context`s | 12 (4 `js.exe`, 8 helpers) | 378 MiB |
+| one `Engine`, `prewarm=2` | 9 (1 `js.exe`, 8 helpers) | 352 MiB |
+| one `Engine` (default `prewarm=1`) | 5 (1 `js.exe`, 4 helpers) | 221 MiB |
 | one `Engine`, one `network` for all four | 3 (1 `js.exe`, 2 helpers) | 151 MiB |
 
 Most of a Context's memory is its helpers and its own JavaScript heap, so the
 helper options save the most; a heavier page grows each session's heap the
-same way in both modes.
+same way in both modes. Thirty-two contexts loading a page with a 2,000-element
+list at once, on 22 cores: 32 `Context`s took 1.8 s with 3.0 GiB of private
+memory in 96 processes, 32 sessions 2.2 s with 1.7 GiB in 33, and 32 sessions
+on one `network` 3.5 s (their first load starts the shared helpers; later loads
+take 0.3 s) with 0.88 GiB in 7. On Windows none of these processes has a console
+(`conhost.exe`) of its own.
 
 ## Failures
 

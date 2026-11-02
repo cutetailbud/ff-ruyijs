@@ -189,7 +189,7 @@ with Context() as context:
 
 ### 多个独立会话共用一个进程
 
-`Context` 会启动自己的进程；`Engine` 则把多个 Context 作为同一进程中的会话并行运行，每个会话有自己的线程、堆、页面、时钟、Cookie、存储、代理和 TLS 配置。`prewarm` 和 `network=` 可以精简占 Context 大部分内存的 Necko 辅助进程：实测四个会话 5 个进程、219 MiB，四个 Context 为 12 个进程、385 MiB；四个会话共用一个 network 时为 3 个进程、151 MiB（[docs/engine.zh-CN.md](docs/engine.zh-CN.md)）。
+`Context` 会启动自己的进程；`Engine` 则把多个 Context 作为同一进程中的会话并行运行，每个会话有自己的线程、堆、页面、时钟、Cookie、存储、代理和 TLS 配置。`prewarm` 和 `network=` 可以精简占 Context 大部分内存的 Necko 辅助进程：实测四个会话 5 个进程、221 MiB，四个 Context 为 12 个进程、378 MiB；四个会话共用一个 network 时为 3 个进程、151 MiB（[docs/engine.zh-CN.md](docs/engine.zh-CN.md)）。
 
 ```python
 from ruyijs import Context, Engine, use_engine

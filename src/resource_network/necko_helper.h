@@ -50,8 +50,10 @@ class NeckoHelper {
     PROCESS_INFORMATION process{};
     std::wstring environment;
     if (partition && Overrides(*partition)) environment = EnvironmentBlock(*partition);
+    // DETACHED_PROCESS: no console, so no conhost.exe per helper (about
+    // 6 MiB each); the three standard handles are the pipes and NUL above.
     const BOOL created = restricted && CreateProcessW(python.c_str(), command.data(), nullptr,
-        nullptr, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT |
+        nullptr, TRUE, DETACHED_PROCESS | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT |
             (environment.empty() ? 0 : CREATE_UNICODE_ENVIRONMENT),
         environment.empty() ? nullptr : environment.data(), nullptr, &startup.StartupInfo, &process);
     DeleteProcThreadAttributeList(attributes);

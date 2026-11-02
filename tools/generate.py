@@ -12,6 +12,11 @@ def replace_once(source, old, new):
 
 
 SESSION_THREADS = """\
+#if defined(MOZ_MEMORY) && __has_include("mozmemory.h")
+#  include "mozmemory.h"
+#  define RUYIJS_SESSION_ARENA 1
+#endif
+
 struct RuyijsSessionInput {
   JSRuntime* parentRuntime;
   JS::ContextOptions options;
@@ -19,6 +24,17 @@ struct RuyijsSessionInput {
 };
 
 static void RuyijsSessionMain(RuyijsSessionInput input) {
+#ifdef RUYIJS_SESSION_ARENA
+  // A session thread runs a page's DOM and scripts the way Firefox's main
+  // thread does, and gets a jemalloc arena of its own as that thread does
+  // (nsThreadManager::Init): sessions then do not contend on the lock of the
+  // default arena (16 sessions building a DOM at once took 16 times the CPU
+  // of one). mozjemalloc never frees an arena; declared before the context,
+  // this scope exit runs after the context is gone and returns the session's
+  // free pages to the system.
+  jemalloc_thread_local_arena(true);
+  auto releaseArena = MakeScopeExit([] { jemalloc_free_dirty_pages(); });
+#endif
   JSContext* cx = JS_NewContext(JS::DefaultHeapMaxBytes, input.parentRuntime);
   auto destroyContext = MakeScopeExit([cx] {
     if (cx) JS_DestroyContext(cx);

@@ -176,8 +176,10 @@ StartResult Process::Start(std::wstring_view executable, std::string initial, Wo
     const PartitionRef partition = CurrentPartition();
     std::wstring environment;
     if (Overrides(*partition)) environment = EnvironmentBlock(*partition);
+    // DETACHED_PROCESS: no console and no conhost.exe; a worker talks over its
+    // RPC pipe only, and writes to absent standard handles are dropped.
     if (!CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, FALSE,
-                        CREATE_NO_WINDOW | CREATE_SUSPENDED |
+                        DETACHED_PROCESS | CREATE_SUSPENDED |
                             (environment.empty() ? 0 : CREATE_UNICODE_ENVIRONMENT),
                         environment.empty() ? nullptr : environment.data(), nullptr, &startup,
                         &information))
