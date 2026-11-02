@@ -205,6 +205,8 @@ jobs:
           wheel-test\Scripts\python.exe -c "import ruyijs; print(ruyijs.__version__, ruyijs.get_runtime_path())"
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\smoke_test.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\helper_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\atob_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\network_smoke.py"

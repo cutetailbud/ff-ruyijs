@@ -28,6 +28,12 @@ from wheel_runtime import download_url, validate  # noqa: E402
 
 REPLACED = ("dist/js.exe", "dist/mozglue.dll")
 LICENSE_FILES = ("LICENSE", "NOTICE", "COMMERCIAL-LICENSE.md")
+EMBEDDED = "vendor/necko-derived/python"
+# Extension modules of the embedded Python that the Necko helper cannot use:
+# Tk (its zip has no tkinter package), SQLite and winsound. Only _tkinter.pyd
+# and _sqlite3.pyd load the DLLs.
+UNUSED = ("DLLs/_tkinter.pyd", "DLLs/tcl86t.dll", "DLLs/tk86t.dll", "DLLs/_sqlite3.pyd",
+          "DLLs/sqlite3.dll", "DLLs/winsound.pyd")
 
 
 def digest(path):
@@ -76,6 +82,12 @@ def main():
     stage = out / "runtime"
     with tempfile.TemporaryDirectory(dir=out) as temporary:
         shutil.copytree(fetch_base(manifest, Path(temporary)), stage)
+    embedded = stage / EMBEDDED
+    for name in UNUSED:
+        (embedded / name).unlink(missing_ok=True)
+    # The helpers start from bytecode whichever Python installs the wheel.
+    subprocess.run([str(embedded / "python.exe"), "-I", "-B", str(Path(__file__).with_name("compile_embedded.py"))],
+                   check=True)
     for name in REPLACED:
         built = args.dist / Path(name).name
         if not built.is_file():
@@ -93,7 +105,9 @@ def main():
         f"(github.com/mozilla-firefox/firefox at {firefox}) and the ruyijs sources\n"
         "of the same release (https://github.com/cutetailbud/ff-ruyijs).\n"
         "The Necko transport and the embedded Python under vendor/ are carried over from the\n"
-        f"previously pinned runtime {manifest['archive']} (sha256 {manifest['sha256']}).\n"
+        f"previously pinned runtime {manifest['archive']} (sha256 {manifest['sha256']}),\n"
+        "without the embedded Python's Tk, SQLite and winsound modules, and with its bytecode\n"
+        "compiled by that Python (ci/package/compile_embedded.py).\n"
         "Component license texts are in licenses/ and the embedded Python packages.\n"
         "SHA256SUMS describes this runtime.\n", encoding="utf-8", newline="\n")
     files = sorted((p for p in stage.rglob("*") if p.is_file() and p.name != "SHA256SUMS"),

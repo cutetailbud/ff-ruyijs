@@ -3,6 +3,23 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- The Necko helpers start from bytecode. The Python bundled for them on Windows and Linux held its standard
+  library as sources, and pip compiles the bundled packages for whichever Python installs the wheel (rarely the
+  helpers' 3.14), so each helper compiled about 350 modules when it started, and so did each DNS resolver child a
+  helper starts for a new host. The runtime now carries bytecode of the bundled Python (unchecked-hash `.pyc`).
+  On Windows, with the wheel installed by Python 3.12: a helper starts in 0.55 CPU-seconds instead of 2.4 and
+  uses about 3 MiB less (5 MiB after its first HTTPS request); opening 32 Contexts takes 40 CPU-seconds instead
+  of 218; the first request to a new host is about 0.45 s faster, and a page that needs many helpers loads
+  sooner (github.com: 9.4 s instead of 16.8). `ci/helper_check.py` fails when a helper compiles a module.
+- The bundled helper Python leaves out modules the helper cannot use: on Windows Tk, SQLite and winsound
+  (5.4 MB); on Linux the static libpython and its build files (73 MB), the build Python's pip, CPython's test
+  modules, and the Tk, curses, readline, dbm and SQLite extension modules, with the libraries they brought into
+  the bundle (libtcl, libtk, libX11).
+
 ## [0.3.2] - 2026-11-02
 
 ### Fixed

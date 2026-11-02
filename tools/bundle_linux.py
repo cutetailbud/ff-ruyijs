@@ -28,6 +28,39 @@ def ignore(directory, names):
             or name.endswith(('.pyc', '.pyo'))]
 
 
+# Extension modules the helper cannot use: CPython's test modules, and Tk,
+# curses, readline, dbm and SQLite, which would also bring libtcl, libtk,
+# libX11, ncurses, libreadline, gdbm and libsqlite3 into the bundle.
+UNUSED_EXTENSIONS = ('_test', '_ctypes_test', '_xxtestfuzz', 'xxlimited', 'xxsubtype', '_tkinter',
+                     '_curses', 'readline', '_dbm', '_gdbm', '_sqlite3')
+
+
+def stdlib_ignore(root):
+    """ignore, and at the top of the standard library also the build files
+    (config-*: the static libpython and its Makefile, 73 MB) and the build
+    Python's own site-packages (pip; the helper's packages are copied below)."""
+    def skip(directory, names):
+        skipped = ignore(directory, names)
+        if Path(directory) == root:
+            skipped += [name for name in names if name == 'site-packages' or name.startswith('config-')]
+        elif Path(directory).name == 'lib-dynload':
+            skipped += [name for name in names if name.startswith(UNUSED_EXTENSIONS)]
+        return skipped
+    return skip
+
+
+def compile_bytecode(python, stdlib):
+    # The helper (-B) and its resolver children start from bytecode of their
+    # own interpreter whichever Python installs the wheel: pip compiles the
+    # bundle for the installing Python, which is rarely the helper's 3.14.
+    # Unchecked-hash .pyc files hold whatever the files' modification times.
+    subprocess.run([str(python), '-I', '-B', '-c',
+                    'import compileall, py_compile, sys; sys.exit(not compileall.compile_dir('
+                    'sys.argv[1], ddir=sys.argv[2], quiet=1, force=True, '
+                    'invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH))',
+                    str(stdlib), 'lib/' + stdlib.name], check=True)
+
+
 def helper(project, target):
     # The shell starts <runtime>/vendor/necko-derived/python/bin/python3
     # (src/resource_network/necko_helper.cpp), as on macOS.
@@ -44,7 +77,7 @@ print(json.dumps(dict(executable=sys.executable,stdlib=sysconfig.get_path('stdli
     (runtime / 'bin').mkdir(parents=True)
     shutil.copy2(Path(inventory['executable']).resolve(), runtime / 'bin/python3')
     stdlib = runtime / 'lib' / Path(inventory['stdlib']).name
-    shutil.copytree(inventory['stdlib'], stdlib, ignore=ignore)
+    shutil.copytree(inventory['stdlib'], stdlib, ignore=stdlib_ignore(Path(inventory['stdlib'])))
     site = stdlib / 'site-packages'
     site.mkdir(exist_ok=True)
     packages = {canonicalize_name(d['name']): d for d in inventory['distributions']}
@@ -147,6 +180,8 @@ def bundle(project, target):
         shutil.copy2(project / name, target / name)
     helper(project, target)
     bundled = libraries(target)
+    python = target / 'vendor/necko-derived/python/bin/python3'
+    compile_bytecode(python, next((python.parent.parent / 'lib').glob('python3.*')))
     glibc = command('getconf', 'GNU_LIBC_VERSION')
     has_quic = any(target.glob('vendor/necko-derived/python/lib/python*/site-packages/necko/libnecko_quic.so'))
     graphics = 'system Skia' if any(name.startswith('libskia.') for name in bundled) else 'Firefox 159 Skia 149 raster'
