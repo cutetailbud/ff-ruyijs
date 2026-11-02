@@ -1,5 +1,6 @@
 #include "web_geometry/box_input.h"
 #include "domain/styling/css_numeric_value.h"
+#include "web_geometry/font_config.h"
 #include "js/Realm.h"
 #include "js/Wrapper.h"
 #include <array>
@@ -18,25 +19,30 @@ bool Read(State& s, JS::HandleObject object, document_model::LayoutNodeSource* n
 bool SameStyle(const box::BoxStyle& a, const box::BoxStyle& b) {
   return a.font_size==b.font_size && a.root_font_size==b.root_font_size &&
          a.specified_margin_mask==b.specified_margin_mask && a.specified_border_mask==b.specified_border_mask &&
-         a.specified_padding_mask==b.specified_padding_mask && a.values==b.values;
+         a.specified_padding_mask==b.specified_padding_mask &&
+         (a.values==b.values || (a.values && b.values && *a.values==*b.values));
 }
 // One layout pass. `previous` is the last layout of the same root (same
 // cascade, viewport and focus). An element keeps its previous computed style
-// when nothing its selectors read changed and its parent's computed style is
-// unchanged, as Firefox restyles only what a change can reach. An element is
+// when nothing its selectors read changed and what its parent passes to it is
+// unchanged (inherited and custom properties, display, font sizes), as Firefox
+// restyles only what a change can reach: a change to a parent's reset
+// properties alone (padding, width, ...) restyles a child only when the child
+// `inherit`s a reset property. An element is
 // dirty when it is new, moved, or before/after a changed position among its
 // siblings, or its attributes changed; dirtiness reaches its descendants and
 // following siblings (descendant and sibling combinators). Selectors counted
 // from the end make a changed child list dirty all children; :empty makes an
 // element with a changed child list dirty. A change a :has() argument may read
 // lays the tree out again without reuse (`restart`). `same` marks a computed
-// style equal to the previous one; `reached` the previous nodes laid out again.
+// style equal to the previous one, `inputs` one passing its children the same
+// inputs as before; `reached` the previous nodes laid out again.
 struct Pass {
   LayoutCache& cache;
   size_t found = size_t(-1);
   web_styling::ComputedStyleReader& styles;
   const LayoutCache* previous = nullptr;
-  std::vector<char> same, dirty, reached;
+  std::vector<char> same, inputs, dirty, reached;
   bool restart = false, structural = false;
 };
 std::set<std::string> Tokens(const std::u16string& value);
@@ -126,6 +132,7 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   for(const auto& attr:source.attributes) if(attr.name==u"style") inline_style=attr.value;
   const uint64_t attributes=AttributeHash(source);
   const bool parent_same=parent_index==size_t(-1) || pass.same[parent_index];
+  const bool parent_inputs=parent_index==size_t(-1) || pass.inputs[parent_index];
   const LayoutCache* previous=pass.previous;
   size_t before=size_t(-1);
   if(previous) {
@@ -151,7 +158,8 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   const bool children_changed=before!=size_t(-1) && previous->nodes[before].children.size()!=children.length();
   const bool known=styles.Scopes()!=0;
   const bool own_children=children_changed && (!known || styles.Dependencies().empty);
-  bool same=false;
+  bool same=false, inputs=false, inherits_reset=false;
+  uint64_t child_inputs=0;
   const bool changed=before!=size_t(-1) && previous->attributes[before]!=attributes;
   const bool restyled=before!=size_t(-1) && previous->inline_styles[before]!=inline_style;
   // With a selector on the style attribute, an inline-style change reaches
@@ -164,22 +172,41 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
     if(restyled && dependencies.hasAttributes.count("style")) pass.restart=true;
   }
   if(source.element) {
-    if(!dirty && parent_same && styles.Scopes() && !restyled) {
-      node.style=previous->nodes[before].style;same=true;
+    // A child that inherits a reset property reads all of its parent's style.
+    if(!dirty && styles.Scopes() && !restyled && parent_inputs &&
+       (parent_same || !previous->inherits_reset[before])) {
+      node.style=previous->nodes[before].style;
+      child_inputs=previous->child_inputs[before]; inherits_reset=previous->inherits_reset[before];
+      same=inputs=true;
     } else {
       web_styling::ComputedStyle style;
       if(!styles.Read(object,&style)) return false;
       // Layout reads no custom property; dropping them keeps BoxStyle::Get short.
       std::erase_if(style.values,[](const auto& value){return value.first.starts_with("--");});
-      node.style={std::move(style.values),style.fontSize,style.rootFontSize,
+      child_inputs=style.childInputs; inherits_reset=style.inheritsReset;
+      node.style={box::BoxStyle::Share(std::move(style.values)),style.fontSize,style.rootFontSize,
                   style.specifiedMarginMask,style.specifiedBorderMask,style.specifiedPaddingMask};
-      same=before!=size_t(-1) && SameStyle(node.style,previous->nodes[before].style);
+      // The custom properties and the inherited line-height value are not in
+      // BoxStyle: equal styles also pass their children the same inputs.
+      inputs=before!=size_t(-1) && previous->child_inputs[before]==child_inputs;
+      same=inputs && SameStyle(node.style,previous->nodes[before].style);
     }
   } else {
     if(parent_index!=size_t(-1)) node.style=(*nodes)[parent_index].style;
-    same=parent_same;
+    same=parent_same; inputs=parent_inputs;
   }
-  if(source.text && !BoxText(s,source,&node)) return false;
+  // A text box keeps its measurement when its text and everything BoxText
+  // reads are unchanged: its element's inherited font properties, white-space,
+  // line-height and root font size (what that element passes its children),
+  // under the same font configuration.
+  if(source.text) {
+    if(before!=size_t(-1) && parent_inputs && previous->fonts==FontConfigGeneration() &&
+       previous->texts[before]==source.data) {
+      const auto& measured=previous->nodes[before];
+      node.text_width=measured.text_width; node.text_height=measured.text_height;
+      node.line_height=measured.line_height; node.breakable=measured.breakable;
+    } else if(!BoxText(s,source,&node)) return false;
+  }
   for(const auto& attr:source.attributes) {
     if(attr.name==u"type") node.input_type.assign(attr.value.begin(),attr.value.end());
     if(attr.name==u"frameborder"&&node.tag=="iframe"&&(attr.value==u"0"||attr.value==u"no"||attr.value==u"NO"))
@@ -202,7 +229,11 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   pass.cache.inline_styles.push_back(std::move(inline_style));
   pass.cache.attributes.push_back(attributes);
   pass.cache.attribute_lists.push_back(std::move(list));
+  pass.cache.texts.push_back(source.text ? std::move(source.data) : std::u16string());
+  pass.cache.child_inputs.push_back(child_inputs);
+  pass.cache.inherits_reset.push_back(inherits_reset);
   pass.same.push_back(same);
+  pass.inputs.push_back(inputs);
   pass.dirty.push_back(dirty);
   if(parent_index!=size_t(-1)) (*nodes)[parent_index].children.push_back(index);
   if(hidden) return true;
@@ -299,7 +330,7 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
   if(pass.restart) {  // a :has() argument may have changed: lay out without reuse
     *cache=LayoutCache();
     pass.previous=nullptr; pass.restart=false; pass.found=size_t(-1);
-    pass.same.clear(); pass.dirty.clear(); pass.reached.clear();
+    pass.same.clear(); pass.inputs.clear(); pass.dirty.clear(); pass.reached.clear();
     if(!Visit(s,root,target,size_t(-1),pass,0,false,size_t(-1),0)) return false;
   }
   const size_t found=pass.found;
@@ -308,6 +339,7 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
   // One cascade scope only: a shadow scope's sheets are outside the fingerprint.
   if(stamped&&styles->Scopes()<=1) {
     cache->root=rootKey; cache->focused=focused; cache->revision=revision; cache->styles=stamp;
+    cache->fonts=FontConfigGeneration();
     cache->structure=structure; cache->tree=tree;
     cache->viewport=view;
     for(size_t i=0;i<keys.size();++i) cache->index.emplace(std::make_pair(keys[i].document,keys[i].node),i);

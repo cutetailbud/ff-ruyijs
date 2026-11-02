@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -7,10 +8,15 @@
 namespace ruyijs::domain::styling {
 using BoxRect = std::array<double, 4>;
 struct BoxStyle {
-  std::vector<std::pair<std::string, std::string>> values;
+  // Computed values sorted by name (Share), searched by Get, and shared: a
+  // text box takes its element's style and an unchanged element keeps the
+  // previous layout's by copying a pointer, not a few hundred strings.
+  using Values = std::vector<std::pair<std::string, std::string>>;
+  std::shared_ptr<const Values> values;
   double font_size = 16, root_font_size = 16;
   unsigned specified_margin_mask = 0, specified_border_mask = 0, specified_padding_mask = 0;
-  std::string Get(const char* name) const;
+  const std::string& Get(const char* name) const;
+  static std::shared_ptr<const Values> Share(Values values);
 };
 struct BoxNode {
   BoxStyle style;

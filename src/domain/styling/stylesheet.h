@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <cstdlib>
 #include <set>
 #include "domain/shared/aggregate_root.h"
@@ -138,6 +139,9 @@ public:
     double computed_font_size = 16;
     double computed_line_height = 0;
     bool font_computed = false, line_height_computed = false;
+    // An explicit `inherit` on a property that does not inherit: this style
+    // reads a value its parent's StyleResolutionService::child_inputs omits.
+    bool inherits_reset = false;
     unsigned specified_margin_mask = 0, specified_border_mask = 0, specified_padding_mask = 0;
 
     using Properties = std::map<std::string, CssProperty>;
@@ -643,6 +647,7 @@ public:
             }
             if (keyword == "inherit" || keyword == "unset" || keyword == "revert" || keyword == "revert-layer") {
                 bool from_parent = keyword == "inherit" || is_inherited(name);
+                if (keyword == "inherit" && !is_inherited(name)) result.inherits_reset = true;
                 if (from_parent && has_parent && parent_style.has_property(name))
                     result.set_property(name, parent_style.get_property_value(name), false);
                 else if (StyleDeclaration::custom(name))
@@ -717,6 +722,42 @@ public:
         // Custom properties are inherited (CSS Variables 1 §2).
         if (property.size() > 2 && property.compare(0, 2, "--") == 0) return true;
         for (const auto& font : CssFontDefaults()) if (font.name == property) return true;
+        const auto& names = inherited_names();
+        return std::find(names.begin(), names.end(), property) != names.end();
+    }
+
+    /// What compute_style reads from a parent's computed style, as one hash:
+    /// the inherited properties (inherited_names, the font defaults and the
+    /// custom properties), display (Blockify), and the computed font size, line
+    /// height and root font size with their flags (CssComputeFont). A child
+    /// whose own declarations did not change keeps its computed style while
+    /// this holds, unless it is inherits_reset: as Gecko, a change to a
+    /// parent's reset properties alone does not restyle its children.
+    static uint64_t child_inputs(const StyleDeclaration& style) {
+        uint64_t hash = 1469598103934665603ull;
+        const auto mix = [&hash](const void* data, size_t size) {
+            const auto* bytes = static_cast<const unsigned char*>(data);
+            for (size_t i = 0; i < size; ++i) { hash ^= bytes[i]; hash *= 1099511628211ull; }
+        };
+        const auto text = [&mix](const std::string& value) { mix(value.data(), value.size()); mix("\x1f", 1); };
+        const auto property = [&](const std::string& name) {
+            text(name);
+            text(style.has_property(name) ? style.get_property_value(name) : std::string("\x1e"));
+        };
+        for (const auto& name : inherited_names()) property(name);
+        for (const auto& font : CssFontDefaults()) property(font.name);
+        property("display");
+        for (const auto& [name, value] : style.customs()) { text(name); text(value.value); }
+        const double numbers[] = {style.computed_font_size, style.computed_line_height, style.root_font_size};
+        mix(numbers, sizeof numbers);
+        const unsigned char flags[] = {style.font_computed, style.line_height_computed};
+        mix(flags, sizeof flags);
+        return hash;
+    }
+
+    /// The properties an undeclared value inherits besides custom properties
+    /// and the font defaults (is_inherited).
+    static const std::vector<std::string>& inherited_names() {
         static const std::vector<std::string> names = {
             "-x-lang", "color", "font-family", "font-size", "font-style", "font-variant",
             "font-weight", "line-height", "letter-spacing", "word-spacing", "text-align",
@@ -727,7 +768,7 @@ public:
             "accent-color", "color-scheme", "forced-color-adjust", "hyphens",
             "image-rendering", "paint-order", "text-wrap", "overflow-wrap",
             "font-variant-numeric"};
-        return std::find(names.begin(), names.end(), property) != names.end();
+        return names;
     }
 
     /// The user-agent default display keyword for an HTML tag. This is the UA

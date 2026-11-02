@@ -20,6 +20,21 @@ All notable changes to this project are documented here. The format follows
   modules, and the Tk, curses, readline, dbm and SQLite extension modules, with the libraries they brought into
   the bundle (libtcl, libtk, libX11).
 
+### Fixed
+
+- Geometry reads (`offsetHeight`, `getBoundingClientRect()`, `scrollHeight`, ...) after a style change no
+  longer restyle elements the change cannot reach, and lay out faster (#13, reported by @jp19980). A child keeps
+  its computed style when its parent's change leaves what the parent passes it unchanged (inherited and custom
+  properties, display, font sizes), as Firefox does, unless the child `inherit`s a property that does not
+  inherit. Layout shares computed styles instead of copying them, finds properties in a sorted table, remembers
+  resolved lengths, and keeps a text's measurement while neither the text nor its font changed. With 1,500 divs,
+  reading an input's `offsetHeight` after changing a later sibling's padding took 415 ms and now takes 57 ms on
+  the Windows machine we measured (500 divs: 132 to 17.6 ms; 100: 28 to 4.7 ms).
+- Geometry read after a mutation missed two changes until the page was laid out from scratch: a custom property
+  changed on an element did not reach children that read it through `var()`, and a line-height changed from a
+  length to a number (`20px` to `1.25`) did not reach children with another font size. `ci/layout_check.py`
+  compares geometry read after a mutation with a fresh layout of the mutated page.
+
 ## [0.3.2] - 2026-11-02
 
 ### Fixed

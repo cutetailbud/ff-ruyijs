@@ -105,6 +105,8 @@ bool ComputedStyleReader::Read(JS::HandleObject element, ComputedStyle* out) {
   for (const auto& entry : css::StyleResolutionService::initial_values())
     if (!computed.all().count(entry.first)) result.values.emplace_back(entry.first, entry.second);
   result.customsText = SerializeCustoms(computed);
+  result.childInputs = css::StyleResolutionService::child_inputs(computed);
+  result.inheritsReset = computed.inherits_reset;
   ComputeColors(&result);
   *out = std::move(result);
   return true;

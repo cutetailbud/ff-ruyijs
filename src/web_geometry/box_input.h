@@ -26,6 +26,13 @@ struct LayoutCache {
   std::vector<uint64_t> attributes;  // Per node: hash of its other attributes.
   using Attributes = std::vector<std::pair<std::u16string, std::u16string>>;
   std::vector<Attributes> attribute_lists;  // Per node: its attributes (for :has() reach).
+  // Per element: what its computed style passes to its children's cascade,
+  // and whether it inherits a reset property (ComputedStyle::childInputs,
+  // inheritsReset); 0 for text.
+  std::vector<uint64_t> child_inputs;
+  std::vector<char> inherits_reset;
+  std::vector<std::u16string> texts;  // Per node: its text (empty for elements).
+  uint64_t fonts=0;  // The font configuration generation the text was measured under.
   std::map<std::pair<uint64_t,uint64_t>,size_t> index;
 };
 // HTMLElement offset* from one layout: border box without transforms, relative

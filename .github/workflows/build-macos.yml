@@ -165,6 +165,7 @@ jobs:
           unset PYTHONPATH
           wheel-test/bin/python -c "import ruyijs; print(ruyijs.__version__, ruyijs.get_runtime_path())"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/smoke_test.py"
+          wheel-test/bin/python "$GITHUB_WORKSPACE/ci/layout_check.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/atob_check.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/network_smoke.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/proxy_smoke.py"

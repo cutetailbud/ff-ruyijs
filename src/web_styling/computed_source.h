@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <vector>
 #include <utility>
 #include <string>
@@ -67,6 +68,11 @@ struct ComputedStyle {
   double fontSize = 16;
   double rootFontSize = 16;
   unsigned specifiedMarginMask = 0, specifiedBorderMask = 0, specifiedPaddingMask = 0;
+  // What this style passes to children's cascade
+  // (StyleResolutionService::child_inputs), and whether it `inherit`s a
+  // property that does not inherit, so reads its parent's other values too.
+  uint64_t childInputs = 0;
+  bool inheritsReset = false;
   std::string Get(const char* name) const {
     for (const auto& entry : values) if (entry.first == name) return entry.second;
     return {};

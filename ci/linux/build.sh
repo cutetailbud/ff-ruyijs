@@ -82,6 +82,8 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/smoke_test.py"
     # The Necko helper starts from bytecode and carries no unusable modules.
     "${clean[@]}" "$venv/bin/python" "$root/ci/helper_check.py"
+    # Geometry after a mutation equals a fresh layout of the mutated page.
+    "${clean[@]}" "$venv/bin/python" "$root/ci/layout_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/atob_check.py"
     # One real page load through the bundled Necko helper, direct and through
     # a local CONNECT proxy.
