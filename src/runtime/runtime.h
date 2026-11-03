@@ -21,7 +21,14 @@ struct SessionOptions {
   bool debug = false;
   std::string environment;
   // Necko helpers started in the background for the session's partition.
+  // Linux starts them on the first request. Two idle interpreters are most of
+  // a Context's memory, and on Linux they are their own process group, so they
+  // keep running after the shell has exited. Windows and macOS keep 2.
+#if defined(__linux__)
+  unsigned prewarm = 0;
+#else
   unsigned prewarm = 2;
+#endif
   // A shared engine's session: the native stack a single-session process
   // leaves to RunSession (bytes below its entry), so recursion depth matches.
   size_t stack = 0;

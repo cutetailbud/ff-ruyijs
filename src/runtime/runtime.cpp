@@ -4,6 +4,7 @@
 #include "runtime/native_stack.h"
 #include "resource_network/async_http.h"
 #include "resource_network/necko_http.h"
+#include "runtime/transport_partition.h"
 #include "runtime/http_environment_ports.h"
 #include "runtime/pipe.h"
 #include "runtime/exception_capture.h"
@@ -110,6 +111,19 @@ bool RunSession(JSContext* cx, const SessionOptions& session, js::cli::OptionPar
   const uintptr_t entry = RUYIJS_ENTRY_POSITION();
   if (session.host) return Host(cx, cli, checkpoint, *session.host, NativeStackBelow(cx, entry));
   if (session.stack) MatchNativeStack(cx, entry, session.stack);
+#if defined(__linux__)
+  // A plain Context (no engine stack) owns the process. Its helpers are a new
+  // process group, so they are not reaped by the shell exiting; they notice
+  // the closed pipe and spend 100-200 ms leaving. Drop them before return,
+  // which is before the process exits. An engine session has a stack and
+  // releases its own partition from the host, including a shared network.
+  struct ReleasePlainHelpers {
+    bool armed;
+    ~ReleasePlainHelpers() {
+      if (armed) resource_network::ReleaseNeckoPartition(CurrentPartition()->key);
+    }
+  } releasePlainHelpers{session.stack == 0};
+#endif
   // Heap compaction stays off for the whole runtime. The donor engine's
   // compacting GC faults while relocating the shape/property-map graph the
   // browser installers build (see docs/DEVIATIONS.md D16 for the reproducer
@@ -270,8 +284,9 @@ bool RunSession(JSContext* cx, const SessionOptions& session, js::cli::OptionPar
   BindHttpEnvironment(*main,*resources,*scheduling);
   BindObjectUrlNetwork(*main, *resources);
   BindBlobStreams(*main->platform, *resources);
-  // Helper sessions (two by default) start in the background now, so the page's
+  // Helper sessions start in the background when prewarm is set, so the page's
   // first requests do not wait for the helper interpreter (NECKO_TRANSPORT.md).
+  // A plain Linux Context leaves prewarm at 0 and starts a helper on demand.
   resource_network::PrewarmNeckoSessions(session.prewarm);
   asyncHttp = std::make_unique<resource_network::AsyncHttp>(resources->Resources());
   if (!resources->BindAsyncHttp(*asyncHttp)) return false;
