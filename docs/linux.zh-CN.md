@@ -35,4 +35,5 @@ ci/linux/build.sh test     # 在全新 venv 里安装 wheel 并运行冒烟测�
 ```
 
 donor 步骤用发行版自带的 Python（`/usr/bin/python3`）运行 configure，necko 步骤需要 `python3` 是 Python 3.14。完整构建约占 11 GB 磁盘。Necko 适配层及其限制见
-[native/necko_posix/README.md](../native/necko_posix/README.md)。
+[native/necko_posix/README.md](../native/necko_posix/README.md)。一次实测构建、冒烟测试和速度基线写在
+[linux-baseline.md](linux-baseline.md)。
