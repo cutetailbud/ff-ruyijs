@@ -9,8 +9,39 @@
 #include <string_view>
 
 namespace ruyijs::domain::styling {
+namespace {
+// Names Place, Children and the edge/limit helpers read on every box. The
+// index is an identity of the name, not a position in one style's list.
+const char* const kKnownNames[BoxKnown::kCount] = {
+    "display", "position", "float", "box-sizing", "transform",
+    "width", "height", "min-width", "min-height", "max-width", "max-height",
+    "left", "right", "top", "bottom",
+    "margin-top", "margin-right", "margin-bottom", "margin-left",
+    "padding-top", "padding-right", "padding-bottom", "padding-left",
+    "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+    "overflow-x", "overflow-y",
+};
+// Call sites pass string literals. The first resolution of a literal compares
+// it with the table; every later call from that site is a pointer compare.
+int KnownIndex(const char* name) {
+  struct Slot { const char* name = nullptr; int index = -2; };
+  thread_local std::array<Slot, 256> slots;
+  auto& slot = slots[(reinterpret_cast<uintptr_t>(name) * 0x9E3779B97F4A7C15ull) >> 56];
+  if (slot.name == name && slot.index != -2) return slot.index;
+  int index = -1;
+  for (int i = 0; i < BoxKnown::kCount; ++i)
+    if (std::strcmp(kKnownNames[i], name) == 0) { index = i; break; }
+  slot = {name, index};
+  return index;
+}
+}
 const std::string& BoxStyle::Get(const char* name) const {
   static const std::string missing;
+  const int knownIndex = KnownIndex(name);
+  if (knownIndex >= 0 && known) {
+    const std::string* slot = known->slot[knownIndex];
+    return slot ? *slot : missing;
+  }
   if (!values) return missing;
   // Every computed style lists nearly the same properties in the same sorted
   // order, so where this thread last found a name (callers pass literals)
@@ -34,6 +65,30 @@ std::shared_ptr<const BoxStyle::Values> BoxStyle::Share(Values values) {
   values.erase(std::unique(values.begin(), values.end(), [](const auto& a, const auto& b) { return a.first == b.first; }),
                values.end());
   return std::make_shared<const Values>(std::move(values));
+}
+BoxStyle BoxStyle::Build(Values raw, double font, double root, unsigned margin, unsigned border,
+                        unsigned padding) {
+  BoxStyle style;
+  style.values = Share(std::move(raw));
+  auto known = std::make_shared<BoxKnown>();
+  if (style.values) {
+    const auto& list = *style.values;
+    for (int i = 0; i < BoxKnown::kCount; ++i) {
+      const std::string_view key(kKnownNames[i]);
+      const auto found = std::lower_bound(list.begin(), list.end(), key,
+          [](const auto& entry, std::string_view wanted) {
+            return std::string_view(entry.first) < wanted;
+          });
+      if (found != list.end() && std::string_view(found->first) == key) known->slot[i] = &found->second;
+    }
+  }
+  style.known = std::move(known);
+  style.font_size = font;
+  style.root_font_size = root;
+  style.specified_margin_mask = margin;
+  style.specified_border_mask = border;
+  style.specified_padding_mask = padding;
+  return style;
 }
 namespace {
 // Layout resolves the same few lengths ("0px", "8px", "auto") for most boxes

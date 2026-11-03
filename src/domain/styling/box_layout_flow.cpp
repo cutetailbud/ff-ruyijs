@@ -80,13 +80,13 @@ bool BoxFlow::Children(size_t index, size_t positioned, unsigned depth, double* 
     }
     const double x = parent.content[0]+(in_line ? line_x : 0);
     // Anonymous text boxes inherit font properties, but element margins,
-    // padding, and borders do not apply to their inline content.
+    // padding, and borders do not apply to their inline content. Place
+    // computes element edges itself, for this same content-box width, so
+    // doing it here only to overwrite it was a second pass per child.
     if (node.text) {
       boxes[child].margin = {};
       boxes[child].padding = {};
       boxes[child].edge = {};
-    } else {
-      BoxEdges(node, parent.content[2], &boxes[child]);
     }
     const double y = parent.content[1]+cursor_y;
     if (!Place(child, parent.content, parent.definite_height, x, y, positioned, depth+1)) return false;

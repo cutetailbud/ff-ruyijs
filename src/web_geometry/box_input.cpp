@@ -184,8 +184,8 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
       // Layout reads no custom property; dropping them keeps BoxStyle::Get short.
       std::erase_if(style.values,[](const auto& value){return value.first.starts_with("--");});
       child_inputs=style.childInputs; inherits_reset=style.inheritsReset;
-      node.style={box::BoxStyle::Share(std::move(style.values)),style.fontSize,style.rootFontSize,
-                  style.specifiedMarginMask,style.specifiedBorderMask,style.specifiedPaddingMask};
+      node.style=box::BoxStyle::Build(std::move(style.values),style.fontSize,style.rootFontSize,
+                  style.specifiedMarginMask,style.specifiedBorderMask,style.specifiedPaddingMask);
       // The custom properties and the inherited line-height value are not in
       // BoxStyle: equal styles also pass their children the same inputs.
       inputs=before!=size_t(-1) && previous->child_inputs[before]==child_inputs;
