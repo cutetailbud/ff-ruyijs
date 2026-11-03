@@ -167,6 +167,7 @@ jobs:
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/smoke_test.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/layout_check.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/atob_check.py"
+          wheel-test/bin/python "$GITHUB_WORKSPACE/ci/fetch_abort_check.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/network_smoke.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/proxy_smoke.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/hello_check.py"

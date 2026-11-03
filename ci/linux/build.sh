@@ -10,7 +10,7 @@
 #                              (tools/build_necko_linux.py --http3; Python 3.14)
 #   ci/linux/build.sh wheel    the manylinux wheel                -> wheelhouse/
 #   ci/linux/build.sh test     installs the wheel in a fresh venv; ci/smoke_test.py,
-#                              ci/atob_check.py, ci/network_smoke.py, ci/proxy_smoke.py,
+#                              ci/atob_check.py, ci/fetch_abort_check.py, ci/network_smoke.py, ci/proxy_smoke.py,
 #                              ci/hello_check.py and ci/engine_check.py
 set -euo pipefail
 step="${1:?usage: build.sh deps|donor|shell|necko|wheel|test}"
@@ -85,6 +85,7 @@ case "$step" in
     # Geometry after a mutation equals a fresh layout of the mutated page.
     "${clean[@]}" "$venv/bin/python" "$root/ci/layout_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/atob_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/fetch_abort_check.py"
     # One real page load through the bundled Necko helper, direct and through
     # a local CONNECT proxy.
     "${clean[@]}" "$venv/bin/python" "$root/ci/network_smoke.py"

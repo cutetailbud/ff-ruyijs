@@ -6,8 +6,12 @@
 
 namespace ruyijs::resource_network {
 bool NativeFetchAbort(JSContext* cx,unsigned argc,JS::Value* vp) {
-  auto args=JS::CallArgsFromVp(argc,vp);args.rval().setUndefined();
+  auto args=JS::CallArgsFromVp(argc,vp);
+  // rval() is the callee's own slot (vp[0]): read the callee first. Writing
+  // rval first made every abort of an in-flight fetch read `undefined` as the
+  // callee object (0xC0000005 in xhs).
   auto slot=js::GetFunctionNativeReserved(&args.callee(),0);
+  args.rval().setUndefined();
   if (!slot.isObject()) return true;
   JS::RootedObject operation(cx,&slot.toObject());
   auto* record=FetchRecord(operation);

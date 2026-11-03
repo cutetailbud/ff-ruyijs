@@ -25,8 +25,11 @@ bool PendingTask(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
   State& s = *static_cast<State*>(WebKit::Owner(args));
   JS::RootedObject a(cx, Target(args));
+  // rval() is the callee's slot (vp[0]): compare against the callee before
+  // writing it, or the task never matches and never runs.
+  const bool current = JS::GetReservedSlot(a, kAPendingTask) == JS::ObjectValue(args.callee());
   args.rval().setUndefined();
-  if (JS::GetReservedSlot(a, kAPendingTask) != JS::ObjectValue(args.callee())) return true;
+  if (!current) return true;
   JS::SetReservedSlot(a, kAPendingTask, JS::NullValue());
   const auto ready = TimelineTime(TimelineOf(a));
   if (!ready) return true;  // An inactive timeline leaves the task pending, as in Firefox.
@@ -54,8 +57,9 @@ bool EndTimer(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
   State& s = *static_cast<State*>(WebKit::Owner(args));
   JS::RootedObject a(cx, Target(args));
+  const bool current = JS::GetReservedSlot(a, kATimerTask) == JS::ObjectValue(args.callee());
   args.rval().setUndefined();
-  if (JS::GetReservedSlot(a, kATimerTask) != JS::ObjectValue(args.callee())) return true;
+  if (!current) return true;
   JS::SetReservedSlot(a, kATimerTask, JS::NullValue());
   return UpdateFinished(s, a, false, false);
 }
