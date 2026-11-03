@@ -41,8 +41,18 @@ State::~State() {
 }
 Target* State::target(JSObject* object) {
   if (!object) return nullptr;
-  for (auto& value : targets)
-    if (!value->released && value->live() == object) return value.get();
+  auto found = targetByObject.find(object);
+  if (found == targetByObject.end()) return nullptr;
+  Target* value = found->second;
+  if (!value->released && value->live() == object) return value;
+  targetByObject.erase(found);
+  // The address was reused, or a trace moved an owned object. The vector is
+  // the record of what is still live.
+  for (auto& item : targets)
+    if (!item->released && item->live() == object) {
+      targetByObject.emplace(object, item.get());
+      return item.get();
+    }
   return nullptr;
 }
 Event* State::event(JSObject* object) {
@@ -90,6 +100,7 @@ bool State::attach(JS::HandleObject object, bool owns, void** record) {
   if (targets.size() >= kTargetLimit) return Error(cx, "RangeError", "EventTarget limit exceeded");
   auto value = std::make_unique<Target>(cx, object, ++nextTarget, owns);
   targetMap.emplace(value->aggregate.id(), &value->aggregate);
+  targetByObject[object] = value.get();
   if (record) *record = value.get();
   targets.push_back(std::move(value));
   return true;
@@ -104,7 +115,11 @@ void State::prune() {
   anyReleased = false;
   for (auto it = targets.begin(); it != targets.end();) {
     if ((*it)->released) {
-      targetMap.erase((*it)->aggregate.id());
+      Target* raw = it->get();
+      targetMap.erase(raw->aggregate.id());
+      for (auto mapped = targetByObject.begin(); mapped != targetByObject.end();)
+        if (mapped->second == raw) mapped = targetByObject.erase(mapped);
+        else ++mapped;
       it = targets.erase(it);
     } else {
       ++it;
