@@ -22,12 +22,14 @@ void State::TakeAdoptedIdentities(State& source, const Identities& pairs) {
     auto indexed = source.wrapperIndex.extract(entry.key);
     entry.key = key;
     entry.owner = this;
+    entry.listed = false;
     indexed.key() = key;
     wrapperIndex.insert(std::move(indexed));
     auto moved = std::move(*wrapperSlot);
     *wrapperSlot = std::move(moved->next);
     moved->next = std::move(wrappers);
     wrappers = std::move(moved);
+    entry.listed = true;
   }
   auto* reflectedSlot = &source.reflected;
   while (*reflectedSlot) {

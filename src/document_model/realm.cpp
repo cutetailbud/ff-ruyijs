@@ -131,6 +131,20 @@ bool Same(NodeKey a, NodeKey b) { return a.document == b.document && a.node == b
 Wrapper* State::Find(JSObject* object) const {
   if (!object) return nullptr;
   object = js::CheckedUnwrapStatic(object);
+  if (!object) return nullptr;
+  // Slot 0 of a live node is that node's wrapper. Walking `wrappers` is
+  // linear in the number of live nodes, and every DOM call does this lookup.
+  // The slot is published before the record is linked, and a collected record
+  // stays reachable from the list until reclaim, so the slot is trusted only
+  // when it names a listed, live record of this realm whose object is still
+  // this one (a compacting trace repoints `wrapper->object`). Anything else
+  // keeps the list walk, which is what Find returned before.
+  if (JS::GetClass(object) == &kNodeClass) {
+    auto* wrapper = static_cast<Wrapper*>(JS::GetReservedSlot(object, 0).toPrivate());
+    if (wrapper && wrapper->listed && !wrapper->dead && wrapper->owner == this &&
+        wrapper->object == object)
+      return wrapper;
+  }
   for (auto* value = wrappers.get(); value; value = value->next.get())
     if (!value->dead && value->object == object) return value;
   return nullptr;
