@@ -7,6 +7,13 @@
 
 namespace ruyijs::domain::styling {
 using BoxRect = std::array<double, 4>;
+// Pointers into a BoxStyle's shared value list for the names layout reads on
+// every box. Absent entries are null. The pointers stay valid while `values`
+// is alive, and BoxStyle keeps both.
+struct BoxKnown {
+  static constexpr int kCount = 29;
+  std::array<const std::string*, kCount> slot{};
+};
 struct BoxStyle {
   // Computed values sorted by name (Share), searched by Get, and shared: a
   // text box takes its element's style and an unchanged element keeps the
@@ -15,8 +22,12 @@ struct BoxStyle {
   std::shared_ptr<const Values> values;
   double font_size = 16, root_font_size = 16;
   unsigned specified_margin_mask = 0, specified_border_mask = 0, specified_padding_mask = 0;
+  // Filled by Build. Null means Get searches `values` (the same answer).
+  std::shared_ptr<const BoxKnown> known;
   const std::string& Get(const char* name) const;
   static std::shared_ptr<const Values> Share(Values values);
+  static BoxStyle Build(Values values, double font_size, double root_font_size,
+                        unsigned margin_mask, unsigned border_mask, unsigned padding_mask);
 };
 struct BoxNode {
   BoxStyle style;
