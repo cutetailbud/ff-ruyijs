@@ -7,7 +7,11 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   ++placements;
   const auto& node = nodes[index]; auto& box = boxes[index];
   const auto& style = node.style;
-  if (style.Get("display") == "none") return true;
+  // Place reads display and position several times. Get's hint makes a repeat
+  // one compare, but the string still has to be fetched; hold the reference.
+  const auto& display = style.Get("display");
+  const auto& position = style.Get("position");
+  if (display == "none") return true;
   if (node.text) {
     box.present = node.text_width > 0;
     box.border = box.content = {x, y, node.text_width, node.text_height};
@@ -16,7 +20,8 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   }
   box.present = true;
   BoxRect cb = containing;
-  const bool absolute = BoxAbsolute(node), fixed = style.Get("position") == "fixed";
+  const bool absolute = !node.text && (position == "absolute" || position == "fixed");
+  const bool fixed = position == "fixed";
   if (absolute) {
     if (positioned == kNoBox || fixed) {
       cb = {fixed ? viewport.scroll_x : 0, fixed ? viewport.scroll_y : 0,
@@ -54,7 +59,7 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   const double bottom = BoxLength(style, "bottom", cb[3], BoxAuto());
   // A flex item is blockified; its container resolved its size (box_layout_flex.cpp).
   const bool flex_item = index < forced_width.size() && std::isfinite(forced_width[index]);
-  const bool inline_box = style.Get("display") == "inline" && !BoxReplaced(node) && !absolute && !flex_item;
+  const bool inline_box = display == "inline" && !BoxReplaced(node) && !absolute && !flex_item;
   if (inline_box) width = height = BoxAuto();
   if (BoxReplaced(node)) {
     if (!std::isfinite(width)) width = node.intrinsic_width >= 0 ? node.intrinsic_width : 300;
@@ -67,7 +72,7 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   bool auto_width = !std::isfinite(width);
   if (auto_width) width = cb[2]-extra_w-box.margin[1]-box.margin[3];
   // An auto-width inline-flex container is shrink-to-fit around its items.
-  if (auto_width && !absolute && style.Get("display") == "inline-flex")
+  if (auto_width && !absolute && display == "inline-flex")
     width = std::min(width, Intrinsic(index, false, depth));
   width = BoxLimit(style, true, cb[2], std::max(0.0, width), extra_w);
   if (flex_item) { width = forced_width[index]; auto_width = false; }
@@ -87,14 +92,14 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     else if (std::isfinite(right)) bx = cb[0]+cb[2]-right-width-extra_w-box.margin[1];
     if (std::isfinite(top)) by = cb[1]+top+box.margin[0];
     else if (std::isfinite(bottom) && box.definite_height) by = cb[1]+cb[3]-bottom-height-extra_h-box.margin[2];
-  } else if (style.Get("position") == "relative") {
+  } else if (position == "relative") {
     bx += std::isfinite(left) ? left : std::isfinite(right) ? -right : 0;
     by += std::isfinite(top) ? top : std::isfinite(bottom) ? -bottom : 0;
   }
   box.border = {BoxRound(bx), BoxRound(by), BoxRound(width+extra_w), BoxRound((box.definite_height?height:0)+extra_h)};
   box.content = {box.border[0]+box.edge[3]+box.padding[3], box.border[1]+box.edge[0]+box.padding[0],
                  width, box.definite_height ? height : 0};
-  const bool establishes = style.Get("position") != "static" || style.Get("transform") != "none";
+  const bool establishes = position != "static" || style.Get("transform") != "none";
   const size_t child_positioned = establishes ? index : positioned;
   // A scroll container's scrollbars take their room from its content box
   // (overflow:scroll always; auto once the content overflows, below).
