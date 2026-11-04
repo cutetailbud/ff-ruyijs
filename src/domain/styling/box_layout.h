@@ -12,7 +12,26 @@ using BoxRect = std::array<double, 4>;
 // is alive, and BoxStyle keeps both.
 struct BoxKnown {
   static constexpr int kCount = 29;
+  enum Index : int {
+    Display = 0, Position, Float, BoxSizing, Transform,
+    Width, Height, MinWidth, MinHeight, MaxWidth, MaxHeight,
+    Left, Right, Top, Bottom,
+    MarginTop, MarginRight, MarginBottom, MarginLeft,
+    PaddingTop, PaddingRight, PaddingBottom, PaddingLeft,
+    BorderTop, BorderRight, BorderBottom, BorderLeft,
+    OverflowX, OverflowY
+  };
+  static_assert(OverflowY + 1 == kCount, "known-slot table size");
   std::array<const std::string*, kCount> slot{};
+};
+inline constexpr const char* kBoxKnownNames[BoxKnown::kCount] = {
+    "display", "position", "float", "box-sizing", "transform",
+    "width", "height", "min-width", "min-height", "max-width", "max-height",
+    "left", "right", "top", "bottom",
+    "margin-top", "margin-right", "margin-bottom", "margin-left",
+    "padding-top", "padding-right", "padding-bottom", "padding-left",
+    "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+    "overflow-x", "overflow-y",
 };
 struct BoxStyle {
   // Computed values sorted by name (Share), searched by Get, and shared: a
@@ -25,6 +44,17 @@ struct BoxStyle {
   // Filled by Build. Null means Get searches `values` (the same answer).
   std::shared_ptr<const BoxKnown> known;
   const std::string& Get(const char* name) const;
+  // The known slot, without the thread-local name lookup Get uses. An absent
+  // property is the same empty string Get returns.
+  const std::string& Slot(int index) const {
+    static const std::string missing;
+    if (known && index >= 0 && index < BoxKnown::kCount) {
+      const std::string* value = known->slot[index];
+      if (value) return *value;
+      return missing;
+    }
+    return index >= 0 && index < BoxKnown::kCount ? Get(kBoxKnownNames[index]) : missing;
+  }
   static std::shared_ptr<const Values> Share(Values values);
   static BoxStyle Build(Values values, double font_size, double root_font_size,
                         unsigned margin_mask, unsigned border_mask, unsigned padding_mask);
