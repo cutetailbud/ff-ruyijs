@@ -278,6 +278,9 @@ class Model final {
 
 
   Status Inspect(NodeKey node, NodeSnapshot* result) const noexcept;
+  // The fields ReadLayoutNode keeps. Skips the sibling scan and the name,
+  // namespace, and doctype strings Inspect copies and layout does not read.
+  Status InspectLayout(NodeKey node, NodeSnapshot* result) const noexcept;
   Status CreateElementNS(NodeKey document, DomStringView namespace_uri,
                         DomStringView qualified_name, const std::optional<DomString>& is,
                         Draft* result) noexcept;
