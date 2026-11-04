@@ -27,7 +27,8 @@ class Engine:
     the Necko helper processes of all sessions together (0: no cap): when it is
     reached, the least recently used idle helper of another session makes way.
     ``prewarm`` (0-2) is how many helpers each new session starts in the
-    background; a plain Context starts 2, and more start on demand either way.
+    background. A plain Context on Windows starts 2; on Linux and macOS the
+    helpers start on the first request. More start on demand either way.
     A crash of the engine process ends all of its sessions.
     """
 
