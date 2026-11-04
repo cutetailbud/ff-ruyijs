@@ -3,6 +3,24 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- DOM calls find a node's wrapper from the object's own slot instead of walking every live wrapper (#16), and
+  event targets are found through an index instead of a scan; appending a node that is not in a tree no longer
+  copies its new parent's child list (#17). Building 8,000 elements with a listener each: 2.3 s instead of 3.4.
+- Layout resolves `auto`, `none` and `0px` without parsing them (#18) and finds the properties it reads on every
+  box by id, without a second edge pass per child (#19). Geometry is unchanged.
+- On Linux and macOS a plain Context starts its Necko helpers on the first request instead of prewarming two,
+  and drops them before the shell exits (#20, #21). Windows and Engine sessions keep their prewarm setting.
+- `docs/linux-baseline.md` and `ci/linux_baseline.py`: Ubuntu 24.04 build notes and a speed baseline (#15).
+
+### Fixed
+
+- macOS: the xpcshell fallback returns the response headers, and finds a donor build in more checkout layouts
+  (#14). Redirects still reach the page one hop at a time on every route.
+
 ## [0.3.3] - 2026-11-02
 
 ### Changed
