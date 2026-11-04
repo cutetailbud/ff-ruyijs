@@ -121,6 +121,8 @@ struct Builder {
     for (const auto& attribute : token.attributes)  // Names the DOM rejects are dropped.
       if (domain::valid_attribute_local_name(attribute.name)) {
         element->set_attribute16(attribute.name, attribute.value);
+        if (auto ident = element->get_attribute16(u"id"))
+          doc.note_element_id(id, {}, *ident);
         Attribute(id, attribute.name, nullptr);
       }
     Place(id);

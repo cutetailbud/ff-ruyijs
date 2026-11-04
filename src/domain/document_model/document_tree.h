@@ -121,6 +121,9 @@ inline void DocumentAggregate::remove_node(NodeId key) noexcept {
     NodeId parent = node->parent_id() ? node->parent_id() : node->shadow_host_id();
     if (auto* p = get_node(parent)) p->remove_child_id(key);
     if (auto* host = get_element(node->shadow_host_id())) host->set_shadow_root(0);
+    if (const auto* element = get_element(key)) {
+      if (const auto id = element->get_attribute16(u"id")) note_element_id(key, *id, {});
+    }
     nodes_.erase(key);
     if (key == boundary) break;
     key = parent;

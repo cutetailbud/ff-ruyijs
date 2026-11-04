@@ -58,8 +58,14 @@ bool FreshCollection(State& state, CollectionRecord& record) {
 bool CollectionEnumerate(JSContext* cx, JS::HandleObject object) {
   const JS::Value slot = JS::GetReservedSlot(object, 0);
   auto* record = slot.isUndefined() ? nullptr : static_cast<CollectionRecord*>(slot.toPrivate());
-  if (!record || !record->dataOwner || !record->stale) return true;
+  if (!record || !record->dataOwner) return true;
   State& owner = *record->dataOwner;
+  if (!record->live && record->materialized < CollectionCount(*record)) {
+    JSAutoRealm realm(cx, owner.page);
+    JS::RootedObject rooted(cx, object);
+    return MaterializeCollection(owner, rooted, *record);
+  }
+  if (!record->stale) return true;
   JSAutoRealm realm(cx, owner.page);
   return FreshCollection(owner, *record);
 }
@@ -67,7 +73,22 @@ bool CollectionResolve(JSContext* cx, JS::HandleObject object, JS::HandleId id, 
   *resolved = false;
   const JS::Value slot = JS::GetReservedSlot(object, 0);
   auto* record = slot.isUndefined() ? nullptr : static_cast<CollectionRecord*>(slot.toPrivate());
-  if (!record || !record->stale) return true;
+  if (!record || !record->dataOwner) return true;
+  if (!record->live && id.isInt()) {
+    const int32_t index = id.toInt();
+    if (index >= 0 && size_t(index) < CollectionCount(*record)) {
+      bool present = false;
+      if (!JS_AlreadyHasOwnPropertyById(cx, object, id, &present)) return false;
+      if (present) { *resolved = true; return true; }
+      JS::RootedValue value(cx);
+      if (!CollectionIndex(*record->dataOwner, *record, size_t(index), &value)) return false;
+      if (!JS_DefineElement(cx, object, uint32_t(index), value, JSPROP_ENUMERATE | JSPROP_READONLY))
+        return false;
+      *resolved = true;
+      return true;
+    }
+  }
+  if (!record->stale) return true;
   return CollectionEnumerate(cx, object) && JS_AlreadyHasOwnPropertyById(cx, object, id, resolved);
 }
 bool CollectionMayResolve(const JSAtomState&, jsid, JSObject*) { return true; }

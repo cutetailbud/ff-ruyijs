@@ -202,7 +202,7 @@ static bool QueryCall(JSContext* cx, unsigned argc, JS::Value* vp) {
     JS::RootedObject list(cx);
     {
       JSAutoRealm realm(cx, state.page);
-      if (!state.NodeListOwned(found, &list)) return false;
+      if (!state.NodeListOwned(found, &list, CollectionKind::NodeList, nullptr, true)) return false;
     }
     JS::RootedValue result(cx, JS::ObjectValue(*list));
     if (!JS_WrapValue(cx, &result)) return false;

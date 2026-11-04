@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace ruyijs::domain::document_model {
 enum class ReadyState { Loading, Interactive, Complete };
@@ -99,6 +100,10 @@ class DocumentAggregate : public shared::AggregateRoot<NodeId> {
   std::vector<NodeId> get_elements_by_tag(const TagName& tag) const;
   std::vector<NodeId> get_elements_by_class(const std::string& name) const;
   std::vector<NodeId> query16(NodeId root, unsigned kind, DomStringView value) const;
+  // getElementById for this document. `previous` is the node's old id.
+  void note_element_id(NodeId node, DomStringView previous, DomStringView next);
+  // True when the index knows the answer. A duplicate id is not indexed.
+  bool lookup_element_id(DomStringView value, NodeId* hit) const;
   // Namespaced tag query: "*" matches any namespace and any local name, an
   // empty namespace matches elements outside the XHTML namespace.
   std::vector<NodeId> query_ns16(NodeId root, DomStringView namespace_uri, DomStringView local) const;
@@ -166,7 +171,33 @@ class DocumentAggregate : public shared::AggregateRoot<NodeId> {
   ParsedDoctypeRef parsed_doctype_;
   std::optional<DomString> url_{DomString{}};
   std::unordered_map<NodeId, std::unique_ptr<Node>> nodes_;
+  std::unordered_map<DomString, NodeId> element_ids_;
+  std::unordered_set<DomString> ambiguous_ids_;
 };
+inline void DocumentAggregate::note_element_id(NodeId node, DomStringView previous, DomStringView next) {
+  if (!previous.empty()) {
+    auto found = element_ids_.find(DomString(previous));
+    if (found != element_ids_.end() && found->second == node) element_ids_.erase(found);
+    else if (found != element_ids_.end()) ambiguous_ids_.insert(DomString(previous));
+  }
+  if (next.empty()) return;
+  auto found = element_ids_.find(DomString(next));
+  if (found == element_ids_.end()) { element_ids_.emplace(DomString(next), node); return; }
+  if (found->second == node) return;
+  element_ids_.erase(found);
+  ambiguous_ids_.insert(DomString(next));
+}
+inline bool DocumentAggregate::lookup_element_id(DomStringView value, NodeId* hit) const {
+  if (value.empty() || ambiguous_ids_.count(DomString(value))) return false;
+  auto found = element_ids_.find(DomString(value));
+  if (found == element_ids_.end()) return false;
+  const auto* element = get_element(found->second);
+  if (!element) return false;
+  const auto id = element->get_attribute16(u"id");
+  if (!id || DomStringView(*id) != value) return false;
+  *hit = found->second;
+  return true;
+}
 }
 #include "domain/document_model/document_tree.h"
 #include "domain/document_model/document_replace.h"
