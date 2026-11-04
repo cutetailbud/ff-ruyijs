@@ -187,7 +187,10 @@ class Handler final : public js::BaseProxyHandler {
   // live identity.
   void finalize(JS::GCContext*, JSObject* proxy) const override {
     auto* link = static_cast<ReflectedLink*>(js::GetProxyReservedSlot(proxy, 2).toPrivate());
+    auto* factory = static_cast<State*>(js::GetProxyReservedSlot(proxy, 1).toPrivate());
     if (link && link->dataset == proxy) link->dataset = nullptr;
+    if (factory && link && !link->style && !link->dataset && !link->animatedClass)
+      factory->DropReflected(link);
   }
   size_t objectMoved(JSObject* proxy, JSObject* old) const override {
     auto* link = static_cast<ReflectedLink*>(js::GetProxyReservedSlot(proxy, 2).toPrivate());

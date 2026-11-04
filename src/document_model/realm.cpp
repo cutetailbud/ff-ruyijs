@@ -143,23 +143,32 @@ Wrapper* State::Find(NodeKey key) const {
     return nullptr;
   return found->second;
 }
-ReflectedLink* State::Reflected(NodeKey key) {
+void State::DropReflected(ReflectedLink* link) {
+  if (!link) return;
+  reflectedIndex.erase(link->key);
   auto* slot = &reflected;
   while (*slot) {
-    auto* value = slot->get();
-    if (!value->style && !value->dataset && !value->animatedClass) {
+    if (slot->get() == link) {
       auto expired = std::move(*slot);
       *slot = std::move(expired->next);
-    } else {
-      if (Same(value->key, key)) return value;
-      slot = &value->next;
+      return;
     }
+    slot = &(*slot)->next;
+  }
+}
+ReflectedLink* State::Reflected(NodeKey key) {
+  auto found = reflectedIndex.find(key);
+  if (found != reflectedIndex.end()) {
+    ReflectedLink* value = found->second;
+    if (value->style || value->dataset || value->animatedClass) return value;
+    DropReflected(value);
   }
   std::unique_ptr<ReflectedLink> entry(new (std::nothrow) ReflectedLink(cx, key));
   if (!entry) { JS_ReportOutOfMemory(cx); return nullptr; }
   ReflectedLink* raw = entry.get();
   entry->next = std::move(reflected);
   reflected = std::move(entry);
+  reflectedIndex.emplace(key, raw);
   return raw;
 }
 Interface* State::Find(const char* name) const {

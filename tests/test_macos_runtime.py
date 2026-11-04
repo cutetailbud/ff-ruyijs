@@ -182,6 +182,23 @@ def advance_determinism(context):
     return context.eval("fired") == 1
 
 
+
+@case
+def element_style_identity(context):
+    """element.style is one object, and writing it updates the style attribute."""
+    context.load_page("https://test.local/", "<html><body></body></html>")
+    result = context.eval("""
+      const el = document.createElement('div');
+      document.body.appendChild(el);
+      const style = el.style;
+      style.cssText = 'color: red; margin-top: 4px';
+      const text = el.getAttribute('style') || '';
+      style.cssText = '';
+      ({same: style === el.style, wrote: text.includes('color') && text.includes('red'),
+        cleared: !el.getAttribute('style'), text})
+    """)
+    return result.get("same") and result.get("wrote") and result.get("cleared"), result
+
 @case
 def network_timing_v3(context):
     """Over the Necko transport, a same-origin fetch reports measured phases.

@@ -278,6 +278,9 @@ class Model final {
 
 
   Status Inspect(NodeKey node, NodeSnapshot* result) const noexcept;
+  // The node type only. Interface receivers use this instead of Inspect,
+  // which also names siblings and copies strings they do not read.
+  Status Kind(NodeKey node, NodeKind* result) const noexcept;
   // The fields ReadLayoutNode keeps. Skips the sibling scan and the name,
   // namespace, and doctype strings Inspect copies and layout does not read.
   Status InspectLayout(NodeKey node, NodeSnapshot* result) const noexcept;
