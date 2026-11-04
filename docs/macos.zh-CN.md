@@ -109,7 +109,8 @@ Windows 上同一次构建只复制 `oneshot.py`。Darwin 的 venv 不存在时�
 
 ## 一次请求怎么走
 
-长度前缀帧和 Windows 相同。macOS 上的管道是 Unix socket。外壳启动 `python -I -B -m ruyijs_necko.oneshot`。直连 HTTPS 使用 `libnecko_core.dylib`。ALPN `h2` 使用产品的 HTTP/2 设置。ALPN 为 `http/1.1` 时在这条套接字上写 HTTP/1.1。其他 ALPN 表示不了，路由可以回退。有 xpcshell 时代理仍走它；没有时，HTTPS 走 CONNECT，明文走绝对形式请求。直连 `http://` 走 `libnecko_core` 里的套接字和 HTTP/1 交换。直连 `https://` 走 `libnecko_core`，直到同一进程记住了响应里的 `Alt-Svc`，下一次到该来源的请求才走 `libnecko_quic`。证书校验失败不回退。不保存 cookie。直连库路径把 3xx 返回给调用方处理；xpcshell 路径最多跟随 20 次重定向。同一个 helper 进程里，同源 HTTP/2 可以复用一条连接。页面外壳仍是每个请求启动一次 oneshot，除非使用 `--session`。
+长度前缀帧和 Windows 相同。macOS 上的管道是 Unix socket。外壳启动 `python -I -B -m ruyijs_necko.oneshot`。直连 HTTPS 使用 `libnecko_core.dylib`。ALPN `h2` 使用产品的 HTTP/2 设置。ALPN 为 `http/1.1` 时在这条套接字上写 HTTP/1.1。其他 ALPN 表示不了，路由可以回退。有 xpcshell 时代理仍走它；没有时，HTTPS 走 CONNECT，明文走绝对形式请求。直连 `http://` 走 `libnecko_core` 里的套接字和 HTTP/1 交换。直连 `https://` 走 `libnecko_core`，直到同一进程记住了响应里的 `Alt-Svc`，下一次到该来源的请求才走 `libnecko_quic`。证书校验失败不回退。不保存 cookie。`redirectionLimit` 仍是 0，xpcshell 路径上也是，所以 3xx 就作为这次的响应返回。同一个 helper 进程里，同源 HTTP/2 可以复用一条连接。页面外壳仍是每个请求启动一次 oneshot，除非使用 `--session`。
+
 直连 HTTPS 的页面验收过 HTTP/2，版本码 20，覆盖 100 和 159。这条套接字上的 HTTP/1.1 做过单元测试。后来的直连 TLS 检查打开了 `https://www.gnu.org/`，状态 200，版本码 11。更早的 xpcshell 路径也曾返回 HTTP/1.1。直连明文和 HTTP/3 使用与 Windows DLL 相同的导出。本机 HTTP/1.1 返回状态 200、版本码 11。本机 Neqo 服务器在记住响应 `Alt-Svc` 之后，第二次请求返回版本码 30。第二次请求的证书不受信任时失败，状态不是 200。公网 `quic.nginx.org` 同样从版本码 20 到 30，两次正文一致。`cloudflare.com` 没有下发 `Alt-Svc`，两次都停在版本码 20。请求如果落到 donor xpcshell，明文仍会返回 `necko 804b0033`。打开 socket process 后，这份 xpcshell 会关掉管道，并且不写错误。不要再写一套 QUIC。
 
 ## 系统框架

@@ -42,18 +42,20 @@ State::~State() {
 Target* State::target(JSObject* object) {
   if (!object) return nullptr;
   auto found = targetByObject.find(object);
-  if (found == targetByObject.end()) return nullptr;
-  Target* value = found->second;
-  if (!value->released && value->live() == object) return value;
-  targetByObject.erase(found);
-  // The address was reused, or a trace moved an owned object. The vector is
-  // the record of what is still live.
-  for (auto& item : targets)
-    if (!item->released && item->live() == object) {
-      targetByObject.emplace(object, item.get());
-      return item.get();
-    }
+  if (found != targetByObject.end()) {
+    Target* value = found->second;
+    if (!value->released && value->live() == object) return value;
+  }
+  for (Target* value : ownedTargets)
+    if (!value->released && value->live() == object) return value;
   return nullptr;
+}
+void State::refresh(Target* record, JSObject* object) {
+  if (record->object == object) return;
+  auto found = targetByObject.find(record->object);
+  if (found != targetByObject.end() && found->second == record) targetByObject.erase(found);
+  record->object = object;
+  targetByObject[object] = record;
 }
 Event* State::event(JSObject* object) {
   if (!object) return nullptr;
@@ -100,7 +102,8 @@ bool State::attach(JS::HandleObject object, bool owns, void** record) {
   if (targets.size() >= kTargetLimit) return Error(cx, "RangeError", "EventTarget limit exceeded");
   auto value = std::make_unique<Target>(cx, object, ++nextTarget, owns);
   targetMap.emplace(value->aggregate.id(), &value->aggregate);
-  targetByObject[object] = value.get();
+  if (owns) ownedTargets.push_back(value.get());
+  else targetByObject[object] = value.get();
   if (record) *record = value.get();
   targets.push_back(std::move(value));
   return true;
@@ -113,13 +116,15 @@ void State::release(void* record) {
 void State::prune() {
   if (!anyReleased) return;
   anyReleased = false;
+  std::erase_if(ownedTargets, [](Target* value) { return value->released; });
   for (auto it = targets.begin(); it != targets.end();) {
     if ((*it)->released) {
       Target* raw = it->get();
       targetMap.erase(raw->aggregate.id());
-      for (auto mapped = targetByObject.begin(); mapped != targetByObject.end();)
-        if (mapped->second == raw) mapped = targetByObject.erase(mapped);
-        else ++mapped;
+      // A borrowed record's key is its last reported address.
+      if (auto mapped = targetByObject.find(raw->object);
+          mapped != targetByObject.end() && mapped->second == raw)
+        targetByObject.erase(mapped);
       it = targets.erase(it);
     } else {
       ++it;
@@ -180,7 +185,7 @@ bool Realm::AttachBorrowed(JS::HandleObject object, void** record) {
 }
 void Realm::ReleaseBorrowed(void* record) { state_->release(record); }
 void Realm::RefreshBorrowed(void* record, JSObject* object) {
-  if (record) static_cast<Target*>(record)->object = object;
+  if (record) state_->refresh(static_cast<Target*>(record), object);
 }
 void Realm::SetPathResolver(PathResolver callback, RetargetResolver retarget, void* context) {
   state_->pathResolver = callback;

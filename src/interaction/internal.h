@@ -225,10 +225,14 @@ struct State {
   std::vector<std::unique_ptr<Event>> events;
   std::vector<std::shared_ptr<Listener>> listeners;
   std::unordered_map<uint64_t, domain::EventTargetAggregate*> targetMap;
-  // Object address to the live Target. Compaction is off for the runtime, so
-  // a borrowed node's address is stable until it is collected. A miss means
-  // the object is not attached; a hit whose record was released is dropped.
+  // Borrowed node wrapper address to its Target. A node wrapper's trace hook
+  // reports each move (RefreshBorrowed), so the key follows the object. Owned
+  // targets (script EventTargets, XHR, Window...) live in a persistent root
+  // that a collection updates without telling anyone, so they are not keyed
+  // by address: they stay in `ownedTargets`, which is short.
   std::unordered_map<JSObject*, Target*> targetByObject;
+  std::vector<Target*> ownedTargets;
+  void refresh(Target* record, JSObject* object);
   std::unordered_map<domain::ListenerId, domain::ListenerCallback> callbacks;
   std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
   State(JSContext* context, JS::HandleObject global);

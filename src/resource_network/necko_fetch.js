@@ -1,5 +1,7 @@
 // One Necko/NSS session. Frames on stdin/stdout. Diagnostics stay on stderr.
-// Necko follows up to 20 redirects and returns the final response.
+// Redirects are not followed: redirectionLimit is 0 and the 3xx is the response.
+// The page side follows each hop itself (cookies, CORS, Referer, redirect mode,
+// response.url), as on the library route and on Windows and Linux.
 
 const { NetUtil } = ChromeUtils.importESModule("resource://gre/modules/NetUtil.sys.mjs");
 const { ctypes } = ChromeUtils.importESModule("resource://gre/modules/ctypes.sys.mjs");
@@ -129,7 +131,7 @@ function fetchOne(method, url, headers, body, budgetMs) {
     contentPolicyType: Ci.nsIContentPolicy.TYPE_OTHER,
   }).QueryInterface(Ci.nsIHttpChannel);
   if (channel instanceof Ci.nsIEncodedChannel) channel.applyConversion = false;
-  channel.redirectionLimit = 20;
+  channel.redirectionLimit = 0;
   channel.loadFlags |= Ci.nsIRequest.LOAD_BYPASS_CACHE | Ci.nsIRequest.INHIBIT_CACHING;
   channel.requestMethod = method;
   for (const [name, value] of headers) channel.setRequestHeader(name, value, false);
