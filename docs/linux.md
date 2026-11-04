@@ -39,4 +39,5 @@ ci/linux/build.sh test     # installs the wheel in a fresh venv and runs the smo
 
 The donor step runs configure on the distribution Python (`/usr/bin/python3`), the necko step needs Python 3.14 as
 `python3`. A full build uses about 11 GB of disk. The Necko adapter and its limits are described in
-[native/necko_posix/README.md](../native/necko_posix/README.md).
+[native/necko_posix/README.md](../native/necko_posix/README.md). One measured build, the smoke tests, and a speed
+baseline are written up in [linux-baseline.md](linux-baseline.md).
