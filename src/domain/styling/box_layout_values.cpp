@@ -116,6 +116,11 @@ CssNumericValue ResolveLength(const std::string& text, double em, double rem, do
 }
 double BoxLength(const BoxStyle& style, const char* name, double percent, double fallback) {
   const auto& text = style.Get(name);
+  // A plain block's used lengths are almost all auto, none, or 0px. Those
+  // resolve to the fallback or to zero without parsing, and they are the
+  // values Place reads a dozen times per box.
+  if (text.empty() || text == "auto" || text == "none") return fallback;
+  if (text == "0" || text == "0px") return 0;
   if (!std::isfinite(percent) && text.find('%') != text.npos) return fallback;
   // A bare percentage: Gecko resolves it against the app-unit basis with
   // LengthPercentage::to_used_value, multiplying in f32 and truncating to app
