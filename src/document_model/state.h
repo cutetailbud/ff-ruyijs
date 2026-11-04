@@ -77,12 +77,16 @@ struct CustomElementsRegistry {
 // is never reaped; a detached node's wrapper is not rooted, so it lives only
 // while script references it (T41). The class finalizer marks a collected
 // wrapper dead; `dead` also keeps Find() from matching a recycled address.
+// `listed` is true only while this record is linked from its owner's
+// `wrappers` list, so Find can trust the object's slot 0 and still miss a
+// record that exists but is not on that list yet.
 struct ImageRequest;
 struct SvgViewCache;
 struct Wrapper {
   NodeKey key;
   JSObject* object = nullptr;
   State* owner = nullptr;
+  bool listed = false;
   State* factory = nullptr;
   Wrapper* factoryPrevious = nullptr;
   Wrapper* factoryNext = nullptr;

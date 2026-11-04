@@ -55,6 +55,7 @@ bool State::WrapLocal(State& factory, NodeKey key, JS::MutableHandleValue result
   Wrapper* raw = entry.get();
   entry->next = std::move(wrappers);
   wrappers = std::move(entry);
+  raw->listed = true;
   wrapperIndex[key] = raw;
   // The node's wrapper is a borrowed Interaction target: that record must never
   // extend this wrapper's lifetime (T41).
@@ -62,6 +63,7 @@ bool State::WrapLocal(State& factory, NodeKey key, JS::MutableHandleValue result
   if (!factory.interaction.AttachBorrowed(object, &record)) {
     wrapperIndex.erase(key);
     JS::SetReservedSlot(object, 0, JS::PrivateValue(nullptr));
+    raw->listed = false;
     auto failed = std::move(wrappers);
     wrappers = std::move(failed->next);
     return false;
