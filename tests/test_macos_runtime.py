@@ -183,6 +183,39 @@ def advance_determinism(context):
 
 
 @case
+def computed_style_invalidation(context):
+    """A cached computed style must change after style, class, attribute and tree edits."""
+    context.load_page("https://test.local/", "<html><body></body></html>")
+    result = context.eval("""
+      document.body.innerHTML = '<style>#a.on { color: rgb(1, 2, 3) } #a[data-x] { color: rgb(4, 5, 6) } .big { font-size: 30px }</style>'
+        + '<div class=big id=parent><div id=a>t</div></div>';
+      const a = document.getElementById('a');
+      const color = () => getComputedStyle(a).color;
+      const size = () => getComputedStyle(a).fontSize;
+      const first = color();
+      const again = color();
+      a.style.color = 'rgb(9, 9, 9)';
+      const styled = color();
+      a.style.color = '';
+      a.className = 'on';
+      const klass = color();
+      a.className = '';
+      a.setAttribute('data-x', '1');
+      const attr = color();
+      a.removeAttribute('data-x');
+      const before = size();
+      a.parentElement.className = '';
+      const after = size();
+      ({same: first === again, style: styled !== first && styled !== again,
+        klass: klass !== first, attr: attr !== first, tree: after !== before,
+        first, again, styled, klass, attr, before, after})
+    """)
+    ok = (result.get("same") and result.get("style") and result.get("klass")
+          and result.get("attr") and result.get("tree"))
+    return ok, result
+
+
+@case
 def network_timing_v3(context):
     """Over the Necko transport, a same-origin fetch reports measured phases.
 

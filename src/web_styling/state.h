@@ -8,6 +8,7 @@
 #include <memory>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "document_model/style_source.h"
 #include "domain/styling/media_list_value.h"
@@ -117,6 +118,16 @@ struct State {
     std::shared_ptr<ruyijs::domain::styling::RuleIndexStore> indexes;
   };
   std::vector<CascadeInput> cascadeInputs;
+  // getComputedStyle results for one document revision and one cascade stamp.
+  // A style, class, attribute or tree edit bumps the document revision, and a
+  // stylesheet edit changes the stamp, so the next read computes again.
+  struct ComputedBlockCache {
+    uint64_t revision = 0;
+    uint64_t stamp = 0;
+    bool ready = false;
+    std::unordered_map<uint64_t, std::string> blocks;
+  };
+  ComputedBlockCache computedBlocks;
   std::shared_ptr<SheetCache> Materialize(const document_model::StyleSheetSource& source);
   bool RetireSheets(const std::vector<document_model::StyleSheetSource>& sources,
                      const document_model::StyleSheetScope* scope = nullptr);
