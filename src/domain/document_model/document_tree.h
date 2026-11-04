@@ -72,6 +72,14 @@ inline void DocumentAggregate::insert_before(NodeId parent, NodeId child, NodeId
   if (before && p.index_of_child(before) < 0) throw DomError(DomErrorCode::NotFound, "Reference is not a child of parent");
   validate_insert(parent, child, 0);
   if (before == child) return;
+  // appendChild of a node that is not in a tree. Copying the parent's child
+  // vector is quadratic when a page appends thousands of siblings; push_back
+  // leaves the same parent, the same order, and the same parent id.
+  if (!before && !c.parent_id()) {
+    p.append_child_id(child);
+    c.set_parent(parent);
+    return;
+  }
   std::vector<NodeId> next = p.child_ids(), old;
   next.erase(std::remove(next.begin(), next.end(), child), next.end());
   auto position = before ? std::find(next.begin(), next.end(), before) : next.end();

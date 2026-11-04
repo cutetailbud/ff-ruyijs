@@ -225,6 +225,10 @@ struct State {
   std::vector<std::unique_ptr<Event>> events;
   std::vector<std::shared_ptr<Listener>> listeners;
   std::unordered_map<uint64_t, domain::EventTargetAggregate*> targetMap;
+  // Object address to the live Target. Compaction is off for the runtime, so
+  // a borrowed node's address is stable until it is collected. A miss means
+  // the object is not attached; a hit whose record was released is dropped.
+  std::unordered_map<JSObject*, Target*> targetByObject;
   std::unordered_map<domain::ListenerId, domain::ListenerCallback> callbacks;
   std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
   State(JSContext* context, JS::HandleObject global);
