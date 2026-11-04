@@ -14,26 +14,26 @@ bool BoxFlow::AdjoinsChildren(size_t index, bool top) const {
   // The root, replaced and out-of-flow boxes, and every box that establishes a
   // new block formatting context keep their children's margins inside.
   if (node.text || node.parent == kNoBox || BoxReplaced(node) || BoxAbsolute(node)) return false;
-  const auto display = node.style.Get("display");
+  const auto display = node.style.Slot(BoxKnown::Display);
   if (display != "block" && display != "list-item") return false;
-  const auto container = nodes[node.parent].style.Get("display");
+  const auto container = nodes[node.parent].style.Slot(BoxKnown::Display);
   if (container == "flex" || container == "inline-flex" || container == "grid" ||
       container == "inline-grid") return false;
-  const auto floating = node.style.Get("float");
+  const auto floating = node.style.Slot(BoxKnown::Float);
   if (!floating.empty() && floating != "none") return false;
-  for (const char* name : {"overflow-x", "overflow-y"}) {
-    const auto value = node.style.Get(name);
+  for (const int index : {BoxKnown::OverflowX, BoxKnown::OverflowY}) {
+    const auto& value = node.style.Slot(index);
     if (!value.empty() && value != "visible" && value != "clip") return false;
   }
   if (top) return box.edge[0] == 0 && box.padding[0] == 0;
   if (box.edge[2] != 0 || box.padding[2] != 0 || box.definite_height) return false;
-  const auto minimum = node.style.Get("min-height");
+  const auto minimum = node.style.Slot(BoxKnown::MinHeight);
   return minimum.empty() || minimum == "auto" || minimum == "0" || minimum == "0px";
 }
 bool BoxFlow::Children(size_t index, size_t positioned, unsigned depth, double* height, double* width) {
   leading[index] = trailing[index] = 0;
   empty_flow[index] = 1;
-  const auto display = nodes[index].style.Get("display");
+  const auto display = nodes[index].style.Slot(BoxKnown::Display);
   if (display == "flex" || display == "inline-flex") {
     empty_flow[index] = 0;
     return FlexChildren(index, positioned, depth, height, width);
@@ -60,7 +60,7 @@ bool BoxFlow::Children(size_t index, size_t positioned, unsigned depth, double* 
   };
   for (const auto child : nodes[index].children) {
     const auto& node = nodes[child];
-    const auto display = node.style.Get("display");
+    const auto display = node.style.Slot(BoxKnown::Display);
     if (display == "none") continue;
     if (BoxAbsolute(node)) {
       // CSS static position: the position this child would have occupied in

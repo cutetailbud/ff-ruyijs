@@ -13,6 +13,7 @@ inline double BoxRound(double value) {
 }
 inline double BoxAuto() { return std::numeric_limits<double>::quiet_NaN(); }
 double BoxLength(const BoxStyle&, const char*, double percent, double fallback);
+double BoxLengthOf(const BoxStyle&, const std::string&, double percent, double fallback);
 // A single viewport-percentage length (vw, vh, vmin, vmax) against the layout
 // viewport; *out is unset (false) for any other value.
 bool BoxViewportLength(const std::string& text, double width, double height, double* out);

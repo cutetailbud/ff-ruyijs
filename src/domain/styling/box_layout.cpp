@@ -9,8 +9,8 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   const auto& style = node.style;
   // Place reads display and position several times. Get's hint makes a repeat
   // one compare, but the string still has to be fetched; hold the reference.
-  const auto& display = style.Get("display");
-  const auto& position = style.Get("position");
+  const auto& display = style.Slot(BoxKnown::Display);
+  const auto& position = style.Slot(BoxKnown::Position);
   if (display == "none") return true;
   if (node.text) {
     box.present = node.text_width > 0;
@@ -39,10 +39,10 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   const double extra_w = box.padding[1]+box.padding[3]+box.edge[1]+box.edge[3];
   const double extra_h = box.padding[0]+box.padding[2]+box.edge[0]+box.edge[2];
   const double percent_h = definite_height ? cb[3] : BoxAuto();
-  double width = BoxLength(style, "width", cb[2], BoxAuto());
-  double height = BoxLength(style, "height", percent_h, BoxAuto());
-  BoxViewportLength(style.Get("width"), viewport.width, viewport.height, &width);
-  BoxViewportLength(style.Get("height"), viewport.width, viewport.height, &height);
+  double width = BoxLengthOf(style, style.Slot(BoxKnown::Width), cb[2], BoxAuto());
+  double height = BoxLengthOf(style, style.Slot(BoxKnown::Height), percent_h, BoxAuto());
+  BoxViewportLength(style.Slot(BoxKnown::Width), viewport.width, viewport.height, &width);
+  BoxViewportLength(style.Slot(BoxKnown::Height), viewport.width, viewport.height, &height);
   // nscoord_MAX is also reflow's NS_UNCONSTRAINEDSIZE block-size sentinel.
   if (height >= kBoxCoordMax / 60) height = BoxAuto();
   // width="100%" / height="100%" attributes map to the dimension properties
@@ -51,12 +51,12 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     width = BoxRound(node.attribute_width_percent * cb[2] / 100);
   if (!std::isfinite(height) && node.attribute_height_percent >= 0 && std::isfinite(percent_h))
     height = BoxRound(node.attribute_height_percent * percent_h / 100);
-  const bool border_box = style.Get("box-sizing") == "border-box";
+  const bool border_box = style.Slot(BoxKnown::BoxSizing) == "border-box";
   if (border_box) { width -= extra_w; height -= extra_h; }
-  const double left = BoxLength(style, "left", cb[2], BoxAuto());
-  const double right = BoxLength(style, "right", cb[2], BoxAuto());
-  const double top = BoxLength(style, "top", cb[3], BoxAuto());
-  const double bottom = BoxLength(style, "bottom", cb[3], BoxAuto());
+  const double left = BoxLengthOf(style, style.Slot(BoxKnown::Left), cb[2], BoxAuto());
+  const double right = BoxLengthOf(style, style.Slot(BoxKnown::Right), cb[2], BoxAuto());
+  const double top = BoxLengthOf(style, style.Slot(BoxKnown::Top), cb[3], BoxAuto());
+  const double bottom = BoxLengthOf(style, style.Slot(BoxKnown::Bottom), cb[3], BoxAuto());
   // A flex item is blockified; its container resolved its size (box_layout_flex.cpp).
   const bool flex_item = index < forced_width.size() && std::isfinite(forced_width[index]);
   const bool inline_box = display == "inline" && !BoxReplaced(node) && !absolute && !flex_item;
@@ -82,7 +82,7 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     height = BoxLimit(style, false, percent_h, std::max(0.0, height), extra_h);
   if (!absolute && !auto_width && !flex_item) {
     const double free = std::max(0.0, cb[2]-width-extra_w-box.margin[1]-box.margin[3]);
-    const bool auto_l = style.Get("margin-left") == "auto", auto_r = style.Get("margin-right") == "auto";
+    const bool auto_l = style.Slot(BoxKnown::MarginLeft) == "auto", auto_r = style.Slot(BoxKnown::MarginRight) == "auto";
     if (auto_l) box.margin[3] = BoxRound(free / (auto_r ? 2 : 1));
     if (auto_r) box.margin[1] = BoxRound(free / (auto_l ? 2 : 1));
   }
@@ -99,12 +99,12 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   box.border = {BoxRound(bx), BoxRound(by), BoxRound(width+extra_w), BoxRound((box.definite_height?height:0)+extra_h)};
   box.content = {box.border[0]+box.edge[3]+box.padding[3], box.border[1]+box.edge[0]+box.padding[0],
                  width, box.definite_height ? height : 0};
-  const bool establishes = position != "static" || style.Get("transform") != "none";
+  const bool establishes = position != "static" || style.Slot(BoxKnown::Transform) != "none";
   const size_t child_positioned = establishes ? index : positioned;
   // A scroll container's scrollbars take their room from its content box
   // (overflow:scroll always; auto once the content overflows, below).
   const bool scroller = !inline_box && BoxScrollContainer(nodes, index);
-  const auto overflow_x = style.Get("overflow-x"), overflow_y = style.Get("overflow-y");
+  const auto overflow_x = style.Slot(BoxKnown::OverflowX), overflow_y = style.Slot(BoxKnown::OverflowY);
   box.scrollbar = {scroller && overflow_y == "scroll" ? kBoxScrollbar : 0,
                    scroller && overflow_x == "scroll" ? kBoxScrollbar : 0};
   box.content[2] = std::max(0.0, box.content[2] - box.scrollbar[0]);
@@ -125,7 +125,7 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     }
     if (again && !Children(index, child_positioned, depth, &children_height, &children_width)) return false;
   }
-  if (inline_box || (auto_width && style.Get("display") == "inline-block")) {
+  if (inline_box || (auto_width && display == "inline-block")) {
     box.content[2] = children_width; box.border[2] = BoxRound(children_width+extra_w);
   }
   if (absolute && auto_width && !BoxReplaced(node)) {
@@ -146,7 +146,7 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     for (const auto child : node.children) {
       const auto& item = nodes[child];
       if (item.text) area = std::max(area, item.text_height);
-      else if (!BoxAbsolute(item) && item.style.Get("display") == "inline" && !BoxReplaced(item))
+      else if (!BoxAbsolute(item) && item.style.Slot(BoxKnown::Display) == "inline" && !BoxReplaced(item))
         area = std::max(area, boxes[child].content[3]);
     }
     if (area > 0) children_height = area;
@@ -184,8 +184,8 @@ namespace {
 // or the body's when the root's is visible on both axes.
 size_t ViewportOverflowSource(const std::vector<BoxNode>& nodes) {
   const auto visible = [&](size_t i) {
-    for (const char* name : {"overflow-x", "overflow-y"}) {
-      const auto value = nodes[i].style.Get(name);
+    for (const int index : {BoxKnown::OverflowX, BoxKnown::OverflowY}) {
+      const auto& value = nodes[i].style.Slot(index);
       if (!value.empty() && value != "visible") return false;
     }
     return true;
@@ -203,8 +203,8 @@ bool BoxScrollContainer(const std::vector<BoxNode>& nodes, size_t index) {
   if (node.text || node.parent == kNoBox || BoxReplaced(node)) return false;
   if (node.tag == "body" && nodes[node.parent].parent == kNoBox && ViewportOverflowSource(nodes) == index)
     return false;
-  for (const char* name : {"overflow-x", "overflow-y"}) {
-    const auto value = node.style.Get(name);
+  for (const int index : {BoxKnown::OverflowX, BoxKnown::OverflowY}) {
+    const auto& value = node.style.Slot(index);
     if (value == "hidden" || value == "scroll" || value == "auto") return true;
   }
   return false;
@@ -230,7 +230,7 @@ bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& view
   // nsHTMLScrollFrame::ReflowContents for the viewport: lay out without
   // scrollbars, then with each auto scrollbar the scrollable overflow needs.
   const size_t source = ViewportOverflowSource(nodes);
-  const auto overflow_x = nodes[source].style.Get("overflow-x"), overflow_y = nodes[source].style.Get("overflow-y");
+  const auto overflow_x = nodes[source].style.Slot(BoxKnown::OverflowX), overflow_y = nodes[source].style.Slot(BoxKnown::OverflowY);
   const auto may = [](const std::string& value) { return value != "hidden" && value != "clip"; };
   bool vertical = overflow_y == "scroll", horizontal = overflow_x == "scroll";
   BoxViewport pass = viewport;
