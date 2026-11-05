@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <vector>
 
+// Linux donors are built with --disable-jemalloc, so this symbol is absent.
+// js-confdefs.h is force-included and defines MOZ_MEMORY only when jemalloc is on.
+#if defined(MOZ_MEMORY)
 extern "C" void jemalloc_free_dirty_pages();
+#endif
 
 namespace ruyijs::document_model {
 namespace {
@@ -31,7 +35,9 @@ void PurgeLargeRemoval(void (*reclaim)(void*), void* context, domain::DocumentAg
   }
   if (count < 256) return;
   if (reclaim) reclaim(context);
+#if defined(MOZ_MEMORY)
   jemalloc_free_dirty_pages();
+#endif
 }
 }
 Status Model::InnerHtml(NodeKey key, DomString* result) const noexcept {
