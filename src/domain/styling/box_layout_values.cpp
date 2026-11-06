@@ -12,15 +12,7 @@ namespace ruyijs::domain::styling {
 namespace {
 // Names Place, Children and the edge/limit helpers read on every box. The
 // index is an identity of the name, not a position in one style's list.
-const char* const kKnownNames[BoxKnown::kCount] = {
-    "display", "position", "float", "box-sizing", "transform",
-    "width", "height", "min-width", "min-height", "max-width", "max-height",
-    "left", "right", "top", "bottom",
-    "margin-top", "margin-right", "margin-bottom", "margin-left",
-    "padding-top", "padding-right", "padding-bottom", "padding-left",
-    "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
-    "overflow-x", "overflow-y",
-};
+const char* const* kKnownNames = kBoxKnownNames;
 // Call sites pass string literals. The first resolution of a literal compares
 // it with the table; every later call from that site is a pointer compare.
 int KnownIndex(const char* name) {
@@ -114,8 +106,7 @@ CssNumericValue ResolveLength(const std::string& text, double em, double rem, do
   return entry.value;
 }
 }
-double BoxLength(const BoxStyle& style, const char* name, double percent, double fallback) {
-  const auto& text = style.Get(name);
+double BoxLengthOf(const BoxStyle& style, const std::string& text, double percent, double fallback) {
   // A plain block's used lengths are almost all auto, none, or 0px. Those
   // resolve to the fallback or to zero without parsing, and they are the
   // values Place reads a dozen times per box.
@@ -138,6 +129,9 @@ double BoxLength(const BoxStyle& style, const char* name, double percent, double
                                     std::isfinite(percent) ? percent : 0);
   return parsed.kind && (parsed.kind == CssLength || parsed.number == 0)
       ? BoxRound(parsed.number) : fallback;
+}
+double BoxLength(const BoxStyle& style, const char* name, double percent, double fallback) {
+  return BoxLengthOf(style, style.Get(name), percent, fallback);
 }
 bool BoxViewportLength(const std::string& text, double width, double height, double* out) {
   const char* units[] = {"vmin", "vmax", "vw", "vh"};
@@ -162,19 +156,18 @@ bool BoxReplaced(const BoxNode& node) {
 bool BoxAbsolute(const BoxNode& node) {
   // A text node copies its parent's style but is never itself positioned.
   if (node.text) return false;
-  const auto position = node.style.Get("position");
+  const auto position = node.style.Slot(BoxKnown::Position);
   return position == "absolute" || position == "fixed";
 }
 void BoxEdges(const BoxNode& node, double width, BoxLayout* box) {
-  static const char* const margins[] = {"margin-top", "margin-right", "margin-bottom", "margin-left"};
-  static const char* const paddings[] = {"padding-top", "padding-right", "padding-bottom", "padding-left"};
-  static const char* const borders[] = {"border-top-width", "border-right-width", "border-bottom-width",
-                                        "border-left-width"};
+  static constexpr int marginIndex[] = {BoxKnown::MarginTop, BoxKnown::MarginRight, BoxKnown::MarginBottom, BoxKnown::MarginLeft};
+  static constexpr int paddingIndex[] = {BoxKnown::PaddingTop, BoxKnown::PaddingRight, BoxKnown::PaddingBottom, BoxKnown::PaddingLeft};
+  static constexpr int borderIndex[] = {BoxKnown::BorderTop, BoxKnown::BorderRight, BoxKnown::BorderBottom, BoxKnown::BorderLeft};
   for (unsigned i = 0; i < 4; ++i) {
-    box->margin[i] = BoxLength(node.style, margins[i], width, 0);
+    box->margin[i] = BoxLengthOf(node.style, node.style.Slot(marginIndex[i]), width, 0);
     if (node.tag == "body" && !(node.style.specified_margin_mask & (1u << i))) box->margin[i] = 8;
-    box->padding[i] = std::max(0.0, BoxLength(node.style, paddings[i], width, 0));
-    box->edge[i] = std::max(0.0, BoxLength(node.style, borders[i], width, 0));
+    box->padding[i] = std::max(0.0, BoxLengthOf(node.style, node.style.Slot(paddingIndex[i]), width, 0));
+    box->edge[i] = std::max(0.0, BoxLengthOf(node.style, node.style.Slot(borderIndex[i]), width, 0));
     if (node.tag == "iframe" && !(node.style.specified_border_mask & (1u << i))) box->edge[i] = node.no_frame_border ? 0 : 2;
     const bool text_input = node.tag == "input" && (node.input_type.empty() || node.input_type == "text" ||
         node.input_type == "password" || node.input_type == "email" || node.input_type == "url" ||
@@ -186,10 +179,10 @@ void BoxEdges(const BoxNode& node, double width, BoxLayout* box) {
   }
 }
 double BoxLimit(const BoxStyle& style, bool width, double available, double value, double extras) {
-  const auto minimum = BoxLength(style, width ? "min-width" : "min-height", available, 0);
-  const auto maximum = BoxLength(style, width ? "max-width" : "max-height", available,
+  const auto minimum = BoxLengthOf(style, style.Slot(width ? BoxKnown::MinWidth : BoxKnown::MinHeight), available, 0);
+  const auto maximum = BoxLengthOf(style, style.Slot(width ? BoxKnown::MaxWidth : BoxKnown::MaxHeight), available,
                                  std::numeric_limits<double>::infinity());
-  const auto subtract = style.Get("box-sizing") == "border-box" ? extras : 0;
+  const auto subtract = style.Slot(BoxKnown::BoxSizing) == "border-box" ? extras : 0;
   return std::max(0.0, std::max(minimum - subtract, std::min(value, maximum - subtract)));
 }
 }
