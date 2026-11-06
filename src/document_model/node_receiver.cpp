@@ -25,14 +25,14 @@ Wrapper* NodeReceiver(JSContext* cx, JS::HandleValue value, NodeKind expected) {
   Wrapper* entry = NodeReceiver(cx, value);
   if (!entry) return nullptr;
   State& owner = *entry->owner;
-  NodeSnapshot node;
+  NodeKind kind = NodeKind::Document;
   {
     JSAutoRealm realm(cx, owner.page);
-    if (!owner.Check(owner.model.Inspect(entry->key, &node))) return nullptr;
+    if (!owner.Check(owner.model.Kind(entry->key, &kind))) return nullptr;
   }
   // CharacterData's existing Text-kind check also accepts Comment nodes.
-  if (node.kind == expected || (expected == NodeKind::Text &&
-      (node.kind == NodeKind::Comment || node.kind == NodeKind::ProcessingInstruction))) return entry;
+  if (kind == expected || (expected == NodeKind::Text &&
+      (kind == NodeKind::Comment || kind == NodeKind::ProcessingInstruction))) return entry;
   TypeError(cx, "DOM interface receiver is incompatible"); return nullptr;
 }
 }

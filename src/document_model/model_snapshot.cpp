@@ -67,6 +67,11 @@ Status Model::InspectLayout(NodeKey key, NodeSnapshot* result) const noexcept {
     *result = std::move(value);
   });
 }
+Status Model::Kind(NodeKey key, NodeKind* result) const noexcept {
+  return Protect([&] {
+    *result = NodeKind(State().owner(key).require(key.node).node_type());
+  });
+}
 Status Model::InspectDocument(NodeKey key, DocumentSnapshot* result) const noexcept {
   return Protect([&] {
     const auto& owner = State().document(key); DocumentSnapshot value;

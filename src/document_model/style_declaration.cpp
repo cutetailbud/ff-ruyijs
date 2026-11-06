@@ -36,7 +36,10 @@ namespace {
 // released once script drops both (T41). Slot 2 carries the link.
 void FinalizeStyle(JS::GCContext*, JSObject* object) {
   auto* link = static_cast<ReflectedLink*>(JS::GetReservedSlot(object, 2).toPrivate());
+  auto* factory = static_cast<State*>(JS::GetReservedSlot(object, 1).toPrivate());
   if (link && link->style == object) link->style = nullptr;
+  if (factory && link && !link->style && !link->dataset && !link->animatedClass)
+    factory->DropReflected(link);
 }
 // The element's cached facade follows the engine when it moves the facade
 // object, so element.style keeps returning the same live object (T41).
