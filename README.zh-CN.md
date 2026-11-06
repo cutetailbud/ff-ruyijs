@@ -16,7 +16,9 @@
 
 <sub>贡献者</sub>
 
-<a href="https://github.com/cutetailbud/ff-ruyijs/graphs/contributors"><img src="https://contrib.rocks/image?repo=cutetailbud/ff-ruyijs" alt="贡献者" height="48"></a>
+<a href="https://github.com/Facetomyself" title="Facetomyself · #4 macOS arm64 外壳、#6 QUIC 配置、#7 macOS 代理、#9 macOS Necko 适配器、#14-21 DOM 与布局提速、#22-29 DOM、布局与样式提速"><img src="assets/contributors/Facetomyself.png" width="48" height="48" alt="Facetomyself"></a>&nbsp;&nbsp;<a href="https://github.com/Starktomy" title="Starktomy · #5 Linux 运行时"><img src="assets/contributors/Starktomy.png" width="48" height="48" alt="Starktomy"></a>&nbsp;&nbsp;<a href="https://github.com/isesword" title="isesword · #8 macOS Core Text 排版与 Firefox 对齐"><img src="assets/contributors/isesword.png" width="48" height="48" alt="isesword"></a>&nbsp;&nbsp;<a href="https://github.com/sbbbsbbb" title="sbbbsbbb · #10 macOS TLS 与 HTTP/2"><img src="assets/contributors/sbbbsbbb.png" width="48" height="48" alt="sbbbsbbb"></a>
+
+<a href="https://github.com/cutetailbud/ff-ruyijs/graphs/contributors"><img src="https://contrib.rocks/image?repo=cutetailbud/ff-ruyijs" alt="全部贡献者" height="48"></a>
 
 **[安装](#-安装)** &nbsp;·&nbsp; **[功能](#-功能)** &nbsp;·&nbsp; **[攻克的验证系统](#-攻克的验证系统)** &nbsp;·&nbsp; **[示例](#-运行示例)** &nbsp;·&nbsp; **[FAQ](#-常见问题)** &nbsp;·&nbsp; **[联系](#-联系方式)** &nbsp;·&nbsp; **[LinuxDO](https://linux.do/t/topic/3078486)** &nbsp;·&nbsp; [English](README.md) · **简体中文**
 
