@@ -46,6 +46,27 @@ Status Model::Inspect(NodeKey key, NodeSnapshot* result) const noexcept {
     *result = std::move(value);
   });
 }
+Status Model::InspectLayout(NodeKey key, NodeSnapshot* result) const noexcept {
+  return Protect([&] {
+    const auto& owner = State().owner(key);
+    const auto& node = owner.require(key.node);
+    NodeSnapshot value;
+    value.key = key;
+    value.kind = NodeKind(node.node_type());
+    value.parent = Key(key.document, node.parent_id());
+    value.composed_root = Key(key.document, owner.composed_root_id(key.node));
+    value.is_connected = value.composed_root.node == owner.id();
+    value.shadow_host = Key(key.document, node.shadow_host_id());
+    value.shadow_root = Key(key.document, node.shadow_root_id());
+    if (const auto* element = owner.get_element(key.node)) {
+      value.local_name = element->tag_name().local16();
+    } else if (value.kind == NodeKind::Text || value.kind == NodeKind::Comment ||
+               value.kind == NodeKind::ProcessingInstruction) {
+      value.node_value = node.node_value16();
+    }
+    *result = std::move(value);
+  });
+}
 Status Model::InspectDocument(NodeKey key, DocumentSnapshot* result) const noexcept {
   return Protect([&] {
     const auto& owner = State().document(key); DocumentSnapshot value;

@@ -14,7 +14,7 @@ bool Realm::ReadLayoutNode(JS::HandleValue value, LayoutNodeSource* out,
   {
     JSAutoRealm realm(owner.cx, owner.page);
     NodeSnapshot node;
-    if (!owner.Check(owner.model.Inspect(source.key, &node))) return false;
+    if (!owner.Check(owner.model.InspectLayout(source.key, &node))) return false;
     result.element = node.kind == NodeKind::Element;
     result.text = node.kind == NodeKind::Text;
     result.tag = node.local_name.value_or(u"");
@@ -31,7 +31,7 @@ bool Realm::ReadLayoutNode(JS::HandleValue value, LayoutNodeSource* out,
     if (!owner.Check(owner.model.FocusedElement(owner.main, &result.focused))) return false;
     if (parentKey.node) {
       NodeSnapshot p;
-      if (!owner.Check(owner.model.Inspect(parentKey, &p))) return false;
+      if (!owner.Check(owner.model.InspectLayout(parentKey, &p))) return false;
       if (p.shadow_host.node) parentKey = p.shadow_host;
       else if (p.kind != NodeKind::Element) parentKey = {};
     }
@@ -45,7 +45,7 @@ bool Realm::ReadLayoutNode(JS::HandleValue value, LayoutNodeSource* out,
   children.clear();
   for (const auto key : keys) {
     NodeSnapshot child;
-    if (!owner.Check(owner.model.Inspect(key, &child))) return false;
+    if (!owner.Check(owner.model.InspectLayout(key, &child))) return false;
     if (child.kind != NodeKind::Element && child.kind != NodeKind::Text) continue;
     JS::RootedObject object(owner.cx);
     if (!source.owner->WrapNode(key, &object) || !children.append(object)) return false;
