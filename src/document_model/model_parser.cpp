@@ -1,12 +1,43 @@
 #include "document_model/model_internal.h"
 #include "document_model/model_tree_builder.h"
 #include <algorithm>
+#include <vector>
+
+// Linux donors are built with --disable-jemalloc, so this symbol is absent.
+// js-confdefs.h is force-included and defines MOZ_MEMORY only when jemalloc is on.
+#if defined(MOZ_MEMORY)
+extern "C" void jemalloc_free_dirty_pages();
+#endif
 
 namespace ruyijs::document_model {
 namespace {
 void RequireHtml(const domain::DocumentAggregate& owner) {
   if (!owner.uses_html_syntax())
     throw domain::DomError(domain::DomErrorCode::NotSupported, "XML markup parsing is not implemented");
+}
+// A large innerHTML replacement frees a detached tree. Release it and hand the
+// dirty pages back. Smaller edits do not purge.
+void PurgeLargeRemoval(void (*reclaim)(void*), void* context, domain::DocumentAggregate& owner,
+                       const std::vector<domain::NodeId>& removed) {
+  size_t count = 0;
+  std::vector<domain::NodeId> pending;
+  for (domain::NodeId id : removed) {
+    pending.push_back(id);
+    while (!pending.empty()) {
+      const domain::NodeId current = pending.back();
+      pending.pop_back();
+      ++count;
+      if (count >= 256) break;
+      const auto& children = owner.require(current).child_ids();
+      pending.insert(pending.end(), children.begin(), children.end());
+    }
+    if (count >= 256) break;
+  }
+  if (count < 256) return;
+  if (reclaim) reclaim(context);
+#if defined(MOZ_MEMORY)
+  jemalloc_free_dirty_pages();
+#endif
 }
 }
 Status Model::InnerHtml(NodeKey key, DomString* result) const noexcept {
@@ -36,8 +67,8 @@ Status Model::SetInnerHtml(NodeKey key, DomStringView markup) noexcept {
       html::TemplateSink sink;
       BindTemplateSink(sink, State(), content.document);
       const domain::NodeId root = ParseFragmentRoot(charge, State().limits, inert, tag, markup, sink);
+      const auto old = inert.require(content.node).child_ids();
       try {
-        const auto old = inert.require(content.node).child_ids();
         const auto parsed = inert.require(root).child_ids();
         for (auto child : old) inert.remove_child(content.node, child);
         for (auto child : parsed) inert.append_child(content.node, child);
@@ -48,6 +79,7 @@ Status Model::SetInnerHtml(NodeKey key, DomStringView markup) noexcept {
       }
       inert.remove_node(root);
       State().Touch();
+      PurgeLargeRemoval(State().reclaim, State().reclaimContext, inert, old);
       return;
     }
     html::TemplateSink sink;
@@ -55,9 +87,9 @@ Status Model::SetInnerHtml(NodeKey key, DomStringView markup) noexcept {
     // Fragment parsing: an unpublished html root collects the new nodes, so a
     // failure destroys only them and the old children stay in place.
     const domain::NodeId root = ParseFragmentRoot(charge, State().limits, owner, tag, markup, sink, space);
+    const auto old = owner.require(key.node).child_ids();
     try {
       // Copies: the fragment root is emptied as each child moves into place.
-      const auto old = owner.require(key.node).child_ids();
       const auto parsed = owner.require(root).child_ids();
       for (auto child : old) owner.remove_child(key.node, child);
       for (auto child : parsed) owner.append_child(key.node, child);
@@ -70,6 +102,7 @@ Status Model::SetInnerHtml(NodeKey key, DomStringView markup) noexcept {
     }
     owner.remove_node(root);
     State().Touch();
+    PurgeLargeRemoval(State().reclaim, State().reclaimContext, owner, old);
   });
 }
 // Nodes a parser inserts are real changes too, so the session reports them into
