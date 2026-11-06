@@ -3,6 +3,24 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- Layout reads a node without the sibling scan or the name strings it does not use (#22), resolves `element.style`
+  without a full node snapshot and finds a reflected facade through an index instead of a list walk (#27), and
+  reads its known box properties from their slots rather than by name (#29). Geometry is unchanged.
+- `getComputedStyle` is cached while the document revision and cascade stamp are unchanged, so repeated reads of
+  the same element do not recompute the cascade (#23).
+- `querySelectorAll` defers each match's wrapper until it is indexed, and `getElementById` answers from an element
+  id index instead of a tree scan (#24). A custom-element upgrade reads only the tag and connection (#25).
+- A large `innerHTML` replacement purges the detached tree's dirty pages back to the allocator (#26).
+
+### Fixed
+
+- `getElementById` returns null for an element that was removed from the document but is still referenced by
+  script, matching Firefox; the id index no longer reports a detached node (acceptance fix for #24).
+
 ## [0.3.4] - 2026-11-05
 
 ### Changed
