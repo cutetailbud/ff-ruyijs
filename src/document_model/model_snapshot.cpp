@@ -92,6 +92,24 @@ Status Model::Children(NodeKey key, std::vector<NodeKey>* result) const noexcept
     result->swap(values);
   });
 }
+Status Model::PeekElement(NodeKey key, NodeSnapshot* result) const noexcept {
+  return Protect([&] {
+    const auto& owner = State().owner(key);
+    const auto& node = owner.require(key.node);
+    NodeSnapshot value;
+    value.key = key;
+    value.kind = NodeKind(node.node_type());
+    value.owner_document = node.node_type() == domain::NodeType::Document
+        ? NodeKey{} : Key(key.document, owner.id());
+    value.composed_root = Key(key.document, owner.composed_root_id(key.node));
+    value.is_connected = value.composed_root.node == owner.id();
+    if (const auto* element = owner.get_element(key.node)) {
+      value.local_name = element->tag_name().local16();
+      value.is_html_element = element->tag_name().html();
+    }
+    *result = std::move(value);
+  });
+}
 Status Model::AncestorPath(NodeKey key, std::vector<NodeKey>* result) const noexcept {
   return Protect([&] {
     auto& owner = State().owner(key); std::vector<NodeKey> path;

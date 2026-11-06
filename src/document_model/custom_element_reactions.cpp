@@ -41,11 +41,11 @@ CustomElementState* StateOf(State& s, NodeKey key) {
 }
 bool Connected(State& s, NodeKey key) {
   NodeSnapshot node;
-  return s.model.Inspect(key, &node).code == ErrorCode::None && node.is_connected;
+  return s.model.PeekElement(key, &node).code == ErrorCode::None && node.is_connected;
 }
 // The element's definition when it is an upgrade candidate of this realm.
 CustomElementDefinition* Candidate(State& s, NodeKey key, NodeSnapshot* node) {
-  if (s.model.Inspect(key, node).code != ErrorCode::None || node->kind != NodeKind::Element ||
+  if (s.model.PeekElement(key, node).code != ErrorCode::None || node->kind != NodeKind::Element ||
       !node->is_html_element || !node->local_name || node->owner_document.document != s.main.document ||
       node->owner_document.node != s.main.node)
     return nullptr;

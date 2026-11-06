@@ -317,6 +317,9 @@ class Model final {
   Status TableAttribute(NodeKey node, DomStringView attr, DomString*) const noexcept;
   Status TableSpan(NodeKey node, DomStringView attr, uint32_t*) const noexcept;
   Status Children(NodeKey node, std::vector<NodeKey>* result) const noexcept;
+  // Tag, kind, owner document and connection, without the sibling scan or the
+  // name strings Inspect copies. Custom-element upgrade reads only these.
+  Status PeekElement(NodeKey node, NodeSnapshot* result) const noexcept;
   Status AncestorPath(NodeKey node, std::vector<NodeKey>* result) const noexcept;
   // Event topology flags bit 0 marks a closed root; one spare flag is reserved for Window.
   Status EventPath(NodeKey node, bool composed, std::vector<NodeKey>* result,
