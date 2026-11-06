@@ -195,6 +195,10 @@ inline bool DocumentAggregate::lookup_element_id(DomStringView value, NodeId* hi
   if (!element) return false;
   const auto id = element->get_attribute16(u"id");
   if (!id || DomStringView(*id) != value) return false;
+  // getElementById searches the document tree only: a detached node that still
+  // holds the id (script keeps a reference after removeChild) is not a hit, and
+  // the caller falls back to the tree scan, which returns null as Firefox does.
+  if (root_id(found->second) != this->id()) return false;
   *hit = found->second;
   return true;
 }
