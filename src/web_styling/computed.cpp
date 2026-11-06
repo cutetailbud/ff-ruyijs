@@ -10,6 +10,8 @@
 #include "domain/styling/css_page_value.h"
 #include "domain/styling/css_components.h"
 #include "document_model/style_port.h"
+#include "document_model/state.h"
+#include "js/Wrapper.h"
 
 #include <memory>
 #include <vector>
@@ -138,9 +140,35 @@ bool GetComputedStyle(JSContext* cx, unsigned argc, JS::Value* vp) {
   JS::RootedObject element(cx, &args.get(0).toObject());
   // The pseudo-element argument has no box to resolve against in this runtime,
   // so it is ignored and the element's own declaration is returned (D37).
+  JSObject* raw = js::CheckedUnwrapStatic(element);
+  document_model::Wrapper* wrapper = raw && JS::GetClass(raw) == &document_model::kNodeClass
+      ? static_cast<document_model::Wrapper*>(JS::GetReservedSlot(raw, 0).toPrivate()) : nullptr;
+  uint64_t revision = 0, stamp = 0;
+  const bool cacheable = wrapper && wrapper->owner && !wrapper->dead &&
+      CascadeStamp(state, element, &stamp);
+  if (cacheable) revision = wrapper->owner->model.Revision();
+  auto& cache = state.computedBlocks;
+  if (cacheable && cache.ready && cache.revision == revision && cache.stamp == stamp) {
+    auto found = cache.blocks.find(wrapper->key.node);
+    if (found != cache.blocks.end()) {
+      JS::RootedObject view(cx);
+      if (!state.NewStyleView(found->second, &view)) return false;
+      args.rval().setObject(*view);
+      return true;
+    }
+  }
   ComputedStyle computed;
   if (!ReadComputed(state, element, &computed)) return false;
   std::string block = BuildComputedBlock(computed);
+  if (cacheable) {
+    if (!cache.ready || cache.revision != revision || cache.stamp != stamp) {
+      cache.blocks.clear();
+      cache.revision = revision;
+      cache.stamp = stamp;
+      cache.ready = true;
+    }
+    cache.blocks.insert_or_assign(wrapper->key.node, block);
+  }
   JS::RootedObject view(cx);
   if (!state.NewStyleView(block, &view)) return false;
   args.rval().setObject(*view);
