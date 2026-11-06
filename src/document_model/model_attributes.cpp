@@ -19,8 +19,13 @@ Status Model::GetAttribute(NodeKey key, DomStringView name, std::optional<DomStr
 Status Model::SetAttribute(NodeKey key, DomStringView name, DomStringView value) noexcept {
   return Protect([&] {
     auto& element = State().element(key); auto old = element.get_attribute16(name);
+    const auto previous_id = element.get_attribute16(u"id");
     State().budget(0,value.size() + (old ? 0 : name.size()),old ? old->size() : 0);
     element.set_attribute16(name,value);
+    const auto next_id = element.get_attribute16(u"id");
+    if (previous_id != next_id)
+      State().owner(key).note_element_id(key.node, previous_id ? DomStringView(*previous_id) : DomStringView(),
+                                         next_id ? DomStringView(*next_id) : DomStringView());
     State().NoteAttributes(key, name, DomStringView(), old ? &*old : nullptr);
     // An unchanged value (classList.add of a present token) is still a mutation
     // record, but no collection, token view or selector match can change.
@@ -31,7 +36,12 @@ Status Model::RemoveAttribute(NodeKey key, DomStringView name) noexcept {
   return Protect([&] {
     auto& element = State().element(key);
     auto old = element.get_attribute16(name);
+    const auto previous_id = element.get_attribute16(u"id");
     element.remove_attribute16(name);
+    const auto next_id = element.get_attribute16(u"id");
+    if (previous_id != next_id)
+      State().owner(key).note_element_id(key.node, previous_id ? DomStringView(*previous_id) : DomStringView(),
+                                         next_id ? DomStringView(*next_id) : DomStringView());
     // Removing an attribute that was not there is not a mutation.
     if (old) State().NoteAttributes(key, name, DomStringView(), &*old);
     if (name == u"style" || !old) State().TouchStyle(); else State().TouchAttribute();

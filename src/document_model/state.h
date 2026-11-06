@@ -330,7 +330,8 @@ struct State {
   // and removedNodes). The record is owned by the object and freed by the
   // collection class finalizer.
   bool NodeListOwned(const std::vector<NodeKey>&, JS::MutableHandleObject,
-                     CollectionKind kind = CollectionKind::NodeList, State* factory = nullptr);
+                     CollectionKind kind = CollectionKind::NodeList, State* factory = nullptr,
+                     bool defer = false);
   bool TokenListOwned(Wrapper&, DomStringView attribute, JS::MutableHandleValue);
   bool SyncTokenViews(uint64_t revision);
   bool SyncCollections();

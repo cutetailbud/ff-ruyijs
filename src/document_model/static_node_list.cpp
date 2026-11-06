@@ -6,7 +6,7 @@
 
 namespace ruyijs::document_model {
 bool State::NodeListOwned(const std::vector<NodeKey>& items, JS::MutableHandleObject result,
-                          CollectionKind kind, State* factory) {
+                          CollectionKind kind, State* factory, bool defer) {
   State& allocation = factory ? *factory : *this;
   JSAutoRealm realm(cx, allocation.page);
   Interface* installed = allocation.Find(kind == CollectionKind::HTMLCollection ? "HTMLCollection" : "NodeList");
@@ -23,15 +23,23 @@ bool State::NodeListOwned(const std::vector<NodeKey>& items, JS::MutableHandleOb
   JS::SetReservedSlot(object, 1, JS::BooleanValue(true));
   // Attach before any GC-capable lookup: the rooted list now traces every
   // captured node and its finalizer owns cleanup on all subsequent failures.
-  record->objects.reserve(items.size());
-  for (NodeKey key : items) {
-    JS::RootedValue value(cx);
-    if (!Wrap(key, &value)) return false;
-    // Preserve the previous factory's treatment of already expired log keys.
-    // Once captured, a node is never resolved from a mutable Model key again.
-    if (value.isObject()) record->objects.emplace_back(&value.toObject());
+  if (defer) {
+    // querySelectorAll is static, but length does not need a wrapper yet.
+    // The first index read wraps that node and keeps the object.
+    record->items = items;
+  } else {
+    record->objects.reserve(items.size());
+    for (NodeKey key : items) {
+      JS::RootedValue value(cx);
+      if (!Wrap(key, &value)) return false;
+      // Preserve the previous factory's treatment of already expired log keys.
+      // Once captured, a node is never resolved from a mutable Model key again.
+      if (value.isObject()) record->objects.emplace_back(&value.toObject());
+    }
   }
-  if (!MaterializeCollection(*this, object, *record)) return false;
+  // Index properties are defined on first access (CollectionResolve) or when
+  // the list is enumerated. length and item() read the captured objects
+  // directly, so a length-only query does not define one property per match.
   result.set(object);
   return true;
 }

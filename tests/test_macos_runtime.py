@@ -204,6 +204,36 @@ def geometry_surface(context):
 
 
 @case
+def query_list_and_id_index(context):
+    """Static NodeList indexes stay put; a live list and the id index follow edits."""
+    context.load_page("https://test.local/", "<html><body></body></html>")
+    result = context.eval("""
+      document.body.innerHTML = '<div id=a></div><div id=b></div><span id=c></span>';
+      const list = document.querySelectorAll('div');
+      const first = list[0];
+      const byItem = list.item(0);
+      first.remove();
+      const staticKeeps = list.length === 2 && list[0] === first && byItem === first;
+      const renamed = document.getElementById('b');
+      renamed.id = 'z';
+      const idMoved = document.getElementById('b') === null && document.getElementById('z') === renamed;
+      document.body.innerHTML = '<div id=d></div><div id=d class=second></div>';
+      const dup = document.getElementById('d');
+      const firstDup = !dup.className;
+      dup.remove();
+      const second = document.getElementById('d');
+      const parent = document.createElement('div');
+      document.body.appendChild(parent);
+      const kids = parent.childNodes;
+      parent.appendChild(document.createElement('span'));
+      ({staticKeeps, idMoved, firstDup, secondIs: second && second.className,
+        live: kids.length === 1 && kids[0].tagName === 'SPAN'})
+    """)
+    ok = (result.get("staticKeeps") and result.get("idMoved") and result.get("firstDup")
+          and result.get("secondIs") == "second" and result.get("live"))
+    return ok, result
+
+@case
 def advance_determinism(context):
     # The logical clock drives timers; advance() flushes the loop.
     context.configure_clock("logical", epoch_ms=1700000000000)

@@ -51,9 +51,10 @@ const JSClass kCollectionClass = {"DOM Collection",
                                   &kCollectionOps};
 
 size_t CollectionCount(const CollectionRecord& record) {
-  return record.kind == CollectionKind::NodeList || record.kind == CollectionKind::HTMLCollection
-             ? (record.live ? record.items.size() : record.objects.size())
-             : record.strings.size();
+  if (record.kind != CollectionKind::NodeList && record.kind != CollectionKind::HTMLCollection)
+    return record.strings.size();
+  if (record.live || !record.items.empty()) return record.items.size();
+  return record.objects.size();
 }
 
 DomString NamespaceArgument(DomStringView namespace_uri, DomStringView local) {
@@ -96,9 +97,15 @@ bool CollectionIndex(State& state, CollectionRecord& record, size_t index,
     switch (record.kind) {
       case CollectionKind::NodeList:
       case CollectionKind::HTMLCollection:
-        if (!record.live)
+        if (!record.live && record.items.empty())
+          value.setObject(*record.objects[index]);
+        else if (index < record.objects.size() && record.objects[index])
           value.setObject(*record.objects[index]);
         else if (!owner.Wrap(record.items[index], &value)) return false;
+        else if (value.isObject()) {
+          if (record.objects.size() <= index) record.objects.resize(index + 1);
+          record.objects[index] = &value.toObject();
+        }
         break;
       case CollectionKind::TokenList:
         if (!Value(cx, DomStringView(record.strings[index]), &value)) return false;
