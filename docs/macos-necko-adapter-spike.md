@@ -6,7 +6,7 @@ Products stay in `dist/necko-adapter/` after `stage_runtime`, with the build tre
 
 ## What is installed
 
-`tools/build_necko_darwin.py` downloads the `runtime.json` 0.3.5 Windows archive, checks its size and SHA-256, and extracts the text files of `necko` and `ruyijs_necko` into a Python 3.14 virtualenv. The four Linux patch anchors are applied with `libnecko_core.dylib` instead of `libnecko_core.so`. `ruyijs_necko/oneshot.py` is `src/resource_network/necko_oneshot.py`. Python 3.12 cannot import this adapter: `ruyijs_necko/codec.py` imports `compression.zstd`, which the 3.14 standard library provides. The extracted `_tls_profiles.py` is the same 4883 bytes as `native/necko_tls/necko_win/_tls_profiles.py`.
+`tools/build_necko_darwin.py` downloads the `runtime.json` 0.3.6 Windows archive, checks its size and SHA-256, and extracts the text files of `necko` and `ruyijs_necko` into a Python 3.14 virtualenv. The four Linux patch anchors are applied with `libnecko_core.dylib` instead of `libnecko_core.so`. `ruyijs_necko/oneshot.py` is `src/resource_network/necko_oneshot.py`. Python 3.12 cannot import this adapter: `ruyijs_necko/codec.py` imports `compression.zstd`, which the 3.14 standard library provides. The extracted `_tls_profiles.py` is the same 4883 bytes as `native/necko_tls/necko_win/_tls_profiles.py`.
 
 The core library is `native/necko_posix/src` linked against the existing `../firefox-159/obj-necko` NSS. No NSS rebuild was started. Darwin has no `SOCK_NONBLOCK` or `SOCK_CLOEXEC`, so the socket opens with `fcntl` and `SO_NOSIGPIPE`. `SSL_DataPending` is a local symbol in the folded `libnss3.dylib`, so `necko_tls_pending` reports whether `PR_Recv` can peek one byte. The HTTP/2 pump only tests that sign.
 
