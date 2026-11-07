@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.6] - 2026-11-07
+
+### Fixed
+
+- Aborting a fetch that is still in flight rejects it with `AbortError` instead of crashing `js.exe`
+  (0xC0000005 on Windows, "pipe closed during a frame" on Linux). Pages that abort pending fetches, such as
+  Twitch's login page with its Kasada SDK, now load (#30).
+- A pending Web Animations play/pause task and the finish timer run; they never matched their own callback
+  before and so never fired.
+
 ## [0.3.5] - 2026-11-06
 
 ### Changed

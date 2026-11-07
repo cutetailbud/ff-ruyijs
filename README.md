@@ -68,7 +68,7 @@ python -m pip install --upgrade ruyijs
 To verify the installation:
 ```python
 import ruyijs
-print(ruyijs.__version__)   # 0.3.5
+print(ruyijs.__version__)   # 0.3.6
 ```
 
 ### Build from source
