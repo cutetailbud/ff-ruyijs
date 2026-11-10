@@ -139,6 +139,12 @@ class Realm final {
   // PageLoad's load-event delay: runs one external completion as a task,
   // waiting for it if needed; false once no external work is pending.
   bool RunExternalTask();
+  // The load event's wait for images and style sheets (#31): as above, but on
+  // the system clock the wait also ends when a queued task (a timer, a posted
+  // message, a frame) falls due, so the caller can yield to it; the event loop
+  // keeps turning while the load event is delayed (Firefox).
+  enum class ExternalStep { Ran, Idle, TaskDue };
+  ExternalStep RunExternalOrDueTask();
  private:
   std::unique_ptr<State> state_;
 };

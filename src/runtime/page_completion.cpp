@@ -72,11 +72,19 @@ bool PageLoad::Complete(JS::HandleObject task) {
   Owners owners = OwnersOf(*target, page);
   const bool frame = JS::GetReservedSlot(task, Frame).toBoolean();
   // Existing image load blocking stays on the same external-completion port;
-  // stylesheets in flight block the load event too (Firefox).
+  // stylesheets in flight block the load event too (Firefox). Only the load
+  // event waits: once another task falls due (a page timer), this task queues
+  // itself behind it and the event loop runs it first (#31).
   auto* styling = target->styling.get();
-  while (((!frame && document.ImageLoadsPending()) || (styling && styling->LoadsInFlight())) &&
-         scheduling_.RunExternalTask())
+  while ((!frame && document.ImageLoadsPending()) || (styling && styling->LoadsInFlight())) {
+    const auto step = scheduling_.RunExternalOrDueTask();
     if (!CompletionPending(cx_, task, scheduling_)) return true;
+    if (step == execution_scheduling::Realm::ExternalStep::Idle) break;
+    if (step == execution_scheduling::Realm::ExternalStep::TaskDue) {
+      JS::RootedObject callback(cx_, &JS::GetReservedSlot(task, Callback).toObject());
+      return scheduling_.PostTask(callback);
+    }
+  }
   if (!CompletionPending(cx_, task, scheduling_)) return true;
   if (styling && styling->LoadsPending()) {  // an arrived sheet's task runs first
     JS::RootedObject callback(cx_, &JS::GetReservedSlot(task, Callback).toObject());

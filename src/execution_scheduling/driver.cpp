@@ -26,6 +26,22 @@ bool Realm::RunExternalTask() {
     s.ExternalReady(1000);
   }
 }
+Realm::ExternalStep Realm::RunExternalOrDueTask() {
+  auto& s = *state_;
+  for (;;) {
+    if (s.RunExternal()) return ExternalStep::Ran;
+    if (!s.ExternalPending()) return ExternalStep::Idle;
+    // Logical time does not move while a transport is pending, so no task can
+    // fall due here; keep the former wait.
+    if (s.model.Clock().logical) { s.ExternalReady(1000); continue; }
+    s.SyncClock();
+    const auto now = s.model.Inspect();
+    if (s.model.FramePending() || (now.has_next && now.next <= now.now))
+      return ExternalStep::TaskDue;
+    // Wait for a completion until the next task's deadline at the latest.
+    s.WaitUntil(now.has_next ? now.next : now.now + 1000, 1000);
+  }
+}
 bool Realm::ValidateAdvance(double ms, double step, uint32_t maxTasks) {
   const auto clock = state_->model.Clock();
   if (!std::isfinite(ms) || ms < 0 || ms > (clock.logical ? 86400000 : 60000))
