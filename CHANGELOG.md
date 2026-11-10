@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.7] - 2026-11-10
+
+### Fixed
+
+- Page timers, posted messages and animation frames run while the `load` event waits on slow images or style
+  sheets. A 50 ms `setTimeout` on a page with a 2 s image ran after the image and after `load`; it now runs
+  at about 50 ms, and `load` still fires once the image is done, as in Firefox (#31).
+
 ## [0.3.6] - 2026-11-07
 
 ### Fixed

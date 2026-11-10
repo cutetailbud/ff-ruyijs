@@ -68,7 +68,7 @@ python -m pip install --upgrade ruyijs
 验证安装：
 ```python
 import ruyijs
-print(ruyijs.__version__)   # 0.3.6
+print(ruyijs.__version__)   # 0.3.7
 ```
 
 ### 从源码构建
