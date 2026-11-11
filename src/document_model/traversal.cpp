@@ -27,9 +27,9 @@ Walker* WalkerOf(State& state, const JS::CallArgs& args) {
 }
 
 bool FilterNode(State& state, Walker& walker, NodeKey key, int32_t* result) {
-  NodeSnapshot snapshot;
-  if (!state.Check(state.model.Inspect(key, &snapshot))) return false;
-  const uint32_t type = uint32_t(snapshot.kind);
+  NodeKind kind = NodeKind::Document;
+  if (!state.Check(state.model.Kind(key, &kind))) return false;
+  const uint32_t type = uint32_t(kind);
   // whatToShow carries one bit per node type: ELEMENT_NODE is bit 0.
   if (type == 0 || type > 32 || !(walker.what & (uint32_t(1) << (type - 1)))) {
     *result = 3;  // FILTER_SKIP
@@ -57,22 +57,15 @@ bool FilterNode(State& state, Walker& walker, NodeKey key, int32_t* result) {
 bool WalkerPresent(NodeKey key) { return key.document != 0 || key.node != 0; }
 
 bool WalkerChild(State& state, NodeKey node, bool first, NodeKey* result) {
-  NodeSnapshot value;
-  if (!state.Check(state.model.Inspect(node, &value))) return false;
-  *result = first ? value.first_child : value.last_child;
-  return true;
+  return state.Check(state.model.NodeLink(
+      node, first ? NodeRelation::FirstChild : NodeRelation::LastChild, result));
 }
 bool WalkerSibling(State& state, NodeKey node, bool next, NodeKey* result) {
-  NodeSnapshot value;
-  if (!state.Check(state.model.Inspect(node, &value))) return false;
-  *result = next ? value.next_sibling : value.previous_sibling;
-  return true;
+  return state.Check(state.model.NodeLink(
+      node, next ? NodeRelation::NextSibling : NodeRelation::PreviousSibling, result));
 }
 bool WalkerParent(State& state, NodeKey node, NodeKey* result) {
-  NodeSnapshot value;
-  if (!state.Check(state.model.Inspect(node, &value))) return false;
-  *result = value.parent;
-  return true;
+  return state.Check(state.model.NodeLink(node, NodeRelation::Parent, result));
 }
 
 namespace {

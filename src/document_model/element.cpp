@@ -20,11 +20,12 @@ static bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
     if (!state.Check(state.model.GetAttribute(entry->key, field == Id ? u"id" : u"class", &value))) return false;
     return Value(cx, value ? DomStringView(*value) : DomStringView(), args.rval());
   }
-  NodeSnapshot value;
-  if (!state.Check(state.model.Inspect(entry->key, &value))) return false;
-  if (field == Tag) return Value(cx, DomStringView(value.node_name), args.rval());
-  return Value(cx, field == Local ? value.local_name : field == Prefix ? value.prefix : value.namespace_uri,
-               args.rval());
+  std::optional<DomString> value;
+  const ElementTagField tag_field = field == Tag ? ElementTagField::TagName
+      : field == Local ? ElementTagField::LocalName
+      : field == Prefix ? ElementTagField::Prefix : ElementTagField::NamespaceURI;
+  if (!state.Check(state.model.ElementTag(entry->key, tag_field, &value))) return false;
+  return Value(cx, value, args.rval());
 }
 static bool Set(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
@@ -44,9 +45,13 @@ static bool Call(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto op = Method(FunctionSlot(args));
   if (op == Names || op == HasAttributes) {
     State& state = *entry->owner;
+    if (op == HasAttributes) {
+      bool has = false;
+      if (!state.Check(state.model.HasAttributes(entry->key, &has))) return false;
+      args.rval().setBoolean(has); return true;
+    }
     std::vector<AttributeSnapshot> values;
     if (!state.Check(state.model.Attributes(entry->key, &values))) return false;
-    if (op == HasAttributes) { args.rval().setBoolean(!values.empty()); return true; }
     JS::RootedObject array(cx, JS::NewArrayObject(cx, values.size()));
     JS::RootedValue value(cx);
     if (!array) return false;
