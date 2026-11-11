@@ -38,7 +38,7 @@ bool IdleRequest(JSContext* cx,unsigned argc,JS::Value* vp){
  if(!callback->arguments.append(JS::ObjectValue(*factory)))return false;
  uint32_t handle=uint32_t(JS::GetReservedSlot(factory,INext).toNumber());callback->idleHandle=handle;
  s.SyncClock();if(!s.Accept(s.model.ScheduleIdle(!timeout.isUndefined(),duration,&callback->id)))return false;
- ++s.argumentSlots;callback->next=std::move(s.callbacks);s.callbacks=std::move(callback);
+ ++s.argumentSlots;s.Track(std::move(callback));
  JS::SetReservedSlot(factory,INext,JS::DoubleValue(uint32_t(handle+1)));args.rval().setNumber(handle);return true;
 }
 bool IdleCancel(JSContext* cx,unsigned argc,JS::Value* vp){
@@ -47,10 +47,10 @@ bool IdleCancel(JSContext* cx,unsigned argc,JS::Value* vp){
  s.Observe("Window","cancelIdleCallback",int(ApiAccess::Call));
  if(!argc)return Error(cx,"cancelIdleCallback requires a handle");
  uint32_t handle=0;if(!JS::ToUint32(cx,args[0],&handle))return false;
- for(Callback* cb=s.callbacks.get();cb;cb=cb->next.get()){
-  if(cb->kind==Kind::Idle&&!cb->running&&cb->idleHandle==handle&&&cb->arguments[0].toObject()==factory){
-   uint64_t id=cb->id;s.model.CancelIdle(id);s.Remove(id);break;
-  }
+ auto hit=s.activeIdles.find({factory.get(),handle});
+ if(hit!=s.activeIdles.end()){
+  uint64_t id=hit->second;Callback* cb=s.Find(id);
+  if(cb&&cb->kind==Kind::Idle&&!cb->running){s.model.CancelIdle(id);s.Remove(id);}
  }
  args.rval().setUndefined();return true;
 }
