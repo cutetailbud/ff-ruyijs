@@ -116,6 +116,12 @@ struct DocumentSnapshot {
 };
 enum class QueryKind { Id, TagName, ClassNames };
 enum class TableList { Rows, Bodies, Cells };
+enum class NodeRelation : uint8_t {
+  OwnerDocument, BaseDocument, Parent, ParentElement, FirstChild, LastChild,
+  PreviousSibling, NextSibling, Root, ComposedRoot,
+  FirstElementChild, LastElementChild, PreviousElementSibling, NextElementSibling
+};
+enum class ElementTagField : uint8_t { TagName, LocalName, Prefix, NamespaceURI };
 struct TableInsertion { NodeKey parent, before; bool body = false; };
 // Variadic insertion behind append/prepend/before/after/replaceWith and the
 // child-node remove(). A null item node creates a Text node from the item
@@ -288,6 +294,17 @@ class Model final {
   // The node type only. Interface receivers use this instead of Inspect,
   // which also names siblings and copies strings they do not read.
   Status Kind(NodeKey node, NodeKind* result) const noexcept;
+  // Narrow property reads so Node, Element, CharacterData and traversal getters
+  // do not copy unused strings, walk ancestors, or scan siblings via Inspect.
+  Status NodeName(NodeKey node, DomString* result) const noexcept;
+  Status NodeValue(NodeKey node, std::optional<DomString>* result) const noexcept;
+  Status NodeLink(NodeKey node, NodeRelation relation, NodeKey* result) const noexcept;
+  Status IsConnected(NodeKey node, bool* result) const noexcept;
+  Status HasChildren(NodeKey node, bool* result) const noexcept;
+  Status ChildElementCount(NodeKey node, size_t* result) const noexcept;
+  Status ElementTag(NodeKey node, ElementTagField field, std::optional<DomString>* result) const noexcept;
+  Status HasAttributes(NodeKey node, bool* result) const noexcept;
+  Status DataLength(NodeKey node, size_t* result) const noexcept;
   // The fields ReadLayoutNode keeps. Skips the sibling scan and the name,
   // namespace, and doctype strings Inspect copies and layout does not read.
   Status InspectLayout(NodeKey node, NodeSnapshot* result) const noexcept;

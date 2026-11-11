@@ -72,6 +72,144 @@ Status Model::Kind(NodeKey key, NodeKind* result) const noexcept {
     *result = NodeKind(State().owner(key).require(key.node).node_type());
   });
 }
+Status Model::NodeName(NodeKey key, DomString* result) const noexcept {
+  return Protect([&] {
+    *result = State().owner(key).require(key.node).node_name16();
+  });
+}
+Status Model::NodeValue(NodeKey key, std::optional<DomString>* result) const noexcept {
+  return Protect([&] {
+    *result = State().owner(key).require(key.node).node_value16();
+  });
+}
+Status Model::NodeLink(NodeKey key, NodeRelation relation, NodeKey* result) const noexcept {
+  return Protect([&] {
+    const auto& owner = State().owner(key);
+    const auto& node = owner.require(key.node);
+    domain::NodeId found = 0;
+    switch (relation) {
+      case NodeRelation::OwnerDocument:
+        found = node.node_type() == domain::NodeType::Document ? 0 : owner.id();
+        break;
+      case NodeRelation::BaseDocument:
+        found = node.node_type() == domain::NodeType::Document ? key.node : owner.id();
+        break;
+      case NodeRelation::Parent:
+        found = node.parent_id();
+        break;
+      case NodeRelation::ParentElement: {
+        const auto parent = node.parent_id();
+        found = parent && owner.get_element(parent) ? parent : 0;
+        break;
+      }
+      case NodeRelation::FirstChild:
+        found = node.first_child_id();
+        break;
+      case NodeRelation::LastChild:
+        found = node.last_child_id();
+        break;
+      case NodeRelation::PreviousSibling:
+      case NodeRelation::NextSibling:
+        if (const auto parent_id = node.parent_id()) {
+          const auto& parent = owner.require(parent_id);
+          const int index = parent.index_of_child(key.node);
+          if (index >= 0) {
+            if (relation == NodeRelation::PreviousSibling && index > 0)
+              found = parent.child_ids()[size_t(index - 1)];
+            else if (relation == NodeRelation::NextSibling && size_t(index + 1) < parent.child_count())
+              found = parent.child_ids()[size_t(index + 1)];
+          }
+        }
+        break;
+      case NodeRelation::Root:
+        found = owner.root_id(key.node);
+        break;
+      case NodeRelation::ComposedRoot:
+        found = owner.composed_root_id(key.node);
+        break;
+      case NodeRelation::FirstElementChild:
+        for (auto child : node.child_ids())
+          if (owner.get_element(child)) { found = child; break; }
+        break;
+      case NodeRelation::LastElementChild: {
+        const auto& kids = node.child_ids();
+        for (size_t i = kids.size(); i > 0; --i)
+          if (owner.get_element(kids[i - 1])) { found = kids[i - 1]; break; }
+        break;
+      }
+      case NodeRelation::PreviousElementSibling:
+      case NodeRelation::NextElementSibling:
+        if (const auto parent_id = node.parent_id()) {
+          const auto& parent = owner.require(parent_id);
+          const int index = parent.index_of_child(key.node);
+          const auto& kids = parent.child_ids();
+          if (index >= 0) {
+            if (relation == NodeRelation::PreviousElementSibling) {
+              for (size_t i = size_t(index); i > 0; --i)
+                if (owner.get_element(kids[i - 1])) { found = kids[i - 1]; break; }
+            } else {
+              for (size_t i = size_t(index) + 1; i < kids.size(); ++i)
+                if (owner.get_element(kids[i])) { found = kids[i]; break; }
+            }
+          }
+        }
+        break;
+    }
+    *result = Key(key.document, found);
+  });
+}
+Status Model::IsConnected(NodeKey key, bool* result) const noexcept {
+  return Protect([&] {
+    const auto& owner = State().owner(key);
+    owner.require(key.node);
+    *result = owner.composed_root_id(key.node) == owner.id();
+  });
+}
+Status Model::HasChildren(NodeKey key, bool* result) const noexcept {
+  return Protect([&] {
+    *result = State().owner(key).require(key.node).has_children();
+  });
+}
+Status Model::ChildElementCount(NodeKey key, size_t* result) const noexcept {
+  return Protect([&] {
+    const auto& owner = State().owner(key);
+    const auto& node = owner.require(key.node);
+    size_t count = 0;
+    for (auto child : node.child_ids())
+      if (owner.get_element(child)) ++count;
+    *result = count;
+  });
+}
+Status Model::ElementTag(NodeKey key, ElementTagField field, std::optional<DomString>* result) const noexcept {
+  return Protect([&] {
+    const auto& tag = State().element(key).tag_name();
+    switch (field) {
+      case ElementTagField::TagName:
+        *result = tag.value16();
+        break;
+      case ElementTagField::LocalName:
+        *result = tag.local16();
+        break;
+      case ElementTagField::Prefix:
+        *result = tag.prefix16().empty() ? std::nullopt : std::optional<DomString>(DomString(tag.prefix16()));
+        break;
+      case ElementTagField::NamespaceURI:
+        *result = tag.namespace16().empty() ? std::nullopt : std::optional<DomString>(DomString(tag.namespace16()));
+        break;
+    }
+  });
+}
+Status Model::HasAttributes(NodeKey key, bool* result) const noexcept {
+  return Protect([&] {
+    *result = !State().element(key).attributes16().empty();
+  });
+}
+Status Model::DataLength(NodeKey key, size_t* result) const noexcept {
+  return Protect([&] {
+    const auto& node = State().owner(key).require(key.node);
+    *result = static_cast<const domain::CharacterData&>(node).length();
+  });
+}
 Status Model::InspectDocument(NodeKey key, DocumentSnapshot* result) const noexcept {
   return Protect([&] {
     const auto& owner = State().document(key); DocumentSnapshot value;

@@ -15,20 +15,45 @@ static bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
   Wrapper* entry = NodeReceiver(cx, args.thisv(), &args);
   if (!entry) return false;
   State& state = *entry->owner;
-  NodeSnapshot value;
-  if (!state.Check(state.model.Inspect(entry->key, &value))) return false;
   switch (FunctionSlot(args)) {
-    case Type: args.rval().setInt32(int32_t(value.kind)); return true;
-    case Name: return Value(cx, DomStringView(value.node_name), args.rval());
-    case Owner: return state.Wrap(value.owner_document, args.rval());
-    case Parent: return state.Wrap(value.parent, args.rval());
-    case ParentElement: return state.Wrap(value.parent_element, args.rval());
-    case First: return state.Wrap(value.first_child, args.rval());
-    case Last: return state.Wrap(value.last_child, args.rval());
-    case Previous: return state.Wrap(value.previous_sibling, args.rval());
-    case Next: return state.Wrap(value.next_sibling, args.rval());
-    case Connected: args.rval().setBoolean(value.is_connected); return true;
-    case NodeValue: return Value(cx, value.node_value, args.rval());
+    case Type: {
+      NodeKind kind = NodeKind::Document;
+      if (!state.Check(state.model.Kind(entry->key, &kind))) return false;
+      args.rval().setInt32(int32_t(kind)); return true;
+    }
+    case Name: {
+      DomString name;
+      if (!state.Check(state.model.NodeName(entry->key, &name))) return false;
+      return Value(cx, DomStringView(name), args.rval());
+    }
+    case Owner:
+    case Parent:
+    case ParentElement:
+    case First:
+    case Last:
+    case Previous:
+    case Next: {
+      const int32_t slot = FunctionSlot(args);
+      const NodeRelation rel = slot == Owner ? NodeRelation::OwnerDocument
+          : slot == Parent ? NodeRelation::Parent
+          : slot == ParentElement ? NodeRelation::ParentElement
+          : slot == First ? NodeRelation::FirstChild
+          : slot == Last ? NodeRelation::LastChild
+          : slot == Previous ? NodeRelation::PreviousSibling : NodeRelation::NextSibling;
+      NodeKey target;
+      if (!state.Check(state.model.NodeLink(entry->key, rel, &target))) return false;
+      return state.Wrap(target, args.rval());
+    }
+    case Connected: {
+      bool connected = false;
+      if (!state.Check(state.model.IsConnected(entry->key, &connected))) return false;
+      args.rval().setBoolean(connected); return true;
+    }
+    case NodeValue: {
+      std::optional<DomString> val;
+      if (!state.Check(state.model.NodeValue(entry->key, &val))) return false;
+      return Value(cx, val, args.rval());
+    }
     case Content: {
       std::optional<DomString> content;
       return state.Check(state.model.TextContent(entry->key, &content)) && Value(cx, content, args.rval());
@@ -36,9 +61,10 @@ static bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
     case BaseURI: {
       // baseURI is the document base; a document without an owned URL reads the
       // realm's environment port, so a detached node still reports it.
+      NodeKey doc_key;
       DocumentSnapshot document;
-      if (!state.Check(state.model.InspectDocument(
-              value.kind == NodeKind::Document ? value.key : value.owner_document, &document))) return false;
+      if (!state.Check(state.model.NodeLink(entry->key, NodeRelation::BaseDocument, &doc_key)) ||
+          !state.Check(state.model.InspectDocument(doc_key, &document))) return false;
       if (!document.url) {
         JS::RootedValue url(cx);
         { JSAutoRealm realm(cx, state.page); if (!state.environment.URL(&url)) return false; }
@@ -188,10 +214,15 @@ static bool Call(JSContext* cx, unsigned argc, JS::Value* vp) {
       if (!JS_GetProperty(cx, options, "composed", &composed)) return false;
       useComposed = JS::ToBoolean(composed);
     }
-    NodeSnapshot value;
-    if (!state.Check(state.model.Inspect(entry->key, &value))) return false;
-    if (op == Root) return state.Wrap(useComposed ? value.composed_root : value.root, args.rval());
-    args.rval().setBoolean(value.child_count != 0); return true;
+    if (op == Root) {
+      NodeKey root;
+      if (!state.Check(state.model.NodeLink(entry->key,
+              useComposed ? NodeRelation::ComposedRoot : NodeRelation::Root, &root))) return false;
+      return state.Wrap(root, args.rval());
+    }
+    bool has = false;
+    if (!state.Check(state.model.HasChildren(entry->key, &has))) return false;
+    args.rval().setBoolean(has); return true;
   }
   unsigned required = op == Insert || op == Replace ? 2 : 1;
   if (argc < required) return TypeError(cx, "Node method has too few arguments");

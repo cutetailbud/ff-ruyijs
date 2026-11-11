@@ -8,10 +8,14 @@ static bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
   Wrapper* entry = NodeReceiver(cx, args.thisv(), NodeKind::Text);
   if (!entry) return false;
   State& state = *entry->owner;
-  NodeSnapshot value;
-  if (!state.Check(state.model.Inspect(entry->key, &value))) return false;
-  if (FunctionSlot(args) == 0) return Value(cx, value.node_value, args.rval());
-  args.rval().setNumber(double(value.data_length)); return true;
+  if (FunctionSlot(args) == 0) {
+    std::optional<DomString> text;
+    if (!state.Check(state.model.NodeValue(entry->key, &text))) return false;
+    return Value(cx, text, args.rval());
+  }
+  size_t length = 0;
+  if (!state.Check(state.model.DataLength(entry->key, &length))) return false;
+  args.rval().setNumber(double(length)); return true;
 }
 static bool Set(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
@@ -41,9 +45,9 @@ static bool Call(JSContext* cx, unsigned argc, JS::Value* vp) {
   }
   State& state = *entry->owner;
   if (op == Append) {
-    NodeSnapshot value;
-    if (!state.Check(state.model.Inspect(entry->key, &value))) return false;
-    offset = uint32_t(value.data_length);
+    size_t length = 0;
+    if (!state.Check(state.model.DataLength(entry->key, &length))) return false;
+    offset = uint32_t(length);
   }
   if (op == Substring) {
     if (!state.Check(state.model.SubstringData(entry->key, offset, count, &text))) return false;
