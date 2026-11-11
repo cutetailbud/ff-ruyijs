@@ -27,9 +27,14 @@ Status Model::SetAttribute(NodeKey key, DomStringView name, DomStringView value)
       State().owner(key).note_element_id(key.node, previous_id ? DomStringView(*previous_id) : DomStringView(),
                                          next_id ? DomStringView(*next_id) : DomStringView());
     State().NoteAttributes(key, name, DomStringView(), old ? &*old : nullptr);
-    // An unchanged value (classList.add of a present token) is still a mutation
-    // record, but no collection, token view or selector match can change.
-    if (name == u"style" || (old && DomStringView(*old) == value)) State().TouchStyle(); else State().TouchAttribute();
+    // An unchanged value (classList.add of a present token) or an in-place update
+    // to an existing style attribute is still a mutation record, but no collection
+    // or NamedNodeMap membership can change; creating style adds an Attr entry.
+    const bool is_style = element.tag_name().folds_case() ? domain::ascii_lower(DomString(name)) == u"style"
+                                                          : name == u"style";
+    if (old && (is_style || DomStringView(*old) == value)) State().TouchStyle();
+    else if (domain::ascii_lower(DomString(name)) == u"class") State().TouchClass();
+    else State().TouchAttribute();
   });
 }
 Status Model::RemoveAttribute(NodeKey key, DomStringView name) noexcept {
@@ -44,7 +49,9 @@ Status Model::RemoveAttribute(NodeKey key, DomStringView name) noexcept {
                                          next_id ? DomStringView(*next_id) : DomStringView());
     // Removing an attribute that was not there is not a mutation.
     if (old) State().NoteAttributes(key, name, DomStringView(), &*old);
-    if (name == u"style" || !old) State().TouchStyle(); else State().TouchAttribute();
+    if (!old) State().TouchStyle();
+    else if (domain::ascii_lower(DomString(name)) == u"class") State().TouchClass();
+    else State().TouchAttribute();
   });
 }
 Status Model::Attributes(NodeKey key, std::vector<AttributeSnapshot>* result) const noexcept {
@@ -130,7 +137,9 @@ Status Model::SetAttributeNS(NodeKey key, DomStringView namespace_uri, DomString
     State().budget(0,value.size() + (old ? 0 : qualified.size()),old ? old->size() : 0);
     element.set_attribute_ns16(namespace_uri,qualified,value);
     State().NoteAttributes(key, folded, namespace_uri, old ? &*old : nullptr);
-    State().Touch();
+    if (old && (DomStringView(*old) == value || (namespace_uri.empty() && folded == u"style"))) State().TouchStyle();
+    else if (namespace_uri.empty() && domain::ascii_lower(folded) == u"class") State().TouchClass();
+    else State().TouchAttribute();
   });
 }
 Status Model::RemoveAttributeNS(NodeKey key, DomStringView namespace_uri, DomStringView local) noexcept {
@@ -139,7 +148,9 @@ Status Model::RemoveAttributeNS(NodeKey key, DomStringView namespace_uri, DomStr
     auto old = element.get_attribute_ns16(namespace_uri,local);
     element.remove_attribute_ns16(namespace_uri,local);
     if (old) State().NoteAttributes(key, local, namespace_uri, &*old);
-    State().Touch();
+    if (!old) State().TouchStyle();
+    else if (namespace_uri.empty() && domain::ascii_lower(DomString(local)) == u"class") State().TouchClass();
+    else State().TouchAttribute();
   });
 }
 Status Model::ToggleAttribute(NodeKey key, DomStringView name, bool force, bool has_force,
@@ -155,7 +166,8 @@ Status Model::ToggleAttribute(NodeKey key, DomStringView name, bool force, bool 
     if (target) { State().budget(0,name.size()); element.set_attribute16(name,{}); }
     else { State().budget(0,0,old->size()); element.remove_attribute16(name); }
     State().NoteAttributes(key, name, DomStringView(), old ? &*old : nullptr);
-    State().Touch();
+    if (domain::ascii_lower(DomString(name)) == u"class") State().TouchClass();
+    else State().TouchAttribute();
   });
 }
 }

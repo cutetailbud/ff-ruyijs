@@ -26,7 +26,9 @@ bool ParsedSelector::MatchAt(size_t index,const ElementNode& node,const ElementN
   return false;
 }
 bool ParsedSelector::Match(const ElementNode& node,const ElementNode* scope,size_t& budget,unsigned depth) const {
-  return valid_&&!compounds_.empty()&&depth<=128&&MatchAt(compounds_.size()-1,node,scope,budget,depth);
+  if(!valid_||compounds_.empty()||depth>128) return false;
+  if(ancestor_bloom_&&(node.AncestorBloom()&ancestor_bloom_)!=ancestor_bloom_) return false;
+  return MatchAt(compounds_.size()-1,node,scope,budget,depth);
 }
 void ParsedSelector::IndexKey(char* kind,std::string* key) const {
   *kind=0;key->clear();

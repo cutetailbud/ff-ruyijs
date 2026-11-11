@@ -5,8 +5,18 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 namespace ruyijs::domain::styling {
+inline uint64_t SelectorBloomHash(char kind,std::string_view token) noexcept {
+  uint64_t h=14695981039346656037ull;
+  h=(h^static_cast<unsigned char>(kind))*1099511628211ull;
+  for(unsigned char ch:token) {
+    if(kind=='t'&&ch>='A'&&ch<='Z') ch=static_cast<unsigned char>(ch+32);
+    h=(h^ch)*1099511628211ull;
+  }
+  return (1ull<<(h&63u))|(1ull<<((h>>6u)&63u));
+}
 struct ElementNode;
 struct ElementRelations {
   virtual ~ElementRelations()=default;
@@ -19,6 +29,8 @@ struct ElementNode {
   const ElementNode* parent=nullptr;
   const ElementRelations* relations=nullptr;
   uint64_t document=0,key=0;
+  mutable uint64_t ancestor_bloom=0;
+  mutable bool ancestor_bloom_ready=false;
   bool root=false,empty=true,html=true,focused=false;
   bool has_class(const std::string& name) const {
     return std::find(classes.begin(),classes.end(),name)!=classes.end();
@@ -26,6 +38,22 @@ struct ElementNode {
   const ElementNode* related(char relation) const {
     if(relation=='>'&&parent) return parent;
     return relations?relations->Related(*this,relation):nullptr;
+  }
+  uint64_t own_bloom() const noexcept {
+    uint64_t bits=0;
+    if(!tag.empty()) bits|=SelectorBloomHash('t',tag);
+    if(!id.empty()) bits|=SelectorBloomHash('#',id);
+    for(const auto& cls:classes) if(!cls.empty()) bits|=SelectorBloomHash('.',cls);
+    return bits;
+  }
+  uint64_t AncestorBloom(unsigned depth=0) const {
+    if(depth>512) return ~0ull;
+    if(!ancestor_bloom_ready) {
+      const ElementNode* p=related('>');
+      ancestor_bloom=p?(p->AncestorBloom(depth+1)|p->own_bloom()):0;
+      ancestor_bloom_ready=true;
+    }
+    return ancestor_bloom;
   }
 };
 struct SelectorAttribute {std::string name,value,op;char flag=0;};
@@ -61,6 +89,8 @@ class ParsedSelector {
   // compound: '#' its first id, '.' its first class, 't' its lower-cased type,
   // 0 none. The cascade buckets rules by it, as Firefox's rule hash does.
   void IndexKey(char* kind,std::string* key) const;
+  bool edge_child_sensitive() const noexcept {return edge_child_;}
+  bool sibling_sensitive() const noexcept {return sibling_sensitive_;}
  private:
   static bool ParseCompound(const std::string&,SelectorCompound*,unsigned,bool,bool);
   static bool ParseFunction(const std::string&,const std::string&,SelectorCompound*,unsigned,bool,bool);
@@ -69,8 +99,9 @@ class ParsedSelector {
   bool MatchAt(size_t,const ElementNode&,const ElementNode*,size_t&,unsigned) const;
   bool Match(const ElementNode&,const ElementNode*,size_t&,unsigned) const;
   std::vector<SelectorCompound> compounds_;
+  uint64_t ancestor_bloom_=0;
   int a_=0,b_=0,c_=0;
-  bool valid_=true;
+  bool valid_=true,edge_child_=false,sibling_sensitive_=false;
 };
 std::vector<ParsedSelector> ParseSelectorList(const std::string&);
 bool CssSelectorSyntax(const std::string&,bool relative=false);

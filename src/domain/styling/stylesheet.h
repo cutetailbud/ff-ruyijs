@@ -16,7 +16,9 @@
 #include "domain/styling/css_overflow_value.h"
 
 #include <cstdint>
+#include <deque>
 #include <unordered_map>
+#include <unordered_set>
 #include <map>
 #include <memory>
 #include <string>
@@ -439,13 +441,15 @@ struct RuleIndex {
     std::vector<const std::vector<ParsedSelector>*> parsed;
     Entries universal;
     std::unordered_map<std::string, Entries> ids, classes, types;
+    bool edge_child = false, sibling_sensitive = false;
 };
 struct RuleIndexStore {
     std::map<std::string, std::vector<ParsedSelector>> selectors;
     std::map<const StyleSheetAggregate*, RuleIndex> indexes;
 };
 struct StyleResolutionContext {
-    std::map<std::pair<uint64_t,uint64_t>, StyleDeclaration> computed;
+    std::map<std::pair<uint64_t,uint64_t>, std::shared_ptr<const StyleDeclaration>> computed;
+    std::deque<StyleDeclaration> transient;
     using Entries = RuleIndex::Entries;
     // Built once per sheet for the store's lifetime, during which the sheets
     // do not change. A context owns a store unless one is shared with it.
@@ -469,6 +473,8 @@ struct StyleResolutionContext {
                 char kind = 0;
                 std::string key;
                 parsed->second[s].IndexKey(&kind, &key);
+                index.edge_child |= parsed->second[s].edge_child_sensitive();
+                index.sibling_sensitive |= parsed->second[s].sibling_sensitive();
                 Entries& bucket = kind == '#' ? index.ids[key] : kind == '.' ? index.classes[key] :
                                   kind == 't' ? index.types[key] : index.universal;
                 bucket.emplace_back(r, s);
@@ -493,19 +499,49 @@ public:
         return compute_style(sheets, element);
     }
 
-    /// The cascade for one element: user-agent defaults, then author rules by
-    /// (importance, inline origin, specificity, source order), then the inline
-    /// declaration, then inheritance of the inherited properties.
     static StyleDeclaration compute_style(
         const std::vector<const StyleSheetAggregate*>& sheets, const ElementNode& element,
         StyleResolutionContext* shared = nullptr)
     {
         StyleResolutionContext local;
-        if (!shared) shared = &local;
+        return compute_style_ref(sheets, element, shared ? *shared : local);
+    }
+
+    /// The cascade for one element: user-agent defaults, then author rules by
+    /// (importance, inline origin, specificity, source order), then the inline
+    /// declaration, then inheritance of the inherited properties.
+    static const StyleDeclaration& compute_style_ref(
+        const std::vector<const StyleSheetAggregate*>& sheets, const ElementNode& element,
+        StyleResolutionContext& shared)
+    {
         const auto identity = std::make_pair(element.document, element.key);
         if (element.key) {
-            const auto previous = shared->computed.find(identity);
-            if (previous != shared->computed.end()) return previous->second;
+            const auto previous = shared.computed.find(identity);
+            if (previous != shared.computed.end()) return *previous->second;
+        }
+        if (element.key && element.inline_style.empty() && element.id.empty() &&
+            element.tag != "legend") {
+            if (const ElementNode* prev = element.related('-');
+                prev && prev->key && prev->inline_style.empty() && prev->id.empty() &&
+                prev->tag == element.tag && prev->html == element.html &&
+                prev->empty == element.empty && prev->focused == element.focused &&
+                prev->root == element.root && prev->classes == element.classes &&
+                prev->attributes == element.attributes) {
+                const auto prev_it = shared.computed.find({prev->document, prev->key});
+                if (prev_it != shared.computed.end()) {
+                    bool can_share = true, any_edge = false;
+                    for (const auto* sheet : sheets) {
+                        if (!sheet || sheet->disabled()) continue;
+                        const auto& idx = shared.Index(*sheet);
+                        if (idx.sibling_sensitive) { can_share = false; break; }
+                        any_edge |= idx.edge_child;
+                    }
+                    if (can_share && (!any_edge || (prev->related('-') && element.related('+')))) {
+                        shared.computed.emplace(identity, prev_it->second);
+                        return *prev_it->second;
+                    }
+                }
+            }
         }
         std::map<std::string, Candidate> winners;
         uint64_t order = 0;
@@ -566,12 +602,14 @@ public:
         std::vector<uint32_t> layer_order;
         for (const auto* sheet : sheets)
             if (sheet && sheet->layers) { layer_order = CssLayerOrder(*sheet->layers); break; }
+        const std::string lower_tag = detail::LowerAscii(element.tag);
+        StyleResolutionContext::Entries candidates;
         for (const auto* sheet : sheets) {
             if (!sheet || sheet->disabled()) continue;
             // Only the buckets this element can match, visited in source
             // order, so cascade order is that of the full rule walk.
-            const auto& index = shared->Index(*sheet);
-            StyleResolutionContext::Entries candidates(index.universal);
+            const auto& index = shared.Index(*sheet);
+            candidates.assign(index.universal.begin(), index.universal.end());
             auto add = [&](const std::unordered_map<std::string, StyleResolutionContext::Entries>& map,
                            const std::string& key) {
                 const auto bucket = map.find(key);
@@ -580,7 +618,7 @@ public:
             };
             if (!element.id.empty()) add(index.ids, element.id);
             for (const auto& name : element.classes) add(index.classes, name);
-            add(index.types, detail::LowerAscii(element.tag));
+            add(index.types, lower_tag);
             std::sort(candidates.begin(), candidates.end());
             candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
             const auto& rules = sheet->rules();
@@ -625,19 +663,30 @@ public:
                 }
             }
         }
+        static const StyleDeclaration kEmptyParentStyle;
         auto parent = element.related('>');
         bool has_parent = parent != nullptr;
-        StyleDeclaration parent_style;
-        if (has_parent) parent_style = compute_style(sheets, *parent, shared);
+        const StyleDeclaration& parent_style =
+            has_parent ? compute_style_ref(sheets, *parent, shared) : kEmptyParentStyle;
         StyleDeclaration result;
         result.computed_font_size = parent_style.computed_font_size;
         result.computed_line_height = parent_style.computed_line_height;
         result.font_computed = parent_style.font_computed;
         result.line_height_computed = parent_style.line_height_computed;
         if (has_parent) result.inherit_customs(parent_style);
+        auto has_var = [](const std::string& text) noexcept {
+            for (size_t i = 0; i + 4 <= text.size(); ++i) {
+                if ((text[i] | 0x20) == 'v' && (text[i + 1] | 0x20) == 'a' &&
+                    (text[i + 2] | 0x20) == 'r' && text[i + 3] == '(')
+                    return true;
+            }
+            return false;
+        };
+        bool may_have_vars = false;
         for (const auto& entry : winners) {
             const std::string& name = entry.first;
             std::string value = detail::TrimAscii(entry.second.value);
+            if (!may_have_vars && has_var(value)) may_have_vars = true;
             std::string keyword = detail::LowerAscii(value);
             const bool inherits = keyword == "inherit" || keyword == "unset" ||
                                   keyword == "revert" || keyword == "revert-layer";
@@ -669,22 +718,31 @@ public:
         // css-properties-values §2: a registered custom property that does
         // not inherit restarts from its initial value on every element, and
         // one with no declared or inherited value takes its initial value.
+        std::vector<std::string> registered_defaults;
         for (const auto* sheet : sheets) {
             if (!sheet || !sheet->registered) continue;
             for (const auto& [name, registration] : *sheet->registered) {
                 if (winners.count(name)) continue;
                 if (!registration.first) result.remove_property(name);
-                if (!result.has_property(name) && !registration.second.empty())
+                if (!result.has_property(name) && !registration.second.empty()) {
                     result.set_property(name, registration.second, false);
+                    if (has_var(registration.second)) {
+                        may_have_vars = true;
+                        registered_defaults.push_back(name);
+                    }
+                }
             }
             break;
         }
-        std::map<std::string, uint64_t> declared;
-        for (const auto& entry : winners) declared[entry.first] = entry.second.order;
-        CssResolveVariables(result, declared,
-                            {[](const std::string& name) { return is_inherited(name); },
-                             [](const std::string& name) { return initial_value(name); },
-                             has_parent ? &parent_style : nullptr});
+        if (may_have_vars) {
+            std::map<std::string, uint64_t> declared;
+            for (const auto& entry : winners) declared[entry.first] = entry.second.order;
+            for (const auto& name : registered_defaults) declared.emplace(name, 0);
+            CssResolveVariables(result, declared,
+                                {[](const std::string& name) { return is_inherited(name); },
+                                 [](const std::string& name) { return initial_value(name); },
+                                 has_parent ? &parent_style : nullptr});
+        }
         CssComputeFont(result, parent_style, parent_style.root_font_size);
         result.root_font_size = has_parent ? parent_style.root_font_size : result.computed_font_size;
         unsigned side_index = 0;
@@ -697,8 +755,12 @@ public:
         Blockify(result, has_parent ? &parent_style : nullptr);
         CssComputeBox(result, result.root_font_size);
         CssComputeOverflow(result);
-        if (element.key) shared->computed.emplace(identity, result);
-        return result;
+        if (element.key) {
+            auto stored = std::make_shared<const StyleDeclaration>(std::move(result));
+            return *shared.computed.emplace(identity, std::move(stored)).first->second;
+        }
+        shared.transient.push_back(std::move(result));
+        return shared.transient.back();
     }
 
     /// The specification initial value of a property, or "" when unknown.
@@ -721,9 +783,13 @@ public:
     static bool is_inherited(const std::string& property) {
         // Custom properties are inherited (CSS Variables 1 §2).
         if (property.size() > 2 && property.compare(0, 2, "--") == 0) return true;
-        for (const auto& font : CssFontDefaults()) if (font.name == property) return true;
-        const auto& names = inherited_names();
-        return std::find(names.begin(), names.end(), property) != names.end();
+        static const std::unordered_set<std::string> kInherited = [] {
+            std::unordered_set<std::string> set;
+            for (const auto& font : CssFontDefaults()) set.insert(font.name);
+            for (const auto& name : inherited_names()) set.insert(name);
+            return set;
+        }();
+        return kInherited.find(property) != kInherited.end();
     }
 
     /// What compute_style reads from a parent's computed style, as one hash:

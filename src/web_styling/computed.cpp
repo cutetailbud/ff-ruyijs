@@ -145,30 +145,37 @@ bool GetComputedStyle(JSContext* cx, unsigned argc, JS::Value* vp) {
       ? static_cast<document_model::Wrapper*>(JS::GetReservedSlot(raw, 0).toPrivate()) : nullptr;
   uint64_t revision = 0, stamp = 0;
   const bool cacheable = wrapper && wrapper->owner && !wrapper->dead &&
-      CascadeStamp(state, element, &stamp);
+      CascadeStamp(state, element, &stamp, true);
   if (cacheable) revision = wrapper->owner->model.Revision();
   auto& cache = state.computedBlocks;
-  if (cacheable && cache.ready && cache.revision == revision && cache.stamp == stamp) {
-    auto found = cache.blocks.find(wrapper->key.node);
-    if (found != cache.blocks.end()) {
-      JS::RootedObject view(cx);
-      if (!state.NewStyleView(found->second, &view)) return false;
-      args.rval().setObject(*view);
-      return true;
-    }
-  }
-  ComputedStyle computed;
-  if (!ReadComputed(state, element, &computed)) return false;
-  std::string block = BuildComputedBlock(computed);
   if (cacheable) {
-    if (!cache.ready || cache.revision != revision || cache.stamp != stamp) {
+    if (!cache.ready || cache.document != wrapper->key.document ||
+        cache.revision != revision || cache.stamp != stamp) {
       cache.blocks.clear();
+      cache.reader = std::make_unique<ComputedStyleReader>(state);
+      cache.document = wrapper->key.document;
       cache.revision = revision;
       cache.stamp = stamp;
       cache.ready = true;
+    } else {
+      auto found = cache.blocks.find(wrapper->key.node);
+      if (found != cache.blocks.end()) {
+        JS::RootedObject view(cx);
+        if (!state.NewStyleView(found->second, &view)) return false;
+        args.rval().setObject(*view);
+        return true;
+      }
     }
-    cache.blocks.insert_or_assign(wrapper->key.node, block);
   }
+  ComputedStyle computed;
+  if (cacheable) {
+    if (!cache.reader) cache.reader = std::make_unique<ComputedStyleReader>(state);
+    if (!cache.reader->Read(element, &computed)) return false;
+  } else {
+    if (!ReadComputed(state, element, &computed)) return false;
+  }
+  std::string block = BuildComputedBlock(computed);
+  if (cacheable) cache.blocks.insert_or_assign(wrapper->key.node, block);
   JS::RootedObject view(cx);
   if (!state.NewStyleView(block, &view)) return false;
   args.rval().setObject(*view);

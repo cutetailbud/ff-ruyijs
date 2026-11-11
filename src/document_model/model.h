@@ -239,6 +239,10 @@ class Model final {
   // The revision of the tree shape and character data: unchanged by attribute
   // writes, so a layout can tell an attribute-only change from a tree change.
   uint64_t TreeRevision() const noexcept;
+  // The revision of the tree shape and class attributes: unchanged by non-class
+  // attribute writes, so class-based collections and classList views stay live
+  // without re-collecting on unrelated attribute writes.
+  uint64_t ClassRevision() const noexcept;
   // Real-change log for the observer owner (src/web_observers). Recording is
   // off until an observer registers, so script that never observes pays one
   // flag test per mutation. MutationsSince copies every notice after a
