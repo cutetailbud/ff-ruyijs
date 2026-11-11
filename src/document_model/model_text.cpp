@@ -9,6 +9,7 @@ Status Model::SetNodeValue(NodeKey key, DomStringView value) noexcept {
       const DomString old = node.text_content16();
       State().budget(0,value.size(),node.storage_units()); node.set_node_value16(DomString(value));
       State().NoteData(key, &old);
+      State().Touch();
     }
   });
 }
@@ -23,6 +24,7 @@ Status Model::ReplaceData(NodeKey key, uint32_t offset, uint32_t count, DomStrin
     State().budget(0,value.size(),std::min<size_t>(count,data.length()-offset));
     data.replace(offset,count,value);
     State().NoteData(key, &old);
+    State().Touch();
   });
 }
 Status Model::TextContent(NodeKey key, std::optional<DomString>* result) const noexcept {

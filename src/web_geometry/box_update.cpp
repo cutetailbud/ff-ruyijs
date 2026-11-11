@@ -153,8 +153,11 @@ bool TryTreeUnchangedLayout(State& s, JS::HandleValue target_value,
     std::vector<box::BoxLayout> next_layout;
     box::BoxLayoutCache next_boxes;
     box::BoxReuseInput reuse{nullptr, &cache->box_cache, nullptr, &same_node};
-    if (!box::ComputeBoxLayout(cache->nodes, viewport, &next_layout, &cache->scrollport, &reuse, &next_boxes))
+    if (!box::ComputeBoxLayout(cache->nodes, viewport, &next_layout, &cache->scrollport, &reuse, &next_boxes)) {
+      // The cache was patched in place: drop it so no later read takes the stale layout.
+      s.layoutCache.reset();
       return WebKit::Fail(s.cx, "Element box layout budget exceeded");
+    }
     cache->layout = std::move(next_layout);
     cache->box_cache = std::move(next_boxes);
   }

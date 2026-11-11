@@ -75,6 +75,13 @@ CASES = {
     "presentational width attribute resizes replaced element": (
         "<div id=p><canvas id=c width=80 height=40></canvas><div id=tail>t</div></div>",
         "document.getElementById('c').setAttribute('width', '190')"),
+    "a text node's data change resizes its box": (
+        "<div id=p style='width:600px'><span id=a>short</span><div id=b>tail</div></div>",
+        "document.getElementById('a').firstChild.data = 'a much longer piece of replaced text'"),
+    "appendData and a class change in one batch both reach the layout": (
+        "<style>.wide { padding-left: 30px }</style><div id=p style='width:600px'><span id=a>short</span></div>",
+        "document.getElementById('a').firstChild.appendData(' and some more words');"
+        " document.getElementById('p').className = 'wide'"),
 }
 
 
