@@ -27,6 +27,7 @@ bool ReadCascadeSources(State&, JS::HandleObject,
     std::shared_ptr<const SelectorDependencies>* dependencies,
     std::shared_ptr<ruyijs::domain::styling::RuleIndexStore>* indexes);
 bool CascadeStamp(State&, JS::HandleObject, uint64_t*);
+bool CascadeStamp(State&, JS::HandleObject, uint64_t*, bool includeEnvironment);
 
 class AdoptedHandler final : public js::ForwardingProxyHandler {
  public:

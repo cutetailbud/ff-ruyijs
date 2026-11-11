@@ -38,7 +38,7 @@ bool State::TokenListOwned(Wrapper& entry, DomStringView attribute, JS::MutableH
   JS::SetReservedSlot(object, 1, JS::BooleanValue(true));
   JS::SetReservedSlot(object, 2, JS::ObjectValue(*node));
   if (!RefreshCollection(owner, object, *record)) return false;
-  record->revision = owner.model.StructureRevision();
+  record->revision = TargetCollectionRevision(owner.model, *record);
   record->weakOwner = &owner;
   record->weakObject = object;
   record->weakNext = owner.tokenViews;
@@ -46,16 +46,17 @@ bool State::TokenListOwned(Wrapper& entry, DomStringView attribute, JS::MutableH
   owner.tokenViews = record;
   result.setObject(*object); return true;
 }
-bool State::SyncTokenViews(uint64_t revision) {
+bool State::SyncTokenViews(uint64_t) {
   for (auto* record = tokenViews; record; record = record->weakNext) {
-    if (record->revision == revision) continue;
+    const uint64_t target = TargetCollectionRevision(model, *record);
+    if (record->revision == target) continue;
     // Finalization may unlink later views during allocation. This view stays
     // rooted and its updated next link remains the sole iteration cursor.
     JS::RootedObject object(cx, WeakLive(record->weakObject));
     if (!object) continue;  // being finalized; the finalizer unlinks it
     JSAutoRealm realm(cx, object);
     if (!RefreshCollection(*this, object, *record)) return false;
-    record->revision = revision;
+    record->revision = target;
   }
   return true;
 }

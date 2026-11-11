@@ -99,10 +99,10 @@ bool CollectionIndex(State& state, CollectionRecord& record, size_t index,
       case CollectionKind::HTMLCollection:
         if (!record.live && record.items.empty())
           value.setObject(*record.objects[index]);
-        else if (index < record.objects.size() && record.objects[index])
+        else if (!record.live && index < record.objects.size() && record.objects[index])
           value.setObject(*record.objects[index]);
         else if (!owner.Wrap(record.items[index], &value)) return false;
-        else if (value.isObject()) {
+        else if (!record.live && value.isObject()) {
           if (record.objects.size() <= index) record.objects.resize(index + 1);
           record.objects[index] = &value.toObject();
         }
@@ -285,7 +285,7 @@ Collection* State::NewCollection(CollectionKind kind, NodeKey scope, CollectionF
   Collection* result = collections.get();
   if (live && !Collect(*this, *result->record)) return nullptr;
   if (!MaterializeCollection(*this, object, *result->record)) return nullptr;
-  result->record->revision = model.StructureRevision();
+  result->record->revision = TargetCollectionRevision(model, *result->record);
   return result;
 }
 
@@ -306,7 +306,8 @@ bool State::SyncCollections() {
   for (Collection* entry = collections.get(); entry && ok; entry = entry->next.get()) {
     // A dying view is never written: its slots would point the store buffer at
     // an arena the sweep is about to free (T41).
-    if (!entry->record->live || entry->record->revision == revision) continue;
+    const uint64_t target = TargetCollectionRevision(model, *entry->record);
+    if (!entry->record->live || entry->record->revision == target) continue;
     JS::RootedObject object(cx, WeakLive(entry->object));
     if (!object) continue;
     if (LazyCollection(*entry->record)) {
@@ -314,7 +315,7 @@ bool State::SyncCollections() {
       continue;
     }
     ok = RefreshCollection(*this, object, *entry->record);
-    if (ok) entry->record->revision = revision;
+    if (ok) entry->record->revision = target;
   }
   if (ok) ok = SyncTokenViews(revision);
   syncing = false;

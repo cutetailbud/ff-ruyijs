@@ -25,6 +25,7 @@ namespace ruyijs {
 class PageHelpers;
 namespace browser_environment { class Environment; }
 namespace web_styling {
+class ComputedStyleReader;
 
 // One rule of a CSSStyleSheet: the selector text and the serialized declaration
 // block the rule style view exposes. Stable shared records survive list index
@@ -122,10 +123,12 @@ struct State {
   // A style, class, attribute or tree edit bumps the document revision, and a
   // stylesheet edit changes the stamp, so the next read computes again.
   struct ComputedBlockCache {
+    uint64_t document = 0;
     uint64_t revision = 0;
     uint64_t stamp = 0;
     bool ready = false;
     std::unordered_map<uint64_t, std::string> blocks;
+    std::unique_ptr<ComputedStyleReader> reader;
   };
   ComputedBlockCache computedBlocks;
   std::shared_ptr<SheetCache> Materialize(const document_model::StyleSheetSource& source);

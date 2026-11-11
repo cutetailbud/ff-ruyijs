@@ -2,6 +2,7 @@
 
 #include "browser_environment/environment.h"
 #include "js/Realm.h"
+#include "web_styling/computed_source.h"
 #include "web_styling/internal.h"
 #include "web_styling/page_descriptors.h"
 
@@ -43,6 +44,7 @@ State::State(JSContext* context, JS::HandleObject global, PageHelpers& helpers,
   }
 }
 State::~State() {
+  computedBlocks.reader.reset();
   // Native shared holders may outlive this owner until the closing GC.
   for (const auto& cache : sheets) cache->object = nullptr;
 }
