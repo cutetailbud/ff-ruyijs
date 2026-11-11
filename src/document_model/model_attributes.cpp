@@ -55,6 +55,57 @@ Status Model::Attributes(NodeKey key, std::vector<AttributeSnapshot>* result) co
     result->swap(values);
   });
 }
+Status Model::ChangedElements(const std::vector<NodeKey>& keys, const std::vector<char>& elements,
+                              const std::vector<uint64_t>& previous_attributes,
+                              const std::vector<DomString>& previous_styles, bool style_only,
+                              std::vector<ChangedElement>* changed) const noexcept {
+  return Protect([&] {
+    std::vector<ChangedElement> out;
+    DocumentId cached_id = 0;
+    const domain::DocumentAggregate* cached_doc = nullptr;
+    for (size_t i = 0; i < keys.size(); ++i) {
+      if (!elements[i]) continue;
+      const auto& key = keys[i];
+      if (!cached_doc || cached_id != key.document) {
+        cached_doc = &State().owner(key);
+        cached_id = key.document;
+      }
+      const auto* element = cached_doc->get_element(key.node);
+      if (!element) continue;
+      if (style_only) {
+        const auto value = element->get_attribute16(u"style");
+        const DomStringView current = value ? DomStringView(*value) : DomStringView{};
+        if (current != previous_styles[i])
+          out.push_back({i, previous_attributes[i], DomString(current), {}, false, true});
+        continue;
+      }
+      uint64_t hash = 1469598103934665603ull;
+      DomStringView style_view{};
+      const auto& attrs = element->attributes16();
+      for (const auto& attr : attrs) {
+        if (attr.name == u"style") {
+          style_view = attr.value;
+          continue;
+        }
+        for (char16_t c : attr.name) { hash ^= c; hash *= 1099511628211ull; }
+        hash ^= 0x3d; hash *= 1099511628211ull;
+        for (char16_t c : attr.value) { hash ^= c; hash *= 1099511628211ull; }
+        hash ^= 0x1f; hash *= 1099511628211ull;
+      }
+      const bool attr_diff = hash != previous_attributes[i];
+      const bool style_diff = style_view != previous_styles[i];
+      if (!attr_diff && !style_diff) continue;
+      ChangedElement item{i, hash, DomString(style_view), {}, attr_diff, style_diff};
+      if (attr_diff) {
+        item.attribute_list.reserve(attrs.size());
+        for (const auto& a : attrs)
+          item.attribute_list.push_back({a.name, a.value, a.namespace_uri, a.prefix, a.local_name});
+      }
+      out.push_back(std::move(item));
+    }
+    changed->swap(out);
+  });
+}
 Status Model::GetAttributeNS(NodeKey key, DomStringView namespace_uri, DomStringView local,
                              std::optional<DomString>* result) const noexcept {
   return Protect([&] {

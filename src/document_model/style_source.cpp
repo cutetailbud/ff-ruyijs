@@ -17,7 +17,7 @@ bool CollectSources(State& state, NodeKey scope, std::vector<StyleSheetSource>* 
   const bool shadow = snapshot.shadow_host.node != 0;
   if (shadow && !snapshot.is_connected) return true;
   std::vector<NodeKey> styles;
-  if (!state.Check(state.model.Query(scope, QueryKind::TagName, u"*", &styles))) return false;
+  if (!state.Check(state.model.SheetElements(scope, &styles))) return false;
   for (NodeKey key : styles) {
     NodeSnapshot node;
     if (!state.Check(state.model.Inspect(key, &node))) return false;

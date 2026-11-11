@@ -21,12 +21,12 @@ struct ComputedStyle;
 // a compound with a pseudo-class also depends on its siblings (hasSibling*),
 // and one with no class, id or type key on any tree change (hasStructural).
 struct SelectorDependencies {
-  bool styleAttribute = false, fromEnd = false, empty = false, hasStructural = false;
+  bool styleAttribute = false, fromEnd = false, empty = false, hasStructural = false, siblingCombinator = false;
   std::set<std::string> hasClasses, hasIds, hasAttributes, hasTags;
   std::set<std::string> hasSiblingClasses, hasSiblingIds, hasSiblingTags;
   void Merge(const SelectorDependencies& other) {
     styleAttribute |= other.styleAttribute; fromEnd |= other.fromEnd; empty |= other.empty;
-    hasStructural |= other.hasStructural;
+    hasStructural |= other.hasStructural; siblingCombinator |= other.siblingCombinator;
     for (const auto& pair : {std::make_pair(&hasClasses, &other.hasClasses), std::make_pair(&hasIds, &other.hasIds),
                        std::make_pair(&hasAttributes, &other.hasAttributes), std::make_pair(&hasTags, &other.hasTags),
                        std::make_pair(&hasSiblingClasses, &other.hasSiblingClasses),

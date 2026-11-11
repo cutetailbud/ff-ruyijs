@@ -116,6 +116,23 @@ bool BindGeometryPorts(BrowsingContext& context) {
                   JS::MutableHandleObject parent, JS::MutableHandleObjectVector children) {
     return static_cast<BrowsingContext*>(raw)->document->ReadLayoutNode(value, out, parent, children);
   };
+  boxes.head = [](void* raw, JS::HandleValue value, document_model::LayoutHeadSource* out,
+                  JS::MutableHandleObject root) {
+    return static_cast<BrowsingContext*>(raw)->document->ReadLayoutHead(value, out, root);
+  };
+  boxes.changedElements = [](void* raw, JS::HandleValue value,
+                             const std::vector<document_model::NodeKey>& keys,
+                             const std::vector<char>& elements,
+                             const std::vector<uint64_t>& previous_attributes,
+                             const std::vector<std::u16string>& previous_styles, bool style_only,
+                             std::vector<document_model::ChangedElement>* changed) {
+    return static_cast<BrowsingContext*>(raw)->document->ReadChangedElements(
+        value, keys, elements, previous_attributes, previous_styles, style_only, changed);
+  };
+  boxes.wrap = [](void* raw, JS::HandleValue value, document_model::NodeKey key,
+                  JS::MutableHandleObject out) {
+    return static_cast<BrowsingContext*>(raw)->document->WrapLayoutNode(value, key, out);
+  };
   boxes.stamp = [](void* raw, JS::HandleObject element, uint64_t* stamp) {
     return static_cast<BrowsingContext*>(raw)->styling->CascadeStamp(element, stamp);
   };

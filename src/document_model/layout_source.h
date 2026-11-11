@@ -19,6 +19,14 @@ struct LayoutNodeSource {
   // Model::TreeRevision: unchanged when only attributes changed.
   uint64_t tree = 0;
 };
+// Fast layout root & revision probe without copying child lists or attributes.
+struct LayoutHeadSource {
+  bool renderedDocument = false, ancestorBudgetExceeded = false;
+  void* factory = nullptr;
+  void* layoutOwner = nullptr;
+  NodeKey key, root, focused;
+  uint64_t revision = 0, structure = 0, tree = 0;
+};
 // HTMLElement offset* as measured by the layout owner (Web Geometry), in CSS
 // pixels before rounding. No offset parent for body, the root or fixed boxes.
 struct OffsetGeometry {

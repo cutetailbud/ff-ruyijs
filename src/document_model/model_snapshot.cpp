@@ -142,4 +142,42 @@ Status Model::Query(NodeKey key, QueryKind kind, DomStringView value, std::vecto
     result->swap(output);
   });
 }
+Status Model::SheetElements(NodeKey key, std::vector<NodeKey>* result) const noexcept {
+  return Protect([&] {
+    const auto& owner = State().owner(key);
+    std::vector<NodeKey> output;
+    for (auto node : owner.descendants(key.node)) {
+      const auto* element = owner.get_element(node);
+      if (!element) continue;
+      const auto local = element->tag_name().local16();
+      if (local == u"style" || (element->tag_name().html() && local == u"link"))
+        output.push_back(Key(key.document, node));
+    }
+    result->swap(output);
+  });
+}
+Status Model::InspectLayoutRoot(NodeKey key, NodeKey* root, NodeKey* composed_root,
+                                bool* connected, bool* budget_exceeded) const noexcept {
+  return Protect([&] {
+    const auto& owner = State().owner(key);
+    owner.require(key.node);
+    const auto composed = owner.composed_root_id(key.node);
+    *composed_root = Key(key.document, composed);
+    *connected = composed == owner.id();
+    *budget_exceeded = false;
+    auto current = key.node;
+    for (unsigned depth = 0;; ++depth) {
+      const auto parent_id = owner.require(current).parent_id();
+      if (!parent_id) break;
+      const auto& p = owner.require(parent_id);
+      domain::NodeId next = 0;
+      if (p.shadow_host_id()) next = p.shadow_host_id();
+      else if (p.node_type() == domain::NodeType::Element) next = parent_id;
+      if (!next) break;
+      if (depth > 256) { *budget_exceeded = true; return; }
+      current = next;
+    }
+    *root = Key(key.document, current);
+  });
+}
 }

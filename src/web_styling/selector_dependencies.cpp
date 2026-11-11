@@ -97,9 +97,65 @@ void CollectHas(const std::string& selector, SelectorDependencies* out) {
     HasArgument(selector.substr(begin, i - begin - (depth ? 0 : 1)), out);
   }
 }
+size_t SkipQuoted(const std::string& s, size_t i) {
+  const char quote = s[i++];
+  while (i < s.size() && s[i] != quote) i += (s[i] == '\\' && i + 1 < s.size()) ? 2 : 1;
+  return i < s.size() ? i + 1 : i;
+}
+bool Space(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'; }
+// Scans for sibling combinators (+, ~) outside attribute brackets, strings,
+// escapes and :nth-*(An+B) arithmetic, and handles :nth-*(An+B of S).
+void ScanSiblingDependencies(const std::string& s, SelectorDependencies* out) {
+  for (size_t i = 0; i < s.size();) {
+    const char c = s[i];
+    if (c == '\\') { i += i + 1 < s.size() ? 2 : 1; continue; }
+    if (c == '\'' || c == '"') { i = SkipQuoted(s, i); continue; }
+    if (c == '[') {
+      ++i;
+      while (i < s.size() && s[i] != ']') {
+        if (s[i] == '\\') i += i + 1 < s.size() ? 2 : 1;
+        else if (s[i] == '\'' || s[i] == '"') i = SkipQuoted(s, i);
+        else ++i;
+      }
+      if (i < s.size()) ++i;
+      continue;
+    }
+    if (c == ':' && i + 5 < s.size() && Lower(s.substr(i + 1, 4)) == "nth-") {
+      size_t j = i + 5;
+      while (j < s.size() && IdentChar(s[j])) ++j;
+      const std::string pseudo = Lower(s.substr(i + 1, j - i - 1));
+      if (j < s.size() && s[j] == '(') {
+        size_t k = j + 1, depth = 1, of_end = std::string::npos;
+        while (k < s.size() && depth) {
+          if (s[k] == '\\') { k += k + 1 < s.size() ? 2 : 1; continue; }
+          if (s[k] == '\'' || s[k] == '"') { k = SkipQuoted(s, k); continue; }
+          if (s[k] == '(') ++depth;
+          else if (s[k] == ')') --depth;
+          else if (depth == 1 && of_end == std::string::npos && Space(s[k]) && k + 4 <= s.size()) {
+            size_t m = k + 1;
+            while (m < s.size() && Space(s[m])) ++m;
+            if (m + 3 <= s.size() && Lower(s.substr(m, 2)) == "of" && Space(s[m + 2])) of_end = m + 3;
+          }
+          ++k;
+        }
+        if (of_end != std::string::npos && of_end < k) {
+          const std::string list = s.substr(of_end, k - of_end - (depth ? 0 : 1));
+          out->siblingCombinator = true;
+          ScanSiblingDependencies(list, out);
+          if (pseudo.find("last") != std::string::npos) HasArgument(list, out);
+        }
+        i = k;
+        continue;
+      }
+    }
+    if (c == '+' || c == '~') out->siblingCombinator = true;
+    ++i;
+  }
+}
 }  // namespace
 void CollectSelectorDependencies(const std::string& selector, SelectorDependencies* out) {
   if (StyleAttributeSelector(selector)) out->styleAttribute = true;
+  ScanSiblingDependencies(selector, out);
   const std::string lower = Lower(selector);
   if (lower.find(":last-") != std::string::npos || lower.find(":nth-last-") != std::string::npos ||
       lower.find(":only-") != std::string::npos || lower.find("-of-type") != std::string::npos)
