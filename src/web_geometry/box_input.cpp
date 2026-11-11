@@ -10,17 +10,71 @@
 #include <memory>
 
 namespace ruyijs::web_geometry {
+void ApplyBoxAttributes(const std::vector<document_model::AttributeSnapshot>& attrs,
+                        box::BoxNode* node) {
+  node->input_type.clear();
+  node->no_frame_border = false;
+  node->intrinsic_width = node->intrinsic_height = -1;
+  node->attribute_width_percent = node->attribute_height_percent = -1;
+  for (const auto& attr : attrs) {
+    if (attr.name == u"type") node->input_type.assign(attr.value.begin(), attr.value.end());
+    if (attr.name == u"frameborder" && node->tag == "iframe" &&
+        (attr.value == u"0" || attr.value == u"no" || attr.value == u"NO"))
+      node->no_frame_border = true;
+    if (attr.name != u"width" && attr.name != u"height") continue;
+    const std::string value(attr.value.begin(), attr.value.end());
+    const auto parsed = box::CssNumericParse(value);
+    if (parsed.kind == box::CssNumber && parsed.number >= 0)
+      (attr.name == u"width" ? node->intrinsic_width : node->intrinsic_height) = parsed.number;
+    else if (!value.empty() && value.back() == '%') {
+      char* end = nullptr;
+      const double pct = std::strtod(value.c_str(), &end);
+      if (end == value.c_str() + value.size() - 1 && pct >= 0)
+        (attr.name == u"width" ? node->attribute_width_percent : node->attribute_height_percent) = pct;
+    }
+  }
+}
+bool BoxSameStyle(const box::BoxStyle& a, const box::BoxStyle& b) {
+  return a.font_size==b.font_size && a.root_font_size==b.root_font_size &&
+         a.specified_margin_mask==b.specified_margin_mask && a.specified_border_mask==b.specified_border_mask &&
+         a.specified_padding_mask==b.specified_padding_mask &&
+         (a.values==b.values || (a.values && b.values && *a.values==*b.values));
+}
+bool BoxSameLayout(const box::BoxStyle& a, const box::BoxStyle& b) {
+  static constexpr const char* kExtraLayoutProps[] = {
+      "-x-lang", "align-content", "align-items", "align-self", "column-gap", "flex-basis",
+      "flex-direction", "flex-grow", "flex-shrink", "flex-wrap", "font-family", "font-style",
+      "font-weight", "grid-auto-rows", "grid-column", "grid-column-end", "grid-column-start",
+      "grid-row", "grid-row-end", "grid-row-start", "grid-template-columns", "grid-template-rows",
+      "justify-content", "line-height", "order", "overflow", "row-gap", "transform-origin",
+      "white-space",
+  };
+  if (a.font_size != b.font_size || a.root_font_size != b.root_font_size ||
+      a.specified_margin_mask != b.specified_margin_mask ||
+      a.specified_border_mask != b.specified_border_mask ||
+      a.specified_padding_mask != b.specified_padding_mask)
+    return false;
+  if (a.values == b.values) return true;
+  for (int k = 0; k < box::BoxKnown::kCount; ++k)
+    if (a.Slot(k) != b.Slot(k)) return false;
+  for (const char* name : kExtraLayoutProps)
+    if (a.Get(name) != b.Get(name)) return false;
+  return true;
+}
+bool BoxSameNode(const box::BoxNode& a, const box::BoxNode& b) {
+  return a.text == b.text && a.breakable == b.breakable && a.no_frame_border == b.no_frame_border &&
+         a.text_width == b.text_width && a.text_height == b.text_height &&
+         a.line_height == b.line_height && a.intrinsic_width == b.intrinsic_width &&
+         a.intrinsic_height == b.intrinsic_height &&
+         a.attribute_width_percent == b.attribute_width_percent &&
+         a.attribute_height_percent == b.attribute_height_percent &&
+         a.tag == b.tag && a.input_type == b.input_type && BoxSameLayout(a.style, b.style);
+}
 namespace {
 bool Read(State& s, JS::HandleObject object, document_model::LayoutNodeSource* node,
            JS::MutableHandleObject parent, JS::MutableHandleObjectVector children) {
   JS::RootedValue value(s.cx,JS::ObjectValue(*object));
   return s.boxPorts.node(s.boxPorts.context,value,node,parent,children);
-}
-bool SameStyle(const box::BoxStyle& a, const box::BoxStyle& b) {
-  return a.font_size==b.font_size && a.root_font_size==b.root_font_size &&
-         a.specified_margin_mask==b.specified_margin_mask && a.specified_border_mask==b.specified_border_mask &&
-         a.specified_padding_mask==b.specified_padding_mask &&
-         (a.values==b.values || (a.values && b.values && *a.values==*b.values));
 }
 // One layout pass. `previous` is the last layout of the same root (same
 // cascade, viewport and focus). An element keeps its previous computed style
@@ -42,12 +96,13 @@ struct Pass {
   size_t found = size_t(-1);
   web_styling::ComputedStyleReader& styles;
   const LayoutCache* previous = nullptr;
-  std::vector<char> same, inputs, dirty, reached;
+  std::vector<size_t> before_index;
+  std::vector<char> same, inputs, dirty, reached, same_node, structural_node;
   bool restart = false, structural = false;
 };
 std::set<std::string> Tokens(const std::u16string& value);
 // The keys of one element against a set of class, id, tag and attribute keys.
-bool KeyMatch(const std::string& tag, const LayoutCache::Attributes& attributes, const std::set<std::string>& classes,
+bool KeyMatch(const std::string& tag, const LayoutAttributes& attributes, const std::set<std::string>& classes,
               const std::set<std::string>& ids, const std::set<std::string>& tags, const std::set<std::string>* names) {
   if (tags.count(tag)) return true;
   for (const auto& [name, value] : attributes) {
@@ -59,7 +114,7 @@ bool KeyMatch(const std::string& tag, const LayoutCache::Attributes& attributes,
   return false;
 }
 bool HasKeyMatch(const web_styling::SelectorDependencies& d, const std::string& tag,
-                 const LayoutCache::Attributes& attributes) {
+                 const LayoutAttributes& attributes) {
   return KeyMatch(tag, attributes, d.hasClasses, d.hasIds, d.hasTags, &d.hasAttributes) ||
          KeyMatch(tag, attributes, d.hasSiblingClasses, d.hasSiblingIds, d.hasSiblingTags, nullptr);
 }
@@ -77,7 +132,7 @@ std::set<std::string> Tokens(const std::u16string& value) {
 }
 // Whether the change from `before` to `after` attributes can change a :has()
 // argument's match (and so a subject anywhere above or before the element).
-bool HasReach(const web_styling::SelectorDependencies& has, const LayoutCache::Attributes& before,
+bool HasReach(const web_styling::SelectorDependencies& has, const LayoutAttributes& before,
               const std::vector<document_model::AttributeSnapshot>& after) {
   if (has.hasClasses.empty() && has.hasIds.empty() && has.hasAttributes.empty()) return false;
   std::map<std::u16string, std::u16string> old, now;
@@ -118,6 +173,7 @@ uint64_t AttributeHash(const document_model::LayoutNodeSource& source) {
 bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t parent_index,
             Pass& pass, unsigned depth, bool inherited_dirty, size_t parent_before, size_t position) {
   auto* nodes=&pass.cache.nodes;
+  auto& meta=*pass.cache.meta;
   auto& styles=pass.styles;
   if(pass.restart) return true;  // this pass is discarded: lay out again without reuse
   if(depth>256||nodes->size()>=16384) return WebKit::Fail(s.cx,"Element geometry tree budget exceeded");
@@ -136,10 +192,11 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   const LayoutCache* previous=pass.previous;
   size_t before=size_t(-1);
   if(previous) {
-    const auto hit=previous->index.find({source.key.document,source.key.node});
-    if(hit!=previous->index.end() && previous->nodes[hit->second].tag==node.tag) before=hit->second;
+    const auto hit=previous->meta->index.find({source.key.document,source.key.node});
+    if(hit!=previous->meta->index.end() && previous->nodes[hit->second].tag==node.tag) before=hit->second;
   }
-  LayoutCache::Attributes list;
+  LayoutAttributes list;
+  list.reserve(source.attributes.size());
   for(const auto& attr:source.attributes) list.emplace_back(attr.name,attr.value);
   // Moved, or a sibling before it inserted or removed: its position changed.
   bool moved=false;
@@ -150,7 +207,8 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
                                       previous->nodes[old_parent].children[position]!=before));
     pass.reached[before]=1;
   }
-  if(previous && (before==size_t(-1) || moved)) {
+  const bool node_structural=previous && (before==size_t(-1) || moved);
+  if(node_structural) {
     pass.structural=true;
     if(source.element && styles.Scopes() && HasKeyMatch(styles.Dependencies(),node.tag,list)) pass.restart=true;
   }
@@ -160,7 +218,7 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   const bool own_children=children_changed && (!known || styles.Dependencies().empty);
   bool same=false, inputs=false, inherits_reset=false;
   uint64_t child_inputs=0;
-  const bool changed=before!=size_t(-1) && previous->attributes[before]!=attributes;
+  const bool changed=before!=size_t(-1) && previous->meta->attributes[before]!=attributes;
   const bool restyled=before!=size_t(-1) && previous->inline_styles[before]!=inline_style;
   // With a selector on the style attribute, an inline-style change reaches
   // other elements like any attribute change (unknown before the first read).
@@ -168,7 +226,7 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   const bool dirty=inherited_dirty || before==size_t(-1) || changed || style_reach || moved || own_children;
   if(source.element && styles.Scopes()) {
     const auto& dependencies=styles.Dependencies();
-    if(changed && HasReach(dependencies,previous->attribute_lists[before],source.attributes)) pass.restart=true;
+    if(changed && HasReach(dependencies,previous->meta->attribute_lists[before],source.attributes)) pass.restart=true;
     if(restyled && dependencies.hasAttributes.count("style")) pass.restart=true;
   }
   if(source.element) {
@@ -189,7 +247,7 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
       // The custom properties and the inherited line-height value are not in
       // BoxStyle: equal styles also pass their children the same inputs.
       inputs=before!=size_t(-1) && previous->child_inputs[before]==child_inputs;
-      same=inputs && SameStyle(node.style,previous->nodes[before].style);
+      same=inputs && BoxSameStyle(node.style,previous->nodes[before].style);
     }
   } else {
     if(parent_index!=size_t(-1)) node.style=(*nodes)[parent_index].style;
@@ -201,42 +259,36 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   // under the same font configuration.
   if(source.text) {
     if(before!=size_t(-1) && parent_inputs && previous->fonts==FontConfigGeneration() &&
-       previous->texts[before]==source.data) {
+       previous->meta->texts[before]==source.data) {
       const auto& measured=previous->nodes[before];
       node.text_width=measured.text_width; node.text_height=measured.text_height;
       node.line_height=measured.line_height; node.breakable=measured.breakable;
     } else if(!BoxText(s,source,&node)) return false;
   }
-  for(const auto& attr:source.attributes) {
-    if(attr.name==u"type") node.input_type.assign(attr.value.begin(),attr.value.end());
-    if(attr.name==u"frameborder"&&node.tag=="iframe"&&(attr.value==u"0"||attr.value==u"no"||attr.value==u"NO"))
-      node.no_frame_border=true;
-    if(attr.name!=u"width"&&attr.name!=u"height") continue;
-    const std::string value(attr.value.begin(),attr.value.end());
-    const auto parsed=box::CssNumericParse(value);
-    if(parsed.kind==box::CssNumber && parsed.number>=0)
-      (attr.name==u"width"?node.intrinsic_width:node.intrinsic_height)=parsed.number;
-    else if(!value.empty()&&value.back()=='%') {
-      char* end=nullptr; const double percent=std::strtod(value.c_str(),&end);
-      if(end==value.c_str()+value.size()-1&&percent>=0)
-        (attr.name==u"width"?node.attribute_width_percent:node.attribute_height_percent)=percent;
-    }
-  }
+  ApplyBoxAttributes(source.attributes, &node);
   if(js::CheckedUnwrapStatic(object)==js::CheckedUnwrapStatic(target)) pass.found=index;
-  const bool hidden=node.style.Get("display")=="none";
+  const bool hidden=node.style.Slot(box::BoxKnown::Display)=="none";
+  const bool node_same=before!=size_t(-1) && BoxSameNode(node,previous->nodes[before]);
   nodes->push_back(std::move(node));
-  pass.cache.keys.push_back(source.key);
+  meta.keys.push_back(source.key);
+  meta.is_element.push_back(source.element ? 1 : 0);
+  meta.attributes.push_back(attributes);
+  meta.attribute_lists.push_back(std::move(list));
+  meta.texts.push_back(source.text ? std::move(source.data) : std::u16string());
   pass.cache.inline_styles.push_back(std::move(inline_style));
-  pass.cache.attributes.push_back(attributes);
-  pass.cache.attribute_lists.push_back(std::move(list));
-  pass.cache.texts.push_back(source.text ? std::move(source.data) : std::u16string());
   pass.cache.child_inputs.push_back(child_inputs);
   pass.cache.inherits_reset.push_back(inherits_reset);
+  pass.before_index.push_back(before);
   pass.same.push_back(same);
   pass.inputs.push_back(inputs);
   pass.dirty.push_back(dirty);
+  pass.same_node.push_back(node_same ? 1 : 0);
+  pass.structural_node.push_back(node_structural ? 1 : 0);
   if(parent_index!=size_t(-1)) (*nodes)[parent_index].children.push_back(index);
-  if(hidden) return true;
+  if(hidden) {
+    if(!children.empty()) meta.has_hidden_children=true;
+    return true;
+  }
   // A changed child list reaches every child through selectors counted from the end.
   const bool all_children=children_changed && (!styles.Scopes() || styles.Dependencies().fromEnd);
   if(children_changed) pass.structural=true;
@@ -245,7 +297,9 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
     JS::RootedObject child(s.cx,children[i]);
     const size_t child_index=nodes->size();
     if(!Visit(s,child,target,index,pass,depth+1,dirty||sibling_dirty||all_children,before,i)) return false;
-    if(child_index<pass.dirty.size() && pass.dirty[child_index]) sibling_dirty=true;
+    if(child_index<pass.dirty.size() && pass.dirty[child_index] &&
+       (pass.structural_node[child_index] || !styles.Scopes() || styles.Dependencies().siblingCombinator))
+      sibling_dirty=true;
   }
   return true;
 }
@@ -279,19 +333,33 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
   JSAutoRealm realm(s.cx,s.kit.page);
   JS::RootedObject target(s.cx,element);
   if(!JS_WrapObject(s.cx,&target)) return false;
-  JS::RootedObject root(s.cx,target), parent(s.cx);
-  JS::RootedObjectVector children(s.cx);
-  document_model::LayoutNodeSource source;
-  if(!Read(s,target,&source,&parent,&children)) return false;
-  if(!source.renderedDocument) return true;
-  const document_model::NodeKey targetKey=source.key, focused=source.focused;
-  const uint64_t revision=source.revision, structure=source.structure, tree=source.tree;
-  for(unsigned depth=0;parent;++depth) {
-    if(depth>256) return WebKit::Fail(s.cx,"Element geometry ancestor budget exceeded");
-    root=parent;
-    if(!Read(s,root,&source,&parent,&children)) return false;
+  JS::RootedValue targetVal(s.cx,JS::ObjectValue(*target));
+  JS::RootedObject root(s.cx,target);
+  document_model::NodeKey targetKey, rootKey, focused;
+  uint64_t revision=0, structure=0, tree=0;
+  if(s.boxPorts.head) {
+    document_model::LayoutHeadSource head;
+    if(!s.boxPorts.head(s.boxPorts.context,targetVal,&head,&root)) return false;
+    if(!head.renderedDocument) return true;
+    if(head.ancestorBudgetExceeded) return WebKit::Fail(s.cx,"Element geometry ancestor budget exceeded");
+    if(root && !JS_WrapObject(s.cx,&root)) return false;
+    targetKey=head.key; rootKey=head.root; focused=head.focused;
+    revision=head.revision; structure=head.structure; tree=head.tree;
+  } else {
+    JS::RootedObject parent(s.cx);
+    JS::RootedObjectVector children(s.cx);
+    document_model::LayoutNodeSource source;
+    if(!Read(s,target,&source,&parent,&children)) return false;
+    if(!source.renderedDocument) return true;
+    targetKey=source.key; focused=source.focused;
+    revision=source.revision; structure=source.structure; tree=source.tree;
+    for(unsigned depth=0;parent;++depth) {
+      if(depth>256) return WebKit::Fail(s.cx,"Element geometry ancestor budget exceeded");
+      root=parent;
+      if(!Read(s,root,&source,&parent,&children)) return false;
+    }
+    rootKey=source.key;
   }
-  const document_model::NodeKey rootKey=source.key;
   box::BoxViewport& viewport=*viewport_out;
   if(!s.boxPorts.viewport(s.boxPorts.context,&viewport.width,&viewport.height,&viewport.scroll_x,&viewport.scroll_y)) return false;
   const std::array<double,4> view{viewport.width,viewport.height,viewport.scroll_x,viewport.scroll_y};
@@ -299,14 +367,21 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
   bool stamped=s.boxPorts.stamp&&s.boxPorts.stamp(s.boxPorts.context,target,&stamp);
   if(!stamped) JS_ClearPendingException(s.cx);  // Uncached: the full path below reports real errors.
   const auto& cached=s.layoutCache;
-  if(stamped&&cached&&cached->revision==revision&&cached->styles==stamp&&cached->viewport==view&&
+  if(stamped&&cached&&cached->styles==stamp&&cached->viewport==view&&
      Same(cached->root,rootKey)&&Same(cached->focused,focused)) {
-    const auto hit=cached->index.find({targetKey.document,targetKey.node});
-    if(hit!=cached->index.end()) { *out=cached; *index=hit->second; }
-    return true;
+    if(cached->revision==revision) {
+      const auto hit=cached->meta->index.find({targetKey.document,targetKey.node});
+      if(hit!=cached->meta->index.end()) { *out=cached; *index=hit->second; }
+      return true;
+    }
+    if(cached->tree==tree) {
+      bool handled=false;
+      if(!TryTreeUnchangedLayout(s,targetVal,targetKey,*cached,revision,structure,viewport,out,index,&handled))
+        return false;
+      if(handled) return true;
+    }
   }
   auto cache=std::make_shared<LayoutCache>();
-  auto& keys=cache->keys;
   auto styles=s.boxPorts.styles(s.boxPorts.context);
   if(!styles) return false;
   Pass pass{*cache,size_t(-1),*styles};
@@ -320,21 +395,34 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
     const auto& dependencies=styles->Dependencies();
     if(dependencies.HasKeys()) {
       if(pass.structural && dependencies.hasStructural) pass.restart=true;
+      // Mutations inside an unvisited display:none subtree are absent from
+      // previous->meta->keys; re-walk cleanly when :has() may observe them.
+      if(pass.previous->meta->has_hidden_children &&
+         (pass.previous->structure!=structure || dependencies.hasAttributes.count("style")))
+        pass.restart=true;
       // A removed (or no longer laid out) element a :has() argument may read.
       const auto& old=*pass.previous;
       for(size_t i=0;i<old.nodes.size() && !pass.restart;++i)
-        if(!pass.reached[i] && !old.nodes[i].text && HasKeyMatch(dependencies,old.nodes[i].tag,old.attribute_lists[i]))
+        if(!pass.reached[i] && !old.nodes[i].text && HasKeyMatch(dependencies,old.nodes[i].tag,old.meta->attribute_lists[i]))
           pass.restart=true;
     }
   }
   if(pass.restart) {  // a :has() argument may have changed: lay out without reuse
     *cache=LayoutCache();
     pass.previous=nullptr; pass.restart=false; pass.found=size_t(-1);
+    pass.before_index.clear();
     pass.same.clear(); pass.inputs.clear(); pass.dirty.clear(); pass.reached.clear();
+    pass.same_node.clear(); pass.structural_node.clear();
     if(!Visit(s,root,target,size_t(-1),pass,0,false,size_t(-1),0)) return false;
   }
   const size_t found=pass.found;
-  if(!box::ComputeBoxLayout(cache->nodes,viewport,&cache->layout,&cache->scrollport))
+  box::BoxReuseInput reuse;
+  const box::BoxReuseInput* reuse_ptr=nullptr;
+  if(pass.previous) {
+    reuse={&pass.previous->nodes,&pass.previous->box_cache,&pass.before_index,&pass.same_node};
+    reuse_ptr=&reuse;
+  }
+  if(!box::ComputeBoxLayout(cache->nodes,viewport,&cache->layout,&cache->scrollport,reuse_ptr,&cache->box_cache))
     return WebKit::Fail(s.cx,"Element box layout budget exceeded");
   // One cascade scope only: a shadow scope's sheets are outside the fingerprint.
   if(stamped&&styles->Scopes()<=1) {
@@ -342,7 +430,14 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
     cache->fonts=FontConfigGeneration();
     cache->structure=structure; cache->tree=tree;
     cache->viewport=view;
-    for(size_t i=0;i<keys.size();++i) cache->index.emplace(std::make_pair(keys[i].document,keys[i].node),i);
+    const bool unknown=styles->Scopes()==0;
+    const auto& d=styles->Dependencies();
+    cache->has_style_dep=unknown || d.styleAttribute || d.hasAttributes.count("style");
+    cache->has_key_dep=unknown || d.HasKeys();
+    cache->has_sibling_dep=unknown || d.siblingCombinator;
+    const auto& keys=cache->meta->keys;
+    cache->meta->index.reserve(keys.size());
+    for(size_t i=0;i<keys.size();++i) cache->meta->index.emplace(std::make_pair(keys[i].document,keys[i].node),i);
     s.layoutCache=cache;
   }
   *out=cache; *index=found;
@@ -357,12 +452,24 @@ bool Realm::MeasureOffset(JS::HandleObject element, document_model::OffsetGeomet
 }
 bool ElementProjection(State& s, JS::HandleValue value, bool list, JS::MutableHandleValue result) {
   if(!s.boxPorts.node) return WebKit::Fail(s.cx,"Element layout source port is not installed");
-  document_model::LayoutNodeSource node;
-  JS::RootedObject parent(s.cx);
-  JS::RootedObjectVector children(s.cx);
-  if(!s.boxPorts.node(s.boxPorts.context,value,&node,&parent,&children)) return false;
-  auto* owner=static_cast<Realm*>(node.layoutOwner);
-  auto* factory=static_cast<Realm*>(node.factory);
+  void* layout_owner=nullptr;
+  void* geom_factory=nullptr;
+  if(s.boxPorts.head) {
+    document_model::LayoutHeadSource head;
+    JS::RootedObject root(s.cx);
+    if(!s.boxPorts.head(s.boxPorts.context,value,&head,&root)) return false;
+    layout_owner=head.layoutOwner;
+    geom_factory=head.factory;
+  } else {
+    document_model::LayoutNodeSource node;
+    JS::RootedObject parent(s.cx);
+    JS::RootedObjectVector children(s.cx);
+    if(!s.boxPorts.node(s.boxPorts.context,value,&node,&parent,&children)) return false;
+    layout_owner=node.layoutOwner;
+    geom_factory=node.factory;
+  }
+  auto* owner=static_cast<Realm*>(layout_owner);
+  auto* factory=static_cast<Realm*>(geom_factory);
   if(!owner||!factory) return WebKit::Fail(s.cx,"Element original geometry factory is not installed");
   JS::RootedObject target(s.cx,&value.toObject());
   std::array<double,4> rect{}; bool present=false;

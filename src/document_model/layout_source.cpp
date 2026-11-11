@@ -53,4 +53,50 @@ bool Realm::ReadLayoutNode(JS::HandleValue value, LayoutNodeSource* out,
   *out = std::move(result);
   return true;
 }
+bool Realm::ReadLayoutHead(JS::HandleValue value, LayoutHeadSource* out, JS::MutableHandleObject root) {
+  NodeSource source;
+  if (!ResolveNodeSource(value, &source)) return false;
+  State& owner = *source.owner->state_;
+  LayoutHeadSource result;
+  result.factory = source.factory->geometryFactory_;
+  result.layoutOwner = source.owner->geometryFactory_;
+  {
+    JSAutoRealm realm(owner.cx, owner.page);
+    NodeKey composed;
+    bool connected = false;
+    if (!owner.Check(owner.model.InspectLayoutRoot(
+            source.key, &result.root, &composed, &connected, &result.ancestorBudgetExceeded)))
+      return false;
+    result.key = source.key;
+    result.renderedDocument = connected && composed.document == owner.main.document &&
+        composed.node == owner.main.node;
+    result.revision = owner.model.Revision();
+    result.structure = owner.model.StructureRevision();
+    result.tree = owner.model.TreeRevision();
+    if (!owner.Check(owner.model.FocusedElement(owner.main, &result.focused))) return false;
+  }
+  root.set(nullptr);
+  if (result.renderedDocument && !result.ancestorBudgetExceeded && result.root.node &&
+      !source.owner->WrapNode(result.root, root))
+    return false;
+  *out = result;
+  return true;
+}
+bool Realm::ReadChangedElements(JS::HandleValue value, const std::vector<NodeKey>& keys,
+                                const std::vector<char>& elements,
+                                const std::vector<uint64_t>& previous_attributes,
+                                const std::vector<DomString>& previous_styles, bool style_only,
+                                std::vector<ChangedElement>* changed) {
+  NodeSource source;
+  if (!ResolveNodeSource(value, &source)) return false;
+  State& owner = *source.owner->state_;
+  JSAutoRealm realm(owner.cx, owner.page);
+  return owner.Check(owner.model.ChangedElements(
+      keys, elements, previous_attributes, previous_styles, style_only, changed));
+}
+bool Realm::WrapLayoutNode(JS::HandleValue value, NodeKey key, JS::MutableHandleObject out) {
+  NodeSource source;
+  if (!ResolveNodeSource(value, &source)) return false;
+  return source.owner->WrapNode(key, out);
+}
 }

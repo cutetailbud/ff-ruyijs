@@ -22,7 +22,7 @@ std::array<double, 2> AncestorScroll(const State& s, const LayoutCache& cache, s
   std::array<double, 2> total{0, 0};
   if (s.elementScroll.empty()) return total;
   for (size_t i = cache.nodes[index].parent; i != size_t(-1); i = cache.nodes[i].parent) {
-    const auto offset = ScrollOffset(s, cache.keys[i]);
+    const auto offset = ScrollOffset(s, cache.meta->keys[i]);
     total[0] += offset[0]; total[1] += offset[1];
   }
   return total;
@@ -36,8 +36,8 @@ bool Realm::ElementScroll(JS::HandleObject element, bool write, double* x, doubl
     if (!write) *x = *y = 0;
     return true;
   }
-  const auto key = Key(layout->keys[found]);
-  auto current = ScrollOffset(*state_, layout->keys[found]);
+  const auto key = Key(layout->meta->keys[found]);
+  auto current = ScrollOffset(*state_, layout->meta->keys[found]);
   if (!write) { *x = current[0]; *y = current[1]; return true; }
   document_model::OffsetGeometry geometry;
   OffsetFrom(*layout, found, &geometry);

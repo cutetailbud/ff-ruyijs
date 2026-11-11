@@ -1,10 +1,21 @@
 #pragma once
-#include <memory>
 #include <array>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 #include "js/RootingAPI.h"
 #include "document_model/svg_points_types.h"
 namespace ruyijs { class PageHelpers; }
-namespace ruyijs::document_model { struct GeometryNode; struct LayoutNodeSource; struct OffsetGeometry; struct SvgViewBoxValue; }
+namespace ruyijs::document_model {
+struct NodeKey;
+struct ChangedElement;
+struct GeometryNode;
+struct LayoutHeadSource;
+struct LayoutNodeSource;
+struct OffsetGeometry;
+struct SvgViewBoxValue;
+}
 namespace ruyijs::web_styling { struct ComputedStyle; class ComputedStyleReader; }
 namespace ruyijs::web_geometry {
 struct State;
@@ -36,6 +47,12 @@ struct BoxPorts {
   std::unique_ptr<web_styling::ComputedStyleReader> (*styles)(void*) = nullptr;
   bool (*node)(void*, JS::HandleValue, document_model::LayoutNodeSource*, JS::MutableHandleObject,
                JS::MutableHandleObjectVector) = nullptr;
+  bool (*head)(void*, JS::HandleValue, document_model::LayoutHeadSource*, JS::MutableHandleObject) = nullptr;
+  bool (*changedElements)(void*, JS::HandleValue, const std::vector<document_model::NodeKey>&,
+                          const std::vector<char>&, const std::vector<uint64_t>&,
+                          const std::vector<std::u16string>&, bool,
+                          std::vector<document_model::ChangedElement>*) = nullptr;
+  bool (*wrap)(void*, JS::HandleValue, document_model::NodeKey, JS::MutableHandleObject) = nullptr;
   bool (*viewport)(void*, double*, double*, double*, double*) = nullptr;
   bool (*stamp)(void*, JS::HandleObject, uint64_t*) = nullptr;  // Cascade fingerprint.
   void* context = nullptr;

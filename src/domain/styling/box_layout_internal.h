@@ -21,12 +21,31 @@ double BoxLimit(const BoxStyle&, bool width, double available, double value, dou
 bool BoxReplaced(const BoxNode&);
 bool BoxAbsolute(const BoxNode&);
 void BoxEdges(const BoxNode&, double width, BoxLayout*);
+struct BoxReuseState {
+  const BoxLayoutCache* cache = nullptr;
+  const std::vector<size_t>* before = nullptr;
+  const BoxLayoutCache* fallback_cache = nullptr;
+  const std::vector<size_t>* fallback_before = nullptr;
+  const std::vector<char>* fallback_clean = nullptr;
+  std::vector<size_t> subtree_size;
+  std::vector<char> subtree_clean, has_unescaped_abs, has_fixed;
+  size_t overflow_source = 0;
+};
+inline bool BoxFormattingParent(const std::vector<BoxNode>& nodes, size_t index) {
+  const size_t p = nodes[index].parent;
+  if (p == kNoBox) return false;
+  const auto& d = nodes[p].style.Slot(BoxKnown::Display);
+  return d == "flex" || d == "inline-flex" || d == "grid" || d == "inline-grid";
+}
 struct BoxFlow {
   const std::vector<BoxNode>& nodes;
   const BoxViewport& viewport;
   std::vector<BoxLayout>& boxes;
+  const BoxReuseState* reuse = nullptr;
   bool Place(size_t, const BoxRect& containing, bool definite_height, double x, double y,
              size_t positioned, unsigned depth);
+  bool TryReuse(size_t, const BoxRect& containing, bool definite_height, double x, double y,
+                bool parent_bfc);
   bool Children(size_t, size_t positioned, unsigned depth, double* height, double* width);
   bool FlexChildren(size_t, size_t positioned, unsigned depth, double* height, double* width);
   bool GridChildren(size_t, size_t positioned, unsigned depth, double* height, double* width);  // box_layout_grid.cpp
@@ -57,7 +76,11 @@ struct BoxFlow {
   // and bottom edges, and whether it has no in-flow content (self-collapsing).
   std::vector<double> leading{}, trailing{};
   std::vector<char> empty_flow{}, self_collapse{};
+  std::vector<BoxPlaceRecord> places{};
 };
+bool PrepareBoxReuse(const std::vector<BoxNode>& nodes, const BoxViewport& viewport,
+                     size_t overflow_source, const BoxReuseInput* input, BoxFlow* flow,
+                     BoxReuseState* out);
 // The collapsed result of two adjoining margins (CSS 2 §8.3.1).
 inline double BoxCollapse(double a, double b) {
   return std::max({a, b, 0.0}) + std::min({a, b, 0.0});

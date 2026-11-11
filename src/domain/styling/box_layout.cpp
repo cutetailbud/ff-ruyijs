@@ -18,6 +18,10 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     box.line = node.line_height >= 0 ? node.line_height : node.text_height;
     return true;
   }
+  const bool parent_bfc = BoxFormattingParent(nodes, index);
+  if (TryReuse(index, containing, definite_height, x, y, parent_bfc)) return true;
+  const double in_forced_w = index < forced_width.size() ? forced_width[index] : BoxAuto();
+  const double in_forced_h = index < forced_height.size() ? forced_height[index] : BoxAuto();
   box.present = true;
   BoxRect cb = containing;
   const bool absolute = !node.text && (position == "absolute" || position == "fixed");
@@ -96,6 +100,7 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     bx += std::isfinite(left) ? left : std::isfinite(right) ? -right : 0;
     by += std::isfinite(top) ? top : std::isfinite(bottom) ? -bottom : 0;
   }
+  const double rel_bx = bx - x, rel_by = by - y;
   box.border = {BoxRound(bx), BoxRound(by), BoxRound(width+extra_w), BoxRound((box.definite_height?height:0)+extra_h)};
   box.content = {box.border[0]+box.edge[3]+box.padding[3], box.border[1]+box.edge[0]+box.padding[0],
                  width, box.definite_height ? height : 0};
@@ -159,9 +164,11 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   // (box_layout_flow.cpp) collapse with them: the box moves down by what its
   // top margin gains, and its children with it.
   self_collapse[index] = 0;
+  double collapse_shift = 0;
   if (!BoxReplaced(node) && !inline_box) {
     const double top = BoxCollapse(box.margin[0], leading[index]);
     const double shift = top - box.margin[0];
+    collapse_shift = shift;
     box.margin[0] = top;
     box.margin[2] = BoxCollapse(box.margin[2], trailing[index]);
     if (shift != 0) {
@@ -177,6 +184,10 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
         std::isfinite(static_x[child]) ? static_x[child] : box.content[0],
         std::isfinite(static_y[child]) ? static_y[child] : box.content[1],
         child_positioned, depth+1)) return false;
+  if (!absolute && index < places.size()) {
+    places[index] = {cb[2], cb[3], in_forced_w, in_forced_h, rel_bx, rel_by,
+                     collapse_shift, definite_height, parent_bfc, true};
+  }
   return true;
 }
 namespace {
@@ -196,6 +207,8 @@ size_t ViewportOverflowSource(const std::vector<BoxNode>& nodes) {
   return 0;
 }
 bool LayoutPass(const std::vector<BoxNode>& nodes, const BoxViewport& viewport,
+                size_t overflow_source, const BoxReuseInput* reuse,
+                BoxLayoutCache* cache_out, std::vector<char>* clean_out,
                 std::vector<BoxLayout>* result);
 }
 bool BoxScrollContainer(const std::vector<BoxNode>& nodes, size_t index) {
@@ -211,7 +224,9 @@ bool BoxScrollContainer(const std::vector<BoxNode>& nodes, size_t index) {
 }
 void BoxOverflowExtent(const std::vector<BoxNode>& nodes, const std::vector<BoxLayout>& boxes,
                        size_t index, double* right, double* bottom) {
-  std::vector<std::pair<size_t, unsigned>> stack{{index, 0}};
+  std::vector<std::pair<size_t, unsigned>> stack;
+  stack.reserve(64);
+  stack.push_back({index, 0});
   while (!stack.empty()) {
     const auto [current, depth] = stack.back(); stack.pop_back();
     if (depth > 256) continue;
@@ -225,7 +240,8 @@ void BoxOverflowExtent(const std::vector<BoxNode>& nodes, const std::vector<BoxL
   }
 }
 bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& viewport,
-                       std::vector<BoxLayout>* result, BoxScrollport* scrollport) {
+                       std::vector<BoxLayout>* result, BoxScrollport* scrollport,
+                       const BoxReuseInput* reuse, BoxLayoutCache* cache_out) {
   if (nodes.empty() || nodes.size() > 16384) return false;
   // nsHTMLScrollFrame::ReflowContents for the viewport: lay out without
   // scrollbars, then with each auto scrollbar the scrollable overflow needs.
@@ -235,10 +251,27 @@ bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& view
   bool vertical = overflow_y == "scroll", horizontal = overflow_x == "scroll";
   BoxViewport pass = viewport;
   double right = 0, bottom = 0;
+  BoxLayoutCache pass_cache;
+  std::vector<char> initial_clean;
   for (int attempt = 0; attempt < 4; ++attempt) {
     pass.client_width = std::max(0.0, viewport.width - (vertical ? kBoxScrollbar : 0));
     pass.client_height = std::max(0.0, viewport.height - (horizontal ? kBoxScrollbar : 0));
-    if (!LayoutPass(nodes, pass, result)) return false;
+    BoxLayoutCache next_cache;
+    BoxReuseInput scrollbar_reuse;
+    const BoxReuseInput* active_reuse = reuse;
+    if (attempt > 0) {
+      scrollbar_reuse.cache = &pass_cache;
+      if (reuse && reuse->cache && !initial_clean.empty()) {
+        scrollbar_reuse.fallback_cache = reuse->cache;
+        scrollbar_reuse.fallback_before = reuse->before;
+        scrollbar_reuse.fallback_clean = &initial_clean;
+      }
+      active_reuse = &scrollbar_reuse;
+    }
+    if (!LayoutPass(nodes, pass, source, active_reuse, &next_cache,
+                    attempt == 0 ? &initial_clean : nullptr, result))
+      return false;
+    pass_cache = std::move(next_cache);
     const auto& root = (*result)[0];
     right = root.border[0] + root.border[2] + root.margin[1];
     bottom = root.border[1] + root.border[3] + root.margin[2];
@@ -251,6 +284,7 @@ bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& view
     // Scrollbars only get added within one reflow (no oscillation).
     vertical = vertical || want_vertical; horizontal = horizontal || want_horizontal;
   }
+  if (cache_out) *cache_out = std::move(pass_cache);
   if (scrollport) {
     scrollport->client_width = pass.ClientWidth(); scrollport->client_height = pass.ClientHeight();
     scrollport->scroll_width = std::max(scrollport->client_width, BoxRound(right));
@@ -260,6 +294,8 @@ bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& view
 }
 namespace {
 bool LayoutPass(const std::vector<BoxNode>& nodes, const BoxViewport& viewport,
+                size_t overflow_source, const BoxReuseInput* reuse,
+                BoxLayoutCache* cache_out, std::vector<char>* clean_out,
                 std::vector<BoxLayout>* result) {
   result->assign(nodes.size(), {});
   BoxFlow flow{nodes, viewport, *result};
@@ -273,7 +309,28 @@ bool LayoutPass(const std::vector<BoxNode>& nodes, const BoxViewport& viewport,
   flow.trailing.assign(nodes.size(), 0);
   flow.empty_flow.assign(nodes.size(), 0);
   flow.self_collapse.assign(nodes.size(), 0);
-  return flow.Place(0, {0, 0, viewport.ClientWidth(), viewport.ClientHeight()}, true, 0, 0, kNoBox, 0);
+  flow.places.assign(nodes.size(), {});
+  BoxReuseState reuse_state;
+  if (PrepareBoxReuse(nodes, viewport, overflow_source, reuse, &flow, &reuse_state)) {
+    flow.reuse = &reuse_state;
+    if (clean_out) *clean_out = reuse_state.subtree_clean;
+  }
+  if (!flow.Place(0, {0, 0, viewport.ClientWidth(), viewport.ClientHeight()}, true, 0, 0, kNoBox, 0))
+    return false;
+  if (cache_out) {
+    cache_out->viewport_width = viewport.width;
+    cache_out->viewport_height = viewport.height;
+    cache_out->overflow_source = overflow_source;
+    cache_out->boxes = *result;
+    cache_out->leading = std::move(flow.leading);
+    cache_out->trailing = std::move(flow.trailing);
+    cache_out->min_content = std::move(flow.min_content);
+    cache_out->max_content = std::move(flow.max_content);
+    cache_out->empty_flow = std::move(flow.empty_flow);
+    cache_out->self_collapse = std::move(flow.self_collapse);
+    cache_out->places = std::move(flow.places);
+  }
+  return true;
 }
 }
 }

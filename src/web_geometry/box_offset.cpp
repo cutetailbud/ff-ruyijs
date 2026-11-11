@@ -76,8 +76,8 @@ void OffsetFrom(const LayoutCache& cache, size_t index, document_model::OffsetGe
         (ancestor.tag == "td" || ancestor.tag == "th" || ancestor.tag == "table"))) break;
     parent = ancestor.parent;
   }
-  if (parent == size_t(-1) || parent >= cache.keys.size()) return;
-  out->parent = true; out->parentKey = cache.keys[parent];
+  if (parent == size_t(-1) || parent >= cache.meta->keys.size()) return;
+  out->parent = true; out->parentKey = cache.meta->keys[parent];
   const auto& origin = cache.layout[parent];
   if (cache.nodes[parent].tag == "body" && !Positioned(cache.nodes[parent])) return;
   out->left -= origin.border[0] + origin.edge[3];

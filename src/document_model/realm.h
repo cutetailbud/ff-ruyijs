@@ -222,6 +222,11 @@ class Realm final {
                         JS::MutableHandleObjectVector children);
   bool ReadLayoutNode(JS::HandleValue, LayoutNodeSource*, JS::MutableHandleObject parent,
                       JS::MutableHandleObjectVector children);
+  bool ReadLayoutHead(JS::HandleValue, LayoutHeadSource*, JS::MutableHandleObject root);
+  bool ReadChangedElements(JS::HandleValue, const std::vector<NodeKey>&, const std::vector<char>&,
+                           const std::vector<uint64_t>&, const std::vector<DomString>&,
+                           bool style_only, std::vector<ChangedElement>*);
+  bool WrapLayoutNode(JS::HandleValue, NodeKey, JS::MutableHandleObject);
   // Connected iframe elements of the main document, from the unique tree via
   // the existing Model::Query. The runtime frame port reads this for
   // window.length/window.frames; it is a snapshot, not a second index.

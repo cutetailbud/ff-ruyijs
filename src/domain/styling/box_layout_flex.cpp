@@ -132,6 +132,7 @@ void BoxFlow::Resize(size_t index, bool height, double size) {
   box.content[height ? 3 : 2] = size;
   box.border[height ? 3 : 2] = BoxRound(size + extra);
   if (height) box.definite_height = true;
+  if (index < places.size()) places[index].valid = false;
 }
 
 bool BoxFlow::FlexChildren(size_t index, size_t positioned, unsigned depth, double* height, double* width) {

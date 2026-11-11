@@ -97,9 +97,34 @@ struct BoxLayout {
 // The viewport scroll frame: the scrollport (client) size and the root's
 // scrollable overflow (scroll) size, at least the scrollport.
 struct BoxScrollport { double client_width = 0, client_height = 0, scroll_width = 0, scroll_height = 0; };
+// Per-element constraint and relative-origin record from one layout pass, for
+// reusing unchanged subtrees on a subsequent mutation or scrollbar pass.
+struct BoxPlaceRecord {
+  double cb_w = 0, cb_h = 0, forced_w = 0, forced_h = 0;
+  double rel_bx = 0, rel_by = 0, collapse_shift = 0;
+  bool definite_height = false, parent_bfc = false, valid = false;
+};
+struct BoxLayoutCache {
+  double viewport_width = 0, viewport_height = 0;
+  size_t overflow_source = 0;
+  std::vector<BoxLayout> boxes;
+  std::vector<double> leading, trailing, min_content, max_content;
+  std::vector<char> empty_flow, self_collapse;
+  std::vector<BoxPlaceRecord> places;
+};
+struct BoxReuseInput {
+  const std::vector<BoxNode>* previous_nodes = nullptr;
+  const BoxLayoutCache* cache = nullptr;
+  const std::vector<size_t>* before = nullptr;
+  const std::vector<char>* same_node = nullptr;
+  const BoxLayoutCache* fallback_cache = nullptr;
+  const std::vector<size_t>* fallback_before = nullptr;
+  const std::vector<char>* fallback_clean = nullptr;
+};
 // Call-scoped projection: no node identity, retained tree, renderer or engine dependency.
 bool ComputeBoxLayout(const std::vector<BoxNode>&, const BoxViewport&, std::vector<BoxLayout>*,
-                      BoxScrollport* scrollport = nullptr);
+                      BoxScrollport* scrollport = nullptr, const BoxReuseInput* reuse = nullptr,
+                      BoxLayoutCache* cache_out = nullptr);
 // Whether a box is a scroll container (overflow other than visible/clip on an
 // axis). The root and a body whose overflow propagates to the viewport are not.
 bool BoxScrollContainer(const std::vector<BoxNode>&, size_t);
