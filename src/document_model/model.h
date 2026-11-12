@@ -437,6 +437,9 @@ class Model final {
 
   Status QuerySelector(NodeKey root, DomStringView selector,
                        std::vector<NodeKey>* result) const noexcept;
+  // True when `name` is a unique id of one connected element in this document.
+  // Duplicates, misses, and detached holders leave `unique` false.
+  Status LookupUniqueId(NodeKey scope, DomStringView name, NodeKey* hit, bool* unique) const noexcept;
   Status AllNamed(NodeKey root, const DomStringView* name,
                   std::vector<NodeKey>* nodes, std::vector<DomString>* names) const noexcept;
   Status WindowNamed(NodeKey root, DomStringView name,

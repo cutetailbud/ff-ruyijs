@@ -81,6 +81,10 @@ class ParsedSelector {
   // the tree (a Document or fragment root) makes them match nothing.
   bool matches(const ElementNode&,const ElementNode* scope) const;
   bool valid() const noexcept {return valid_;}
+  // One compound that is only an id: no type, class, attribute, pseudo,
+  // combinator, or pseudo-element. `id` is the ident SelectorIdent decoded,
+  // escapes included. Anything else is not a document id-index candidate.
+  bool pure_id(std::string* id) const;
   bool has_pseudo_element() const noexcept;
   int specificity_a() const noexcept {return a_;}
   int specificity_b() const noexcept {return b_;}

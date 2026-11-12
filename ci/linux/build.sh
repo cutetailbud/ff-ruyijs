@@ -13,7 +13,8 @@
 #                              ci/atob_check.py, ci/fetch_abort_check.py, ci/load_timer_check.py,
 #                              ci/network_smoke.py, ci/proxy_smoke.py,
 #                              ci/hello_check.py, ci/engine_check.py,
-#                              ci/dom_id_index_check.py and ci/dom_tag_ns_check.py
+#                              ci/dom_id_index_check.py, ci/dom_tag_ns_check.py,
+#                              and ci/dom_id_fastpath_check.py
 set -euo pipefail
 step="${1:?usage: build.sh deps|donor|shell|necko|wheel|test}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -89,6 +90,8 @@ case "$step" in
     # getElementById's id index, and document.getElementsByTagNameNS.
     "${clean[@]}" "$venv/bin/python" "$root/ci/dom_id_index_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/dom_tag_ns_check.py"
+    # Document querySelector('#id') and HTMLCollection.namedItem id fast paths.
+    "${clean[@]}" "$venv/bin/python" "$root/ci/dom_id_fastpath_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/atob_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/fetch_abort_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/load_timer_check.py"
