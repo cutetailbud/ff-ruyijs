@@ -239,6 +239,10 @@ class Model final {
   // The revision of the tree shape and character data: unchanged by attribute
   // writes, so a layout can tell an attribute-only change from a tree change.
   uint64_t TreeRevision() const noexcept;
+  // The revision of the tree shape and class attributes: unchanged by non-class
+  // attribute writes, so class-based collections and classList views stay live
+  // without re-collecting on unrelated attribute writes.
+  uint64_t ClassRevision() const noexcept;
   // Real-change log for the observer owner (src/web_observers). Recording is
   // off until an observer registers, so script that never observes pays one
   // flag test per mutation. MutationsSince copies every notice after a
@@ -433,6 +437,9 @@ class Model final {
 
   Status QuerySelector(NodeKey root, DomStringView selector,
                        std::vector<NodeKey>* result) const noexcept;
+  // True when `name` is a unique id of one connected element in this document.
+  // Duplicates, misses, and detached holders leave `unique` false.
+  Status LookupUniqueId(NodeKey scope, DomStringView name, NodeKey* hit, bool* unique) const noexcept;
   Status AllNamed(NodeKey root, const DomStringView* name,
                   std::vector<NodeKey>* nodes, std::vector<DomString>* names) const noexcept;
   Status WindowNamed(NodeKey root, DomStringView name,

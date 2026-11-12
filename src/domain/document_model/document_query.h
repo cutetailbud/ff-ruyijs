@@ -34,6 +34,8 @@ inline std::vector<NodeId> DocumentAggregate::query16(NodeId root, unsigned kind
   std::vector<NodeId> result;
   auto classes = kind == 2 ? tokens(value) : std::vector<DomString>{};
   if ((kind == 0 && value.empty()) || (kind == 2 && classes.empty())) return result;
+  // One connected holder answers immediately. Duplicates and detached holders
+  // fall through to the tree walk, which returns the first match in tree order.
   if (kind == 0 && root == id()) {
     NodeId hit = 0;
     if (lookup_element_id(value, &hit)) return hit ? std::vector<NodeId>{hit} : result;

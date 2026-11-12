@@ -18,6 +18,8 @@ namespace ruyijs::document_model {
 class Selector final {
  public:
   static Status Parse(DomStringView text, Selector* result) noexcept;
+  // True when the list is exactly one pure id selector (`#id`, escapes decoded).
+  bool PureId(std::string* id) const;
 
   // `scope` is the scoping element for :scope / &; 0 means none (a Document or
   // fragment scoping root, which no element matches as :scope).

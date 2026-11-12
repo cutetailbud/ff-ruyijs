@@ -107,6 +107,9 @@ Status Selector::Parse(DomStringView text, Selector* result) noexcept {
   }
 }
 
+bool Selector::PureId(std::string* id) const {
+  return groups_.size() == 1 && groups_.front() && groups_.front()->pure_id(id);
+}
 bool Selector::Matches(const DocumentAggregate& owner, uint64_t element, uint64_t scope) const {
   TreeInput input(owner);
   const styling::ElementNode* node = input.Load(element);

@@ -50,7 +50,7 @@ bool FreshCollection(State& state, CollectionRecord& record) {
   record.stale = false;  // first: materializing defines properties on the object
   JS::RootedObject object(state.cx, record.cache->object);
   if (!RefreshCollection(state, object, record)) return false;
-  record.revision = state.model.StructureRevision();
+  record.revision = TargetCollectionRevision(state.model, record);
   return true;
 }
 // A stale collection is collected again before a property lookup misses or

@@ -70,6 +70,37 @@ struct CollectionRecord {
   Collection* cache = nullptr;  // The original native identity cache, not a GC root.
 };
 
+inline uint64_t TargetCollectionRevision(const Model& model, const CollectionRecord& record) noexcept {
+  switch (record.kind) {
+    case CollectionKind::NodeList:
+      if (record.filter != CollectionFilter::RadioGroup && record.filter != CollectionFilter::Name)
+        return model.TreeRevision();
+      return model.StructureRevision();
+    case CollectionKind::HTMLCollection:
+      switch (record.filter) {
+        case CollectionFilter::Children:
+        case CollectionFilter::TagName:
+        case CollectionFilter::TagNameNS:
+        case CollectionFilter::SelectOptions:
+        case CollectionFilter::TableRows:
+        case CollectionFilter::TableBodies:
+        case CollectionFilter::TableCells:
+          return model.TreeRevision();
+        case CollectionFilter::ClassNames:
+          return model.ClassRevision();
+        default:
+          return model.StructureRevision();
+      }
+    case CollectionKind::TokenList:
+      if (record.argument.empty() || record.argument == u"class")
+        return model.ClassRevision();
+      return model.StructureRevision();
+    case CollectionKind::AttributeMap:
+      return model.StructureRevision();
+  }
+  return model.StructureRevision();
+}
+
 // One cached JS object per live collection. The scope Wrapper traces this
 // object, which in turn traces that wrapper through reserved slot 2. The cache
 // is weak: trace refreshes its address; finalize clears it for safe-point reap.
@@ -106,6 +137,12 @@ void SplitAttributeArgument(DomStringView argument, DomStringView* namespace_uri
 DomString NamespaceArgument(DomStringView namespace_uri, DomStringView local);
 void SplitNamespaceArgument(DomStringView argument, DomStringView* namespace_uri,
                             DomStringView* local);
+// HTMLCollection.namedItem id fast path. `taken` is set only when `name` is a
+// unique connected id, that element belongs to this collection, and it is the
+// first element in the scope — so an earlier name attribute cannot win. Table,
+// form, select, window, and document.all collections are left to the scan.
+// False means the owner call failed.
+bool FastNamedItemId(State&, const CollectionRecord&, DomStringView name, NodeKey* hit, bool* taken);
 // Shared prototype members: length getter and the from-record iterator.
 bool CollectionLength(JSContext*, unsigned, JS::Value*);
 bool CollectionForEach(JSContext*, unsigned, JS::Value*);
