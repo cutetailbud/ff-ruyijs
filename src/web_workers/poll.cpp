@@ -5,6 +5,8 @@
 #include "jsapi.h"
 #include "js/Object.h"
 #include "js/Realm.h"
+#include <chrono>
+#include <thread>
 
 namespace ruyijs::web_workers {
 namespace {
@@ -39,6 +41,7 @@ bool Poll(JSContext* cx, unsigned argc, JS::Value* vp) {
   JS::RootedObject target(cx);
   std::string frame;
   // One message per task preserves a microtask checkpoint between deliveries.
+  bool childRunning = false;
   const size_t count = state.active.length();
   for (size_t attempt = 0; attempt < count; ++attempt) {
     const size_t index = state.cursor++ % count;
@@ -48,7 +51,14 @@ bool Poll(JSContext* cx, unsigned argc, JS::Value* vp) {
     const auto status = record->process.Poll(&frame, &received);
     if (received) { target = state.active[index]; break; }
     if (status == PipeResult::Closed || status == PipeResult::Failed) record->Stop();
+    else if (record->process.Running()) childRunning = true;
   }
+  // The pipe poll does not wait. On a logical clock, advance() would otherwise
+  // burn every 4 ms reschedule before the child process can start and reply,
+  // so a Blob worker's postMessage never reaches the page. A short wall-clock
+  // pause while the child is alive lets that reply land on a later poll.
+  if (!target && childRunning)
+    std::this_thread::sleep_for(std::chrono::milliseconds(4));
   bool ok = true;
   if (target) {
     JS::RootedValue data(cx);
