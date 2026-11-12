@@ -161,6 +161,9 @@ class XmlParser {
       else if (a.name.find(u':') != std::u16string::npos) ns = Resolve(a.name.substr(0, a.name.find(u':')), at);
       node->set_attribute_ns16(ns, a.name, a.value);
     }
+    // HTML Insert() notes ids; this parser writes attributes directly.
+    if (const auto ident = node->get_attribute16(u"id"))
+      doc_.note_element_id(element, {}, *ident);
     Append(element, units);
     root_ = true;
     if (empty) bindings_.resize(scope);

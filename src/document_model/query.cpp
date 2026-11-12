@@ -22,17 +22,6 @@ static bool FragmentId(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (!state.Check(state.model.Query(entry->key, QueryKind::Id, value, &found))) return false;
   return state.Wrap(found.empty() ? NodeKey{} : found.front(), args.rval());
 }
-static bool DocumentNamespace(JSContext* cx, unsigned argc, JS::Value* vp) {
-  auto args = JS::CallArgsFromVp(argc, vp);
-  State& state = *FunctionState(args);
-  NodeKind kind = NodeKind::Document;
-  if (!Receiver(state, args, &kind)) return false;
-  if (argc < 2) return TypeError(cx, "getElementsByTagNameNS requires two arguments");
-  JS::RootedObject list(cx);
-  if (!state.NodeListOwned({}, &list, CollectionKind::HTMLCollection)) return false;
-  args.rval().setObject(*list); return true;
-}
-
 static bool Empty(NodeKey key) { return key.document == 0 && key.node == 0; }
 
 // Nearest following/preceding sibling that is an Element, walked over owner
@@ -243,7 +232,7 @@ bool InstallQuery(State& state) {
       state.Method("Document", "getElementsByTagName", QueryCall, 1, ByTag) &&
       state.Method("Document", "getElementsByClassName", QueryCall, 1, ByClass) &&
       state.Method("Document", "getElementsByName", QueryCall, 1, ByName) &&
-      state.Method("Document", "getElementsByTagNameNS", DocumentNamespace, 2, 0) &&
+      state.Method("Document", "getElementsByTagNameNS", QueryCall, 2, ByTagNS) &&
       state.Method("DocumentFragment", "getElementById", FragmentId, 1, 0) &&
       state.Accessor("DocumentFragment", "children", FragmentGet, Children) &&
       state.Accessor("DocumentFragment", "childElementCount", FragmentGet, ChildCount) &&

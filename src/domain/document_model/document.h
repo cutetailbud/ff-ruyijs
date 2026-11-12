@@ -4,11 +4,12 @@
 #include "domain/document_model/document_metadata.h"
 #include "domain/document_model/document_type.h"
 #include "domain/document_model/shadow_root.h"
+#include <algorithm>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <unordered_map>
-#include <unordered_set>
+#include <vector>
 
 namespace ruyijs::domain::document_model {
 enum class ReadyState { Loading, Interactive, Complete };
@@ -100,9 +101,13 @@ class DocumentAggregate : public shared::AggregateRoot<NodeId> {
   std::vector<NodeId> get_elements_by_tag(const TagName& tag) const;
   std::vector<NodeId> get_elements_by_class(const std::string& name) const;
   std::vector<NodeId> query16(NodeId root, unsigned kind, DomStringView value) const;
-  // getElementById for this document. `previous` is the node's old id.
+  // getElementById for this document. `previous` is the node's old id (empty if
+  // it had none); `next` is the id it has now (empty if it has none). Every
+  // element that carries the id is recorded, connected or not. One holder is
+  // the fast path; two or more stay off it until only one holder remains.
   void note_element_id(NodeId node, DomStringView previous, DomStringView next);
-  // True when the index knows the answer. A duplicate id is not indexed.
+  // True when one holder is in this document's tree and still has `value`.
+  // Duplicates, unknown ids, and detached holders return false so the caller scans.
   bool lookup_element_id(DomStringView value, NodeId* hit) const;
   // Namespaced tag query: "*" matches any namespace and any local name, an
   // empty namespace matches elements outside the XHTML namespace.
@@ -154,6 +159,8 @@ class DocumentAggregate : public shared::AggregateRoot<NodeId> {
  private:
   void validate_parent(NodeId parent, NodeId child) const;
   void validate_insert(NodeId parent, NodeId child, NodeId replaced) const;
+  void release_element_id(NodeId node, DomStringView value);
+  void acquire_element_id(NodeId node, DomStringView value);
   // Pre-insertion of every child of a DocumentFragment at one position, with
   // one atomic validation pass; the fragment is emptied but never destroyed.
   void insert_fragment(NodeId parent, NodeId fragment, NodeId before, NodeId replaced);
@@ -171,24 +178,56 @@ class DocumentAggregate : public shared::AggregateRoot<NodeId> {
   ParsedDoctypeRef parsed_doctype_;
   std::optional<DomString> url_{DomString{}};
   std::unordered_map<NodeId, std::unique_ptr<Node>> nodes_;
+  // At most one holder. A second holder moves the id into duplicate_ids_.
   std::unordered_map<DomString, NodeId> element_ids_;
-  std::unordered_set<DomString> ambiguous_ids_;
+  // Every holder of an id that is not unique, in the order they were recorded.
+  // Dropping back to one holder moves that node into element_ids_.
+  std::unordered_map<DomString, std::vector<NodeId>> duplicate_ids_;
 };
-inline void DocumentAggregate::note_element_id(NodeId node, DomStringView previous, DomStringView next) {
-  if (!previous.empty()) {
-    auto found = element_ids_.find(DomString(previous));
-    if (found != element_ids_.end() && found->second == node) element_ids_.erase(found);
-    else if (found != element_ids_.end()) ambiguous_ids_.insert(DomString(previous));
+inline void DocumentAggregate::release_element_id(NodeId node, DomStringView value) {
+  const DomString key(value);
+  auto unique = element_ids_.find(key);
+  if (unique != element_ids_.end()) {
+    // Leaving an id someone else holds uniquely: that node is now the only
+    // holder, so the fast path stays pointed at it.
+    if (unique->second == node) element_ids_.erase(unique);
+    return;
   }
-  if (next.empty()) return;
-  auto found = element_ids_.find(DomString(next));
-  if (found == element_ids_.end()) { element_ids_.emplace(DomString(next), node); return; }
-  if (found->second == node) return;
-  element_ids_.erase(found);
-  ambiguous_ids_.insert(DomString(next));
+  auto dup = duplicate_ids_.find(key);
+  if (dup == duplicate_ids_.end()) return;
+  auto& holders = dup->second;
+  auto it = std::find(holders.begin(), holders.end(), node);
+  if (it != holders.end()) holders.erase(it);
+  if (holders.size() > 1) return;
+  const NodeId survivor = holders.size() == 1 ? holders.front() : 0;
+  duplicate_ids_.erase(dup);
+  if (survivor) element_ids_.emplace(key, survivor);
+}
+inline void DocumentAggregate::acquire_element_id(NodeId node, DomStringView value) {
+  const DomString key(value);
+  auto dup = duplicate_ids_.find(key);
+  if (dup != duplicate_ids_.end()) {
+    auto& holders = dup->second;
+    if (std::find(holders.begin(), holders.end(), node) == holders.end()) holders.push_back(node);
+    return;
+  }
+  auto unique = element_ids_.find(key);
+  if (unique == element_ids_.end()) { element_ids_.emplace(key, node); return; }
+  if (unique->second == node) return;
+  const NodeId previous = unique->second;
+  element_ids_.erase(unique);
+  duplicate_ids_.emplace(key, std::vector<NodeId>{previous, node});
+}
+inline void DocumentAggregate::note_element_id(NodeId node, DomStringView previous, DomStringView next) {
+  if (previous == next) {
+    if (!next.empty()) acquire_element_id(node, next);
+    return;
+  }
+  if (!previous.empty()) release_element_id(node, previous);
+  if (!next.empty()) acquire_element_id(node, next);
 }
 inline bool DocumentAggregate::lookup_element_id(DomStringView value, NodeId* hit) const {
-  if (value.empty() || ambiguous_ids_.count(DomString(value))) return false;
+  if (value.empty() || duplicate_ids_.find(DomString(value)) != duplicate_ids_.end()) return false;
   auto found = element_ids_.find(DomString(value));
   if (found == element_ids_.end()) return false;
   const auto* element = get_element(found->second);

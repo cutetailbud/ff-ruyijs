@@ -36,6 +36,9 @@ NodeId CreateDetached(Builder& b, const Token& token) {
       element->set_attribute16(attribute.name, attribute.value);
       b.Attribute(id, attribute.name, nullptr);
     }
+  // Adoption creates this element without Insert(), which is what notes ids.
+  if (const auto ident = element->get_attribute16(u"id"))
+    b.doc.note_element_id(id, {}, *ident);
   return id;
 }
 void Move(Builder& b, NodeId parent, NodeId child, NodeId before = 0) {
