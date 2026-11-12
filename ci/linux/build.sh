@@ -12,7 +12,8 @@
 #   ci/linux/build.sh test     installs the wheel in a fresh venv; ci/smoke_test.py,
 #                              ci/atob_check.py, ci/fetch_abort_check.py, ci/load_timer_check.py,
 #                              ci/network_smoke.py, ci/proxy_smoke.py,
-#                              ci/hello_check.py and ci/engine_check.py
+#                              ci/hello_check.py, ci/engine_check.py,
+#                              and ci/worker_blob_message_check.py
 set -euo pipefail
 step="${1:?usage: build.sh deps|donor|shell|necko|wheel|test}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -85,6 +86,8 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/helper_check.py"
     # Geometry after a mutation equals a fresh layout of the mutated page.
     "${clean[@]}" "$venv/bin/python" "$root/ci/layout_check.py"
+    # Blob Worker postMessage. advance() waits while the child is alive.
+    "${clean[@]}" "$venv/bin/python" "$root/ci/worker_blob_message_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/atob_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/fetch_abort_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/load_timer_check.py"
