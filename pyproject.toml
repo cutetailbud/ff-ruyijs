@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ruyijs"
-version = "0.3.7"
+version = "0.4.0"
 description = "Firefox SpiderMonkey JavaScript contexts and native browser APIs for Python"
 readme = "README.md"
 requires-python = ">=3.10"

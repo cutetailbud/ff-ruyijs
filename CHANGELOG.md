@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-14
+
 ### Changed
 
 - Firefox 160.0. The wheels are built from the official Firefox 160.0 release (`firefox/` submodule at
