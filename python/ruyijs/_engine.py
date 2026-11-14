@@ -48,7 +48,7 @@ class Engine:
         child_environment = process_environment(self.shell)
         # Sessions name their own proxy; the engine itself makes no requests.
         child_environment["RUYIJS_HTTP_PROXY"] = ""
-        self.default_tls = child_environment.get("NECKO_FIREFOX") or "159"
+        self.default_tls = child_environment.get("NECKO_FIREFOX") or "160"
         arguments = []
         try:
             self._pipe = Pipe()

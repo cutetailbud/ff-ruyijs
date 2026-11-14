@@ -2,7 +2,7 @@
 
 Architecture
 ============
-ruyijs provides a real Firefox 159 environment (SpiderMonkey + Necko).
+ruyijs provides a real Firefox 160 environment (SpiderMonkey + Necko).
 The Akamai JS runs natively — no deobfuscation, no algorithm reimplementation,
 no environment patching needed.
 
@@ -501,8 +501,8 @@ def main(argv=None):
     parser.add_argument("--timeout", type=float, default=180, help="Overall timeout (s)")
     parser.add_argument("--output", "-o", type=Path, help="JSON report file")
     parser.add_argument("--test-api", action="store_true", help="Test business API")
-    parser.add_argument("--tls", default="159",
-                        help="Firefox version (100-159) for the TLS ClientHello and the User-Agent")
+    parser.add_argument("--tls", default="160",
+                        help="Firefox version (100-160) for the TLS ClientHello and the User-Agent")
     px = parser.add_mutually_exclusive_group()
     px.add_argument("--proxy", help="HTTP(S) proxy")
     px.add_argument("--direct", action="store_true", help="Direct (no proxy)")
@@ -511,14 +511,14 @@ def main(argv=None):
     proxy = None if args.direct else (args.proxy or auto_proxy())
     report = {
         "status": "error", "target": args.url,
-        "transport": f"ruyijs-spidermonkey159+necko(tls={args.tls})",
+        "transport": f"ruyijs-spidermonkey160+necko(tls={args.tls})",
         "proxy": proxy or "direct",
         "passed": False, "scriptErrors": [], "method": None,
     }
 
     t0 = monotonic()
     log("=" * 60)
-    log(f"Akamai BM 3.x — ruyijs (SpiderMonkey 159 + Necko, Firefox {args.tls} TLS/UA)")
+    log(f"Akamai BM 3.x — ruyijs (SpiderMonkey 160 + Necko, Firefox {args.tls} TLS/UA)")
     log(f"Target: {args.url}")
     log(f"Proxy:  {report['proxy']}")
     log("=" * 60)

@@ -1,8 +1,8 @@
-"""Check that an installed ruyijs wheel sends Firefox 159's TLS ClientHello.
+"""Check that an installed ruyijs wheel sends Firefox 160's TLS ClientHello.
 
 Listens on localhost, opens https://localhost:PORT/ with a Context, records
 the first ClientHello, answers it with a fatal alert, and compares it with
-ci/firefox159-hello.json (captured from Firefox 159.0): legacy session id
+ci/firefox160-hello.json (captured from Firefox 160.0): legacy session id
 length, cipher suites, extensions in order, supported groups, key shares,
 signature algorithms, ALPN and supported versions. Exit status is non-zero on
 any difference unless --report-only is given.
@@ -18,7 +18,7 @@ from pathlib import Path
 
 from ruyijs import Context
 
-REFERENCE = Path(__file__).with_name("firefox159-hello.json")
+REFERENCE = Path(__file__).with_name("firefox160-hello.json")
 FIELDS = ("session_id_len", "cipher_suites", "extensions", "groups", "key_shares", "sig_algs", "alpn", "versions")
 GREASE = {0x0A0A + 0x1010 * i for i in range(16)}
 
@@ -134,11 +134,11 @@ def main():
         mark = "DIFF" if field in differences else "ok  "
         print(f"{mark} {field}: {hello[field]}")
         if field in differences:
-            print(f"     Firefox 159: {reference[field]}")
+            print(f"     Firefox 160: {reference[field]}")
     if differences:
-        print(f"{'REPORT' if report_only else 'FAIL'}: the ClientHello differs from Firefox 159 in {', '.join(differences)}")
+        print(f"{'REPORT' if report_only else 'FAIL'}: the ClientHello differs from Firefox 160 in {', '.join(differences)}")
         sys.exit(0 if report_only else 1)
-    print("ClientHello matches Firefox 159")
+    print("ClientHello matches Firefox 160")
 
 
 if __name__ == "__main__":

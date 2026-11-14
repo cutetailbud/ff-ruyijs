@@ -114,7 +114,7 @@ def _prefer_bundled_crt(shell):
         pass
 
 
-TLS_VERSIONS = tuple(str(v) for v in range(100, 160))
+TLS_VERSIONS = tuple(str(v) for v in range(100, 161))
 
 
 def resolve_shell(shell):
@@ -220,9 +220,9 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
     ``proxy`` selects an explicit HTTP(S) proxy URL for this context's network
     requests. None or an empty string uses direct connections. It does not
     alter the host environment or other contexts.
-    ``tls`` selects the Firefox release (100-159, e.g. ``"120"`` or ``120``)
+    ``tls`` selects the Firefox release (100-160, e.g. ``"120"`` or ``120``)
     whose TLS ClientHello, HTTP/2 settings and HTTP/3 priorities this context's
-    Necko transport sends. None keeps Firefox 159 (or NECKO_FIREFOX if set).
+    Necko transport sends. None keeps Firefox 160 (or NECKO_FIREFOX if set).
     It changes the network fingerprint only; pair it with a matching
     ``configure_fingerprint`` user agent when the page should agree.
 
@@ -285,7 +285,7 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
         if tls_version is not None:
             # The Necko child inherits this and builds its TLS profile from it.
             child_environment["NECKO_FIREFOX"] = tls_version
-        self.tls = tls_version or child_environment.get("NECKO_FIREFOX") or "159"
+        self.tls = tls_version or child_environment.get("NECKO_FIREFOX") or "160"
         try:
             self._pipe = Pipe()
             self._stderr = tempfile.TemporaryFile()
