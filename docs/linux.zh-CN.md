@@ -9,9 +9,9 @@
 
 | 组件 | Linux 后端 |
 | --- | --- |
-| JavaScript、Intl、Wasm | 来自 Firefox 159.0 源码（`firefox/` 子模块）的 SpiderMonkey |
+| JavaScript、Intl、Wasm | 来自 Firefox 160.0 源码（`firefox/` 子模块）的 SpiderMonkey |
 | DOM、iframe realm、事件、Worker | ruyijs 共用源码，跑在 POSIX 进程和 Unix socket 上 |
-| Canvas | Firefox 159 自己的 Skia，从子模块编译 |
+| Canvas | Firefox 160 自己的 Skia，从子模块编译 |
 | 字体 | fontconfig、FreeType 和 HarfBuzz，使用机器上已安装的字体 |
 | WebCrypto | OpenSSL 3 |
 | 图片 | libwebp、LittleCMS2 和 stb_image；AVIF 用随仓库提供的 libavif、dav1d 和 libyuv |

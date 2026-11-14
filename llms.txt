@@ -2,7 +2,7 @@
 
 > Run any site's JavaScript from Python — with the real Firefox engine.
 
-ff-ruyijs is a headless Firefox engine for Python. It embeds the genuine SpiderMonkey (Firefox 159) JavaScript engine and the Necko HTTP/1.1·2·3 networking stack in an isolated process, so Python code can execute a site's scripts, pass bot checks, and collect data — without a browser window, without a renderer, and without detection.
+ff-ruyijs is a headless Firefox engine for Python. It embeds the genuine SpiderMonkey (Firefox 160) JavaScript engine and the Necko HTTP/1.1·2·3 networking stack in an isolated process, so Python code can execute a site's scripts, pass bot checks, and collect data — without a browser window, without a renderer, and without detection.
 
 ## Install
 

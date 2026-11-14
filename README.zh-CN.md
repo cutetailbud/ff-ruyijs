@@ -37,14 +37,14 @@
 
 Headless Chrome 和 Playwright 给你的是一整个浏览器：一个负责 GPU 渲染、管理窗口、吃内存的进程，而反爬厂商已经花了多年时间学习如何识别它。ruyiJS 走的是相反的路 —— 只嵌入与自动化真正相关的 Firefox 内核，其余一概不要：
 
-- **原生引擎，而非模仿。** 货真价实的 SpiderMonkey（Firefox 159）与 Necko 网络栈，会像 Firefox 一样原样执行站点的 JavaScript、challenge、签名与指纹。
+- **原生引擎，而非模仿。** 货真价实的 SpiderMonkey（Firefox 160）与 Necko 网络栈，会像 Firefox 一样原样执行站点的 JavaScript、challenge、签名与指纹。
 - **真正无头。** 没有窗口、没有布局、没有渲染器。纯 JavaScript + Web API 环境，启动快、占用低。
 - **隔离且可复现。** 每个 `Context` 都是独立进程，拥有持续保存的 JavaScript 世界与自己的代理，会话之间互不干扰。
 - **需要时可离线。** 自己提供脚本与响应，无网络也能复跑整条已捕获的流程。
 
 如果你做网页抓取、逆向 Web JavaScript，或采集 challenge 背后的数据，它就适合你。如果普通 HTTP 客户端已经能拿到页面，那就不需要它。
 
-PyPI 上有 **Windows x64**、**macOS arm64** 和 **Linux x86_64** 的 wheel，需要 **Python 3.10+**。三个平台的 wheel 都由 GitHub Actions 从官方 Firefox 159.0 源码构建（见[从源码构建](#从源码构建)）。
+PyPI 上有 **Windows x64**、**macOS arm64** 和 **Linux x86_64** 的 wheel，需要 **Python 3.10+**。三个平台的 wheel 都由 GitHub Actions 从官方 Firefox 160.0 源码构建（见[从源码构建](#从源码构建)）。
 
 ## 📦 安装
 
@@ -77,7 +77,7 @@ print(ruyijs.__version__)   # 0.3.7
 git clone --recurse-submodules https://github.com/cutetailbud/ff-ruyijs
 ```
 
-子模块 `firefox/` 就是官方 Firefox 159.0 发布版（`mozilla-firefox/firefox` 的 `FIREFOX_159_0_RELEASE`，浅克隆）。构建 PyPI wheel 的工作流就是本地构建的参照：[`.github/workflows/wheels.yml`](.github/workflows/wheels.yml) 在 Windows 和 macOS 上运行 `ci/firefox/build.sh js|browser|toolchain` 与 `tools/build.py`，在 Linux 上依次运行 `ci/linux/build.sh` 的各个步骤。
+子模块 `firefox/` 就是官方 Firefox 160.0 发布版（`mozilla-firefox/firefox` 的 `FIREFOX_160_0_RELEASE`，浅克隆）。构建 PyPI wheel 的工作流就是本地构建的参照：[`.github/workflows/wheels.yml`](.github/workflows/wheels.yml) 在 Windows 和 macOS 上运行 `ci/firefox/build.sh js|browser|toolchain` 与 `tools/build.py`，在 Linux 上依次运行 `ci/linux/build.sh` 的各个步骤。
 
 ## 🚀 快速开始
 
@@ -109,9 +109,9 @@ with Context(proxy="http://127.0.0.1:7890") as context:
 
 ```
 Python  ──►  ruyiJS Context（独立进程）  ──►  目标站点
-                 ├─ SpiderMonkey —— Firefox 159 JS 引擎
+                 ├─ SpiderMonkey —— Firefox 160 JS 引擎
                  ├─ 38 个浏览器上下文 —— DOM · Canvas · Worker · iframe · …
-                 ├─ Skia —— Firefox 159 2D 图形，Canvas 的绘制后端
+                 ├─ Skia —— Firefox 160 2D 图形，Canvas 的绘制后端
                  └─ Necko —— HTTP/1.1 · 2 · 3，按上下文独立代理
 ```
 
@@ -157,13 +157,13 @@ with Context() as context:
 
 页面内 `fetch` 与 XHR 走真实 HTTP/1.1、2、3，并通过按上下文隔离的代理。用 `put_resource()` 自行提供响应即可离线复跑整条已捕获的流程。用 `net_log()` 查看每一次请求。macOS 上页面走直连 HTTPS。有 xpcshell 时代理仍走它；没有时走 HTTP CONNECT（`docs/macos.zh-CN.md`）。
 
-### 原生 TLS 指纹 —— 自由切换 Firefox 100 – 159
+### 原生 TLS 指纹 —— 自由切换 Firefox 100 – 160
 
 网络栈使用 Firefox 自身的 **Necko + NSS**（与真实 Firefox 完全一致的 TLS 库）。TLS ClientHello 中的密码套件、扩展、ALPN、密钥共享及其排列顺序均由真实 NSS 库生成，而非模拟，基于 TLS 指纹检测的反爬系统无法区分 ruyiJS 与真实 Firefox 的流量。
 
-Necko 传输层可**自由切换 Firefox 100 – 159 的 TLS 配置**，每个版本均精确复现该版本的 ClientHello，在线上呈现不同的 JA3 / JA4 指纹——可用于轮换浏览器身份、规避按版本封禁，或测试站点对不同 Firefox 版本的反应。
+Necko 传输层可**自由切换 Firefox 100 – 160 的 TLS 配置**，每个版本均精确复现该版本的 ClientHello，在线上呈现不同的 JA3 / JA4 指纹——可用于轮换浏览器身份、规避按版本封禁，或测试站点对不同 Firefox 版本的反应。
 
-每个 Context 用 `tls=` 选择版本（`"100"`–`"159"`，默认 159）。在 Windows 上，这会改变该 Context 的 Necko 传输层的 TLS ClientHello、HTTP/2 设置和 HTTP/3 优先级；如需页面内一致，请用 `configure_fingerprint` 设置对应版本的 User-Agent。在 macOS 上，库报告 NSS 3.131 时，直连 HTTPS 走 arm64 `libnecko_core.dylib`。外壳先找 `dist/necko_tls/libnecko_core.dylib`，再找暂存的 `dist/necko` 副本。已经设置的 `NECKO_CORE_LIBRARY` 优先。`Context()` 和 `Context(tls="100")` 都打开了 `https://example.com/`，状态 200，协议 `h2`。测到的握手是 159 为 15 个套件、5 个组、3 个 key share，100 为 17、6、2。簇边界 100、119、132、135、151、154、156、159 的库内 GET 也返回 200 和 `h2`，个数与配置表一致。其余版本没有逐个当页面打开。调用方没写的请求头和 HTTP/2 设置跟随 0.2.1 产品表里这个 `tls=` 的值。调用方写了的头优先。这份表里的 HTTP/3 字段不用，HTTP/3 也没有变。代理、库缺失或 NSS 版本不同仍走 donor xpcshell。这次没有重测代理。明文 HTTP 仍从这份 donor 返回 `necko 804b0033`（`docs/tls-profile.zh-CN.md`）。PyPI 上的 macOS wheel 不带 xpcshell，所以代理这种情况在那里不可用。
+每个 Context 用 `tls=` 选择版本（`"100"`–`"160"`，默认 160）。在 Windows 上，这会改变该 Context 的 Necko 传输层的 TLS ClientHello、HTTP/2 设置和 HTTP/3 优先级；如需页面内一致，请用 `configure_fingerprint` 设置对应版本的 User-Agent。在 macOS 上，库报告 NSS 3.131 时，直连 HTTPS 走 arm64 `libnecko_core.dylib`。外壳先找 `dist/necko_tls/libnecko_core.dylib`，再找暂存的 `dist/necko` 副本。已经设置的 `NECKO_CORE_LIBRARY` 优先。`Context()` 和 `Context(tls="100")` 都打开了 `https://example.com/`，状态 200，协议 `h2`。测到的握手是 159 为 15 个套件、5 个组、3 个 key share，100 为 17、6、2。簇边界 100、119、132、135、151、154、156、159 的库内 GET 也返回 200 和 `h2`，个数与配置表一致。其余版本没有逐个当页面打开。调用方没写的请求头和 HTTP/2 设置跟随 0.2.1 产品表里这个 `tls=` 的值。调用方写了的头优先。这份表里的 HTTP/3 字段不用，HTTP/3 也没有变。代理、库缺失或 NSS 版本不同仍走 donor xpcshell。这次没有重测代理。明文 HTTP 仍从这份 donor 返回 `necko 804b0033`（`docs/tls-profile.zh-CN.md`）。PyPI 上的 macOS wheel 不带 xpcshell，所以代理这种情况在那里不可用。
 
 ```python
 with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:
@@ -175,7 +175,7 @@ with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:
 
 ### Canvas 使用 Firefox 原生 Skia
 
-Canvas 2D 使用 Firefox 官方的 **Skia**（Firefox 159 正式版的 `gfx/skia`）绘制，而不是重新实现。
+Canvas 2D 使用 Firefox 官方的 **Skia**（Firefox 160 正式版的 `gfx/skia`）绘制，而不是重新实现。
 
 ### Python ↔ JavaScript 互通
 
@@ -291,7 +291,7 @@ JS 引擎是 Mozilla 官方的 **SpiderMonkey**，网络库是 Mozilla 官方的
 <details>
 <summary><b>需要下载浏览器吗？</b></summary>
 
-不需要。每个 wheel 都内置从 Firefox 159.0 源码编出的 SpiderMonkey + Necko 运行时，`pip install ruyijs` 不需要浏览器。macOS 上 pip 还会装好 Necko helper 需要的 Python 包。
+不需要。每个 wheel 都内置从 Firefox 160.0 源码编出的 SpiderMonkey + Necko 运行时，`pip install ruyijs` 不需要浏览器。macOS 上 pip 还会装好 Necko helper 需要的 Python 包。
 </details>
 
 <details>

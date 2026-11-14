@@ -37,14 +37,14 @@ made for web scraping, JS reverse engineering, data collection, and getting past
 
 Headless Chrome and Playwright hand you a whole browser: a GPU-rendering, window-managing, memory-hungry process that anti-bot vendors have spent years learning to detect. ruyiJS takes the opposite path — it embeds only the Firefox internals that matter for automation and leaves the rest behind:
 
-- **The real engine, not an impersonation.** Genuine SpiderMonkey (Firefox 159) and the Necko network stack execute a site's JavaScript, challenges, signatures, and fingerprints exactly as Firefox would.
+- **The real engine, not an impersonation.** Genuine SpiderMonkey (Firefox 160) and the Necko network stack execute a site's JavaScript, challenges, signatures, and fingerprints exactly as Firefox would.
 - **Truly headless.** No window, no layout, no renderer. A pure JavaScript + Web API environment that starts fast and stays light.
 - **Isolated and reproducible.** Each `Context` is its own process with a persistent JavaScript world and its own proxy, so sessions never leak into each other.
 - **Offline when you need it.** Serve scripts and responses yourself and replay a whole captured flow with no network.
 
 If you scrape, reverse-engineer web JavaScript, or collect data behind a challenge, it's for you. If a plain HTTP client already gets your pages, you don't need it.
 
-Wheels for **Windows x64**, **macOS arm64** and **Linux x86_64** are on PyPI for **Python 3.10+**. GitHub Actions builds each of them from the official Firefox 159.0 source ([build from source](#build-from-source)).
+Wheels for **Windows x64**, **macOS arm64** and **Linux x86_64** are on PyPI for **Python 3.10+**. GitHub Actions builds each of them from the official Firefox 160.0 source ([build from source](#build-from-source)).
 
 ## 📦 Installation
 
@@ -77,7 +77,7 @@ print(ruyijs.__version__)   # 0.3.7
 git clone --recurse-submodules https://github.com/cutetailbud/ff-ruyijs
 ```
 
-The `firefox/` submodule is the official Firefox 159.0 release (`mozilla-firefox/firefox` at `FIREFOX_159_0_RELEASE`, a shallow clone). The workflows that build the PyPI wheels are the reference for a local build: [`.github/workflows/wheels.yml`](.github/workflows/wheels.yml) runs `ci/firefox/build.sh js|browser|toolchain` and `tools/build.py` on Windows and macOS, and the steps of `ci/linux/build.sh` on Linux.
+The `firefox/` submodule is the official Firefox 160.0 release (`mozilla-firefox/firefox` at `FIREFOX_160_0_RELEASE`, a shallow clone). The workflows that build the PyPI wheels are the reference for a local build: [`.github/workflows/wheels.yml`](.github/workflows/wheels.yml) runs `ci/firefox/build.sh js|browser|toolchain` and `tools/build.py` on Windows and macOS, and the steps of `ci/linux/build.sh` on Linux.
 
 ## 🚀 Quick start
 
@@ -109,9 +109,9 @@ with Context(proxy="http://127.0.0.1:7890") as context:
 
 ```
 Python  ──►  ruyiJS Context (isolated process)  ──►  Target site
-                 ├─ SpiderMonkey — Firefox 159 JS engine
+                 ├─ SpiderMonkey — Firefox 160 JS engine
                  ├─ 38 browser contexts — DOM · Canvas · Workers · iframes · …
-                 ├─ Skia — Firefox 159 2D graphics behind Canvas
+                 ├─ Skia — Firefox 160 2D graphics behind Canvas
                  └─ Necko — HTTP/1.1 · 2 · 3, per-context proxy
 ```
 
@@ -157,13 +157,13 @@ with Context() as context:
 
 In-page `fetch` and XHR ride real HTTP/1.1, 2, and 3, through a proxy scoped to the context. Serve responses yourself with `put_resource()` to replay an entire captured flow offline. Inspect every request with `net_log()`. On macOS, pages load over direct HTTPS. A proxy uses the donor xpcshell when it is present, and an HTTP CONNECT tunnel into `libnecko_core` when it is not (`docs/macos.md`).
 
-### Native TLS fingerprint — switchable across Firefox 100 – 159
+### Native TLS fingerprint — switchable across Firefox 100 – 160
 
 The network stack is Firefox's own **Necko + NSS** (the same TLS library real Firefox uses). The TLS ClientHello — cipher suites, extensions, ALPN, key shares, and their ordering — is produced by the real NSS library, not an emulation, so bot-detection systems that inspect TLS cannot distinguish ruyiJS traffic from a genuine Firefox session.
 
-The Necko transport can **freely switch between Firefox 100 – 159 TLS profiles**. Each profile reproduces that version's exact ClientHello, giving you a different JA3 / JA4 fingerprint on the wire — useful for rotating browser identities, evading per-version blocks, or testing how a site reacts to different Firefox releases.
+The Necko transport can **freely switch between Firefox 100 – 160 TLS profiles**. Each profile reproduces that version's exact ClientHello, giving you a different JA3 / JA4 fingerprint on the wire — useful for rotating browser identities, evading per-version blocks, or testing how a site reacts to different Firefox releases.
 
-Choose the release per context with `tls=` (`"100"`–`"159"`; default 159). On Windows this sets the TLS ClientHello, HTTP/2 settings and HTTP/3 priorities of that context's Necko transport; set a matching user agent with `configure_fingerprint` when the page should agree. On macOS, direct HTTPS uses arm64 `libnecko_core.dylib` when that library reports NSS 3.131. The shell prefers `dist/necko_tls/libnecko_core.dylib`, then the staged `dist/necko` copy. An existing `NECKO_CORE_LIBRARY` wins. `Context()` and `Context(tls="100")` both opened `https://example.com/` at status 200 and protocol `h2`. The measured handshake was 15 ciphers, 5 groups, and 3 key shares for 159, and 17, 6, and 2 for 100. Library GETs at the cluster boundaries 100, 119, 132, 135, 151, 154, 156, and 159 also returned 200 and `h2`, and the counts matched the profile table. The other versions were not each opened as a page. Omitted request headers and the HTTP/2 settings follow the 0.2.1 product table for that `tls=` value. A header the caller sets wins. HTTP/3 fields in that table are unused, and HTTP/3 is unchanged. A proxy, a missing library, or a different NSS build stays on the donor xpcshell. The proxy was not retested in this run. Plain HTTP still returns `necko 804b0033` from that donor (`docs/tls-profile.md`). The PyPI macOS wheel has no xpcshell, so the proxy case is not available there.
+Choose the release per context with `tls=` (`"100"`–`"160"`; default 160). On Windows this sets the TLS ClientHello, HTTP/2 settings and HTTP/3 priorities of that context's Necko transport; set a matching user agent with `configure_fingerprint` when the page should agree. On macOS, direct HTTPS uses arm64 `libnecko_core.dylib` when that library reports NSS 3.131. The shell prefers `dist/necko_tls/libnecko_core.dylib`, then the staged `dist/necko` copy. An existing `NECKO_CORE_LIBRARY` wins. `Context()` and `Context(tls="100")` both opened `https://example.com/` at status 200 and protocol `h2`. The measured handshake was 15 ciphers, 5 groups, and 3 key shares for 159, and 17, 6, and 2 for 100. Library GETs at the cluster boundaries 100, 119, 132, 135, 151, 154, 156, and 159 also returned 200 and `h2`, and the counts matched the profile table. The other versions were not each opened as a page. Omitted request headers and the HTTP/2 settings follow the 0.2.1 product table for that `tls=` value. A header the caller sets wins. HTTP/3 fields in that table are unused, and HTTP/3 is unchanged. A proxy, a missing library, or a different NSS build stays on the donor xpcshell. The proxy was not retested in this run. Plain HTTP still returns `necko 804b0033` from that donor (`docs/tls-profile.md`). The PyPI macOS wheel has no xpcshell, so the proxy case is not available there.
 
 ```python
 with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:
@@ -175,7 +175,7 @@ with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:
 
 ### Canvas on Firefox's native Skia
 
-Canvas 2D draws through Firefox's own official **Skia** (`gfx/skia` from the Firefox 159 release), not a re-implementation.
+Canvas 2D draws through Firefox's own official **Skia** (`gfx/skia` from the Firefox 160 release), not a re-implementation.
 
 ### Python ↔ JavaScript bridge
 
@@ -291,7 +291,7 @@ The JS engine is Mozilla's official **SpiderMonkey** and the networking stack is
 <details>
 <summary><b>Do I need to download a browser?</b></summary>
 
-No. Every wheel bundles the SpiderMonkey + Necko runtime built from the Firefox 159.0 source, and `pip install ruyijs` needs no browser. On macOS, pip also installs the Python packages of the Necko helper.
+No. Every wheel bundles the SpiderMonkey + Necko runtime built from the Firefox 160.0 source, and `pip install ruyijs` needs no browser. On macOS, pip also installs the Python packages of the Necko helper.
 </details>
 
 <details>

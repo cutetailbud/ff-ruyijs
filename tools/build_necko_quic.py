@@ -1,4 +1,4 @@
-"""Build libnecko_quic.dylib from the Firefox 159 Neqo 0.32.0 crates.
+"""Build libnecko_quic.dylib from the Firefox 160 Neqo 0.33.0 crates.
 
 Cargo stays offline. Git dependencies inside the donor Neqo crates are
 rewritten in a temporary overlay so resolution does not try to clone
@@ -47,7 +47,7 @@ _FIXTURE_BLOCK = re.compile(
 
 
 def firefox_source(root: Path) -> Path:
-    """The Firefox 159 source tree: RUYIJS_FIREFOX_SRC, the firefox/ submodule,
+    """The Firefox source tree: RUYIJS_FIREFOX_SRC, the firefox/ submodule,
     or the sibling firefox-159 checkout of the maintainer layout."""
     override = os.environ.get("RUYIJS_FIREFOX_SRC", "")
     if override:

@@ -21,7 +21,7 @@ bool Configure(Tls* t, const Profile& p, const char* host, const char* peer, boo
   SSLVersionRange range{SSL_LIBRARY_VERSION_TLS_1_2, SSL_LIBRARY_VERSION_TLS_1_3};
   if (SSL_VersionRangeSet(fd, &range) != SECSuccess || SSL_SetURL(fd, host) != SECSuccess ||
       SSL_SetSockPeerID(fd, peer) != SECSuccess || SSL_AuthCertificateHook(fd, VerifyPeer, t) != SECSuccess) return false;
-  // Firefox 159's ClientHello (ci/firefox159-hello.json, checked by
+  // Firefox 160's ClientHello (ci/firefox160-hello.json, checked by
   // ci/hello_check.py) carries status_request, delegated_credentials and a
   // 32-byte legacy session id, and no post_handshake_auth; the Windows
   // necko_core.dll sends the same.

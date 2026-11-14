@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Linux x86_64 build of ruyijs against the Firefox 159.0 source in firefox/
+# Linux x86_64 build of ruyijs against the Firefox 160.0 source in firefox/
 # (the submodule; FIREFOX_SOURCE overrides the location). Each step is one step
 # of ci/linux/build-linux.yml; run them in order on Ubuntu 24.04:
 #
@@ -94,7 +94,7 @@ case "$step" in
     # a local CONNECT proxy.
     "${clean[@]}" "$venv/bin/python" "$root/ci/network_smoke.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/proxy_smoke.py"
-    # The ClientHello must be Firefox 159's (ci/firefox159-hello.json).
+    # The ClientHello must be Firefox 160's (ci/firefox160-hello.json).
     "${clean[@]}" "$venv/bin/python" "$root/ci/hello_check.py"
     # Several Contexts as sessions of one shared engine process.
     "${clean[@]}" "$venv/bin/python" "$root/ci/engine_check.py" --network ;;

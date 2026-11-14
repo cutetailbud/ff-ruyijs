@@ -4,7 +4,7 @@
 
 ## What is ff-ruyijs?
 
-ff-ruyijs is a **headless Firefox engine for Python** — it embeds the real SpiderMonkey (Firefox 159) JavaScript engine and the Necko HTTP stack so Python code can execute any site's JavaScript, pass bot checks, and collect data without a browser window.
+ff-ruyijs is a **headless Firefox engine for Python** — it embeds the real SpiderMonkey (Firefox 160) JavaScript engine and the Necko HTTP stack so Python code can execute any site's JavaScript, pass bot checks, and collect data without a browser window.
 
 - **Repository:** https://github.com/cutetailbud/ff-ruyijs
 - **License:** AGPL-3.0-only, or a commercial license from the author for closed-source use (see COMMERCIAL-LICENSE.md)
@@ -52,7 +52,7 @@ assets/                 README images and architecture diagrams
   `Engine`, which runs many Contexts in one process, each on its own thread with its own state (docs/engine.md).
 - Examples are run via `python -m ruyijs.examples <name>`.
 - All examples support `--proxy`, `--direct`, `--output`, `--help`.
-- Every wheel bundles its native runtime, built from the official Firefox 159.0 source in the `firefox/` submodule; no browser download is needed. The macOS wheel has no xpcshell. A proxy uses that binary when it is present, and an HTTP CONNECT tunnel into `libnecko_core` when it is not (`docs/macos.md`).
+- Every wheel bundles its native runtime, built from the official Firefox 160.0 source in the `firefox/` submodule; no browser download is needed. The macOS wheel has no xpcshell. A proxy uses that binary when it is present, and an HTTP CONNECT tunnel into `libnecko_core` when it is not (`docs/macos.md`).
 
 ## What NOT to do
 

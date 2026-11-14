@@ -184,8 +184,8 @@ def bundle(project, target):
     compile_bytecode(python, next((python.parent.parent / 'lib').glob('python3.*')))
     glibc = command('getconf', 'GNU_LIBC_VERSION')
     has_quic = any(target.glob('vendor/necko-derived/python/lib/python*/site-packages/necko/libnecko_quic.so'))
-    graphics = 'system Skia' if any(name.startswith('libskia.') for name in bundled) else 'Firefox 159 Skia 149 raster'
-    metadata = dict(platform='linux_x86_64', engine='SpiderMonkey 159', transport='standalone-necko+nss',
+    graphics = 'system Skia' if any(name.startswith('libskia.') for name in bundled) else 'Firefox 160 Skia 149 raster'
+    metadata = dict(platform='linux_x86_64', engine='SpiderMonkey 160', transport='standalone-necko+nss',
                     http=['http/1.1', 'h2'] + (['h3', 'WebTransport'] if has_quic else []), webcrypto='OpenSSL',
                     graphics=graphics, build_glibc=glibc, libraries=sorted(bundled))
     for package in ('libstb-dev', 'libharfbuzz-dev', 'libfreetype-dev', 'libfontconfig-dev'):

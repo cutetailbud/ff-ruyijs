@@ -124,7 +124,7 @@ def prepare(root, firefox):
     write_if_changed(config, '[source.crates-io]\nreplace-with="firefox"\n[source.firefox]\ndirectory=' +
         json.dumps(str(firefox / "third_party/rust")) + '\n')
     records = build / "neqo-upstream.json"
-    write_if_changed(records, json.dumps({"firefox": "159.0", "neqo": "0.32.0", "nss-rs": "0.16.1",
+    write_if_changed(records, json.dumps({"firefox": "160.0", "neqo": "0.33.0", "nss-rs": "0.16.1",
         "sha256": inventory}, indent=2) + '\n')
     sdk = root / "build/necko/source/dist"
     if not sdk.exists():

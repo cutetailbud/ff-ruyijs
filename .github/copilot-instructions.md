@@ -2,7 +2,7 @@
 
 ## Project overview
 
-ff-ruyijs is a headless Firefox engine for Python. It embeds SpiderMonkey (Firefox 159) and the Necko HTTP stack so Python can execute any site's JavaScript natively — no browser window, no renderer.
+ff-ruyijs is a headless Firefox engine for Python. It embeds SpiderMonkey (Firefox 160) and the Necko HTTP stack so Python can execute any site's JavaScript natively — no browser window, no renderer.
 
 - **Repository:** https://github.com/cutetailbud/ff-ruyijs
 - **License:** AGPL-3.0-only + commercial (dual license); Mozilla-derived code is MPL-2.0

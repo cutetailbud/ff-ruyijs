@@ -10,9 +10,9 @@ The same facts are written in [linux.zh-CN.md](linux.zh-CN.md).
 
 | Component | Linux backend |
 | --- | --- |
-| JavaScript, Intl, Wasm | SpiderMonkey from the Firefox 159.0 source (the `firefox/` submodule) |
+| JavaScript, Intl, Wasm | SpiderMonkey from the Firefox 160.0 source (the `firefox/` submodule) |
 | DOM, iframe realms, events, Worker | The shared ruyijs sources, on POSIX processes and Unix sockets |
-| Canvas | Firefox 159's own Skia, compiled from the submodule |
+| Canvas | Firefox 160's own Skia, compiled from the submodule |
 | Fonts | fontconfig, FreeType and HarfBuzz, with the fonts installed on the machine |
 | WebCrypto | OpenSSL 3 |
 | Images | libwebp, LittleCMS2 and stb_image; AVIF through the vendored libavif, dav1d and libyuv |

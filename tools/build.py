@@ -274,7 +274,7 @@ def main():
             unit, source_inputs = generate(donor, root, directory)
             sources = [(unit, "shell0"), *product_sources.sources(root)]
             # Both inputs come from a full Firefox browser build. Without one,
-            # use the headers recorded from Firefox 159 in tools/generated.
+            # use the headers recorded from Firefox 160 in tools/generated.
             recorded = root / "tools/generated"
             font_unit, font_inputs = geometry_fonts.prepare(
                 donor, directory, args.firefox_font_prefs, recorded / "firefox_font_prefs.h")

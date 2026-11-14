@@ -7,12 +7,29 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Firefox 160.0. The wheels are built from the official Firefox 160.0 release (`firefox/` submodule at
+  `FIREFOX_160_0_RELEASE`), and the Windows Necko transport is necko-standalone 0.8.3 (NSS 3.132, Neqo
+  0.33.0), with the local HTTP/1.1 and HTTP/3 patches re-applied and both native libraries rebuilt. The
+  User-Agent is `rv:160.0 … Firefox/160.0`, `tls=` accepts 100–160 and defaults to 160, and
+  `ci/hello_check.py` compares against a ClientHello captured from the official Firefox 160.0 build (the
+  same as 159's in every compared field). The macOS runtime is unchanged.
+- The web platform surface follows Firefox 160 on Windows: the speech recognition interfaces
+  (`SpeechRecognition`, `SpeechGrammar`, `SpeechGrammarList` with their `webkit` aliases,
+  `SpeechRecognitionAlternative`, `SpeechRecognitionErrorEvent`, `SpeechRecognitionEvent`,
+  `SpeechRecognitionPhrase`, `SpeechRecognitionResult`, `SpeechRecognitionResultList`, and
+  `SpeechRecognition.available()` / `install()`); `WebTransport.responseHeaders`;
+  `WebTransportDatagramDuplexStream.incomingMaxBufferedDatagrams` / `outgoingMaxBufferedDatagrams` in place of
+  the high-water marks; the `Highlight` and `HighlightRegistry` member order. With no recognition service,
+  `start()` waits as Firefox does without a model or a microphone.
 - Geometry reads after an inline style or attribute change reuse the unchanged parts of the last layout
   instead of laying out the whole page again: 1,500 siblings, `offsetHeight` after `setAttribute` 213 ms
   to 0.5 ms (#13, PR #33 by ladydd).
 
 ### Fixed
 
+- Aborting an in-flight `fetch()` with an `AbortController`, or calling `XMLHttpRequest.abort()` / `open()`,
+  stops the response transfer: the Necko helper carrying the request ends and the server sees the
+  connection close. The request was rejected but its response kept downloading to the end (#43).
 - Changing a text node with `data`, `nodeValue`, `appendData`, `replaceData` and the other CharacterData
   methods updates later geometry reads; they returned the layout from before the change.
 
