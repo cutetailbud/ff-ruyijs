@@ -36,8 +36,8 @@ bool InstallWebTransport(State& s,PageHelpers&) {
   if (!kit.Define("WebTransport",&kTransportClass,parent,TransportConstruct,&s.transport,1) || !ClearFace(s,s.transport)) return false;
   const char* methods[]={"getStats","exportKeyingMaterial","close","createBidirectionalStream","createUnidirectionalStream","createSendGroup"};
   for (int i=0;i<6;++i) if (!kit.Method(s.transport,"WebTransport",methods[i],TransportMethodCall,i==1?1:0,i)) return false;
-  const char* attrs[]={"ready","reliability","congestionControl","protocol","closed","draining","datagrams","incomingBidirectionalStreams","incomingUnidirectionalStreams"};
-  for (int i=0;i<9;++i) if (!kit.Accessor(s.transport,"WebTransport",attrs[i],TransportGet,nullptr,i)) return false;
+  const char* attrs[]={"ready","reliability","congestionControl","responseHeaders","protocol","closed","draining","datagrams","incomingBidirectionalStreams","incomingUnidirectionalStreams"};
+  for (int i=0;i<10;++i) if (!kit.Accessor(s.transport,"WebTransport",attrs[i],TransportGet,nullptr,i)) return false;
   JS::RootedObject reliable(cx,kit.Function(Reliable,"get supportsReliableOnly",0,0));
   JS::RootedObject none(cx),domConstructor(cx);JS::RootedValue value(cx);
   if (!reliable || !JS_DefineProperty(cx,s.transport.constructor,"supportsReliableOnly",reliable,none,JSPROP_ENUMERATE) ||

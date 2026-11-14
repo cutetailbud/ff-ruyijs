@@ -75,7 +75,7 @@ bool TransportWriteStream(State& s,JS::HandleObject endpoint,bool datagram,JS::M
   JS::RootedObject transport(s.cx,SlotObject(endpoint,WESession)),duplex(s.cx,SlotObject(transport,WTDatagrams));
   const bool defaultDatagram=datagram&&!duplex;
   JS::RootedObject controller(s.cx),prototype(s.cx,defaultDatagram?s.writableStream.prototype.get():datagram?s.transportDatagramsWritable.prototype.get():s.transportSend.prototype.get());
-  const double hwm=datagram&&duplex?JS::GetReservedSlot(duplex,WDOutgoingHwm).toNumber():1;
+  const double hwm=datagram&&duplex?JS::GetReservedSlot(duplex,WDOutgoingBuffered).toNumber():1;
   if (!NewNativeWritableStream(s,endpoint,kSink,hwm,prototype,stream,&controller)) return false;
   JS::SetReservedSlot(endpoint,WEWritable,JS::ObjectValue(*stream));JS::SetReservedSlot(endpoint,WEWriteController,JS::ObjectValue(*controller));return true;
 }

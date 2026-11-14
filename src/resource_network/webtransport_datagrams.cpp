@@ -10,7 +10,7 @@ JSObject* Receiver(JS::HandleValue value) {
   JSObject* object=value.isObject()?js::CheckedUnwrapStatic(&value.toObject()):nullptr;
   return object && JS::GetClass(object)==&kTransportDatagramsClass?object:nullptr;
 }
-const char* kNames[]={"","readable","writable","maxDatagramSize","incomingMaxAge","outgoingMaxAge","incomingHighWaterMark","outgoingHighWaterMark"};
+const char* kNames[]={"","readable","writable","maxDatagramSize","incomingMaxAge","outgoingMaxAge","incomingMaxBufferedDatagrams","outgoingMaxBufferedDatagrams"};
 }
 bool TransportDatagramGet(JSContext* cx,unsigned argc,JS::Value* vp) {
   auto args=JS::CallArgsFromVp(argc,vp);const unsigned slot=WebKit::Slot(args);JS::RootedObject object(cx,Receiver(args.thisv()));
@@ -21,9 +21,14 @@ bool TransportDatagramSet(JSContext* cx,unsigned argc,JS::Value* vp) {
   return TransportGuard(cx,[&] {
     auto args=JS::CallArgsFromVp(argc,vp);const unsigned slot=WebKit::Slot(args);JS::RootedObject object(cx,Receiver(args.thisv()));
     if (!object) return TransportBindingError(cx,(std::string("set ")+kNames[slot]).c_str(),"WebTransportDatagramDuplexStream");
+    // Firefox 160: the buffered-datagram limits are unsigned long, at least 1.
+    if (slot==WDIncomingBuffered || slot==WDOutgoingBuffered) {
+      uint32_t count;if (!JS::ToUint32(cx,args.get(0),&count)) return false;
+      JS::SetReservedSlot(object,slot,JS::DoubleValue(count?count:1));args.rval().setUndefined();return true;
+    }
     double value;if (!JS::ToNumber(cx,args.get(0),&value)) return false;
     if (std::isnan(value) || value<0) {
-      const char* detail=slot==WDIncomingAge?"IncomingMaxAge":slot==WDOutgoingHwm?"OutgoingHighWaterMark":"OutgoingMaxAge";
+      const char* detail=slot==WDIncomingAge?"IncomingMaxAge":"OutgoingMaxAge";
       return Error(cx,(std::string("WebTransportDatagramDuplexStream.")+kNames[slot]+" setter: Invalid "+detail).c_str(),true);
     }
     if (slot==WDIncomingAge || slot==WDOutgoingAge) {if (value==0)value=std::numeric_limits<double>::infinity();}

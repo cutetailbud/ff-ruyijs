@@ -46,7 +46,7 @@ bool TransportInitialStreams(State& s,JS::HandleObject transport) {
   JS::SetReservedSlot(datagrams,WDMaxSize,JS::Int32Value(1024));
   JS::SetReservedSlot(datagrams,WDIncomingAge,JS::DoubleValue(std::numeric_limits<double>::infinity()));
   JS::SetReservedSlot(datagrams,WDOutgoingAge,JS::DoubleValue(std::numeric_limits<double>::infinity()));
-  JS::SetReservedSlot(datagrams,WDIncomingHwm,JS::DoubleValue(1));JS::SetReservedSlot(datagrams,WDOutgoingHwm,JS::DoubleValue(5));
+  JS::SetReservedSlot(datagrams,WDIncomingBuffered,JS::DoubleValue(5));JS::SetReservedSlot(datagrams,WDOutgoingBuffered,JS::DoubleValue(5));
   JS::SetReservedSlot(transport,WTDatagrams,JS::ObjectValue(*datagrams));return true;
 }
 }

@@ -18,7 +18,7 @@ bool TransportInstallStreams(State& s) {
   auto& d=s.transportDatagrams;
   if (!Begin(s,d,"WebTransportDatagramDuplexStream",&kTransportDatagramsClass,object,none) ||
       !k.Method(d,"WebTransportDatagramDuplexStream","createWritable",TransportCreateWritable,0,0)) return false;
-  const char* names[]={"readable","writable","maxDatagramSize","incomingMaxAge","outgoingMaxAge","incomingHighWaterMark","outgoingHighWaterMark"};
+  const char* names[]={"readable","writable","maxDatagramSize","incomingMaxAge","outgoingMaxAge","incomingMaxBufferedDatagrams","outgoingMaxBufferedDatagrams"};
   for (int i=0;i<7;++i) if (!k.Accessor(d,"WebTransportDatagramDuplexStream",names[i],TransportDatagramGet,i>=3?TransportDatagramSet:nullptr,i+1)) return false;
   if (!TransportFinishFace(s,d,"WebTransportDatagramDuplexStream") ||
       !Begin(s,s.transportBidi,"WebTransportBidirectionalStream",&kTransportBidiClass,object,none) ||

@@ -117,7 +117,7 @@ bool Realm::Install() {
   const char* S = "SpeechSynthesis";
   const char* U = "SpeechSynthesisUtterance";
   const char* V = "SpeechSynthesisVoice";
-  if (!s.kit.Define(S, &kSynthesisClass, eventTarget, WebKit::Reject, &s.synthesis)) return false;
+  if (!InstallRecognition(s) || !s.kit.Define(S, &kSynthesisClass, eventTarget, WebKit::Reject, &s.synthesis)) return false;
   const char* methods[] = {"speak", "cancel", "pause", "resume", "getVoices"};
   for (int i = 0; i < 5; ++i)
     if (!s.kit.Method(s.synthesis, S, methods[i], SynthesisMethod, i == 0 ? 1 : 0, i)) return false;

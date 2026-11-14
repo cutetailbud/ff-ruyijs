@@ -37,11 +37,18 @@ inline constexpr int32_t kNoStep = INT32_MIN;
 struct State {
   State(JSContext* cx, JS::HandleObject page, PageHelpers& helpers, interaction::Realm& events)
       : cx(cx), kit(cx, page, helpers, this), events(events), synthesis(cx), utterance(cx),
-        voice(cx), instance(cx), dateNow(cx), date(cx) {}
+        voice(cx), grammar(cx), grammarList(cx), recognition(cx), alternative(cx), errorEvent(cx),
+        recognitionEvent(cx), phrase(cx), result(cx), resultList(cx), errorFields(cx), instance(cx),
+        dateNow(cx), date(cx) {}
   JSContext* cx;
   WebKit kit;
   interaction::Realm& events;
   WebFace synthesis, utterance, voice;
+  // Speech recognition (recognition.cpp, Firefox 160).
+  WebFace grammar, grammarList, recognition, alternative, errorEvent, recognitionEvent, phrase, result,
+      resultList;
+  // SpeechRecognitionErrorEvent fields, keyed by the event object.
+  JS::PersistentRootedObject errorFields;
   JS::PersistentRootedObject instance;
   JS::PersistentRootedObject dateNow, date;
   std::shared_ptr<VoiceList> voices;
@@ -72,6 +79,8 @@ bool Voices(State& state, JS::MutableHandleValue out);
 // enumeration is asynchronous, so getVoices() is empty before it lands).
 bool PostVoices(State& state);
 State& Owner(JS::HandleObject synthesis);
+// The Window-only speech recognition interfaces Firefox 160 exposes.
+bool InstallRecognition(State& state);
 JSObject* Queue(State& state);
 }
 #endif

@@ -47,7 +47,7 @@ bool TransportConstruct(JSContext* cx,unsigned argc,JS::Value* vp) {
 bool TransportGet(JSContext* cx,unsigned argc,JS::Value* vp) {
   auto args=JS::CallArgsFromVp(argc,vp);const int kind=WebKit::Slot(args);
   JS::RootedObject object(cx,args.thisv().isObject()?js::CheckedUnwrapStatic(&args.thisv().toObject()):nullptr);
-  const char* names[]={"get ready","get reliability","get congestionControl","get protocol","get closed","get draining","get datagrams","get incomingBidirectionalStreams","get incomingUnidirectionalStreams"};
+  const char* names[]={"get ready","get reliability","get congestionControl","get responseHeaders","get protocol","get closed","get draining","get datagrams","get incomingBidirectionalStreams","get incomingUnidirectionalStreams"};
   if (!object || JS::GetClass(object)!=&kTransportClass) {
     TransportBindingError(cx,names[kind],"WebTransport");
     return kind==WTGetReady || kind==WTGetClosed || kind==WTGetDraining?TransportRejectPending(cx,args.rval()):false;
@@ -56,7 +56,10 @@ bool TransportGet(JSContext* cx,unsigned argc,JS::Value* vp) {
     JS::RootedString text(cx,JS_NewStringCopyZ(cx,kind==WTGetCongestion?"default":JS::GetReservedSlot(object,WTWasReady).toBoolean()?"supports-unreliable":"pending"));
     if (!text) return false;args.rval().setString(text);return true;
   }
-  const unsigned slots[]={WTReady,0,0,WTProtocol,WTClosed,WTDraining,WTDatagrams,WTBidi,WTUni};
+  // Firefox 160: the CONNECT response's headers once the session is up;
+  // ruyijs's Necko session does not report them, so this stays null.
+  if (kind==WTGetResponseHeaders) {args.rval().setNull();return true;}
+  const unsigned slots[]={WTReady,0,0,0,WTProtocol,WTClosed,WTDraining,WTDatagrams,WTBidi,WTUni};
   args.rval().set(JS::GetReservedSlot(object,slots[kind]));return JS_WrapValue(cx,args.rval());
 }
 }

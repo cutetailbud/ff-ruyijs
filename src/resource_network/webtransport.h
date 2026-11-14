@@ -13,10 +13,10 @@ enum EndpointSlot { WESession,WEKind,WEStream,WEReadable,WEWritable,WEReadContro
   WEWriteController,WEGroup,WEOrder,WEReadPending,WESlots };
 enum class EndpointKind { ByteStream,Datagram,IncomingBidi,IncomingUni };
 enum DatagramSlot { WDSession,WDReadable,WDWritable,WDMaxSize,WDIncomingAge,WDOutgoingAge,
-  WDIncomingHwm,WDOutgoingHwm,WDSlots };
+  WDIncomingBuffered,WDOutgoingBuffered,WDSlots };
 enum RequestSlot { WRTicket,WRAction,WRPromise,WREndpoint,WRData,WROffset,WRNext,WRGroup,WROrder,WRCode,WRSize,WRSlots };
 enum TransportMethod { WTStats,WTExport,WTClose,WTCreateBidi,WTCreateUni,WTCreateGroup };
-enum TransportAttribute { WTGetReady,WTGetReliability,WTGetCongestion,WTGetProtocol,WTGetClosed,
+enum TransportAttribute { WTGetReady,WTGetReliability,WTGetCongestion,WTGetResponseHeaders,WTGetProtocol,WTGetClosed,
   WTGetDraining,WTGetDatagrams,WTGetBidi,WTGetUni };
 extern const JSClass kTransportClass,kTransportEndpointClass,kTransportDatagramsClass,
   kTransportBidiClass,kTransportGroupClass,kTransportRequestClass,kTransportErrorDataClass;
