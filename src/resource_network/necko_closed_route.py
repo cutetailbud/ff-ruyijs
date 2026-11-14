@@ -1,7 +1,7 @@
 """Closed route shared with the published 0.2.1 adapter.
 
 Cleartext uses the necko_socket_* and necko_exchange_* exports. HTTP/3 uses
-the necko_quic_* exports in front of Neqo 0.32.0. Python owns the UDP socket
+the necko_quic_* exports in front of Neqo 0.33.0. Python owns the UDP socket
 and certificate check. This module does not start the donor socket process.
 """
 
@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 
 from necko.client import NeckoError, NeckoResponse
 
-QUIC_VERSION = "neqo-0.32.0/nss-3.131"
+QUIC_VERSION = "neqo-0.33.0/nss-3.132"
 _H3_ENTRY = re.compile(r'\s*h3="([^"\\]+)"\s*((?:;[^,]*)?)')
 _ALT_SPLIT = re.compile(r",(?=\s*[a-zA-Z0-9-]+=)")
 _MA = re.compile(r";\s*ma\s*=\s*(\d+)")

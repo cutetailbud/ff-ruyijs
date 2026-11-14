@@ -21,8 +21,8 @@ bool Handshake(std::string_view type, const Value& p, Sender sender) {
         Number(p["pid"], 1) && Hex(p["nonce"], 32, true) && Hex(p["manifest"], 64, false) &&
         U64(p["qpcFrequency"]);
   return type == "ready" && Fields(p, {"manifest", "abi", "nss", "nspr", "wireProfile"}) &&
-      Hex(p["manifest"], 64, false) && Number(p["abi"], 1, 1) && OneOf(p["nss"], {"3.131"}) &&
-      OneOf(p["nspr"], {"4.40"}) && OneOf(p["wireProfile"], {"firefox159"});
+      Hex(p["manifest"], 64, false) && Number(p["abi"], 1, 1) && OneOf(p["nss"], {"3.131", "3.132"}) &&
+      OneOf(p["nspr"], {"4.40"}) && OneOf(p["wireProfile"], {"firefox159", "firefox160"});
 }
 bool Reservation(std::string_view type, const Value& p) {
   if (type == "reserve") return Reserve(p);

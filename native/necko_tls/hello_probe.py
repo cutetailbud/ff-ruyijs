@@ -277,7 +277,7 @@ def main() -> int:
     version = library.necko_tls_nss_version()
     profiles = load_profiles(profile_path)
     report = {"nss": (version or b"").decode("ascii", "replace")}
-    if version != b"3.131":
+    if version != b"3.132":
         report["pass"] = False
         print(json.dumps(report))
         return 1

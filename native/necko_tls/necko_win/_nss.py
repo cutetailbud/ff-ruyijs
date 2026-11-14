@@ -65,7 +65,7 @@ def _array(values):
 
 
 def native_profile(version):
-    """Build the necko_tls_profile for a Firefox version ("100".."159")."""
+    """Build the necko_tls_profile for a Firefox version ("100".."160")."""
     profile = TLS_PROFILES[version]
     arrays = [
         _array(profile.ciphers),
@@ -136,8 +136,8 @@ def configure_library(library):
     for name, (arguments, result) in signatures.items():
         function = getattr(library, "necko_tls_" + name)
         function.argtypes, function.restype = arguments, result
-    if library.necko_tls_nss_version() != b"3.131":
-        raise RuntimeError("firefox-159 requires the packaged NSS 3.131 runtime")
+    if library.necko_tls_nss_version() != b"3.132":
+        raise RuntimeError("firefox-160 requires the packaged NSS 3.132 runtime")
 
 
 # Trust identity -> {subject DER: intermediate certificate} from verified chains.

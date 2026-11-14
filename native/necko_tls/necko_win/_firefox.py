@@ -33,7 +33,7 @@ if _suffix_file.is_file():
         _SUFFIXES = PublicSuffixList(_suffix_data)
 else:
     _SUFFIXES = PublicSuffixList()
-DEFAULT_FIREFOX = "159"
+DEFAULT_FIREFOX = "160"
 
 
 def _user_agent(version):
@@ -154,14 +154,14 @@ PROFILES = {
         "quic": _quic(version),
         "h3_priority": _h3_priority(version),
     }
-    for version in range(100, 160)
+    for version in range(100, 161)
 }
 FIREFOX_VERSIONS = tuple(PROFILES)
 USER_AGENT = PROFILES[DEFAULT_FIREFOX]["user_agent"]
 
 
 def firefox_version(value):
-    """Normalize a Firefox version choice ("158", "159.0", "firefox-158").
+    """Normalize a Firefox version choice ("158", "160.0", "firefox-158").
 
     None falls back to the NECKO_FIREFOX environment variable, then
     DEFAULT_FIREFOX.

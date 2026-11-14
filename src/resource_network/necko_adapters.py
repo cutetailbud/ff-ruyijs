@@ -1,6 +1,6 @@
 """Necko/NSS session for the worker frames.
 
-Direct HTTPS uses libnecko_core when that library reports NSS 3.131.
+Direct HTTPS uses libnecko_core when that library reports NSS 3.132.
 Direct cleartext HTTP uses the recovered socket and HTTP/1 exchange.
 A response Alt-Svc h3 entry is remembered for that origin. The next
 direct request uses necko_quic and the linked Neqo client. A proxy uses

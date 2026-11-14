@@ -1,4 +1,4 @@
-//! JSON bridge in front of the Firefox 159 Neqo 0.32.0 crates.
+//! JSON bridge in front of the Firefox 160 Neqo 0.33.0 crates.
 //!
 //! Python owns the UDP socket and certificate decision. This library does not
 //! start a socket process and does not link neqo_glue. Profile numbers are
@@ -32,7 +32,7 @@ use nss::AuthenticationStatus;
 use nss::cert::CertificateCompressor;
 use serde_json::{Value, json};
 
-const VERSION_OK: &str = "neqo-0.32.0/nss-3.131";
+const VERSION_OK: &str = "neqo-0.33.0/nss-3.132";
 const COMMAND_LIMIT: usize = 0x200001;
 const CANCEL_DEFAULT: AppError = 0x10c;
 
@@ -73,10 +73,10 @@ fn version_label() -> &'static str {
     let ok = NSS_OK.with(|slot| *slot.borrow());
     if ok {
         VERSION_OK
-    } else if nss_text().contains("3.131") {
+    } else if nss_text().contains("3.132") {
         VERSION_OK
     } else {
-        "neqo-0.32.0/nss-mismatch"
+        "neqo-0.33.0/nss-mismatch"
     }
 }
 
@@ -962,7 +962,7 @@ pub extern "C" fn necko_quic_init() -> c_int {
         NSS_OK.with(|slot| *slot.borrow_mut() = false);
         return 1;
     }
-    let ok = nss_text().contains("3.131");
+    let ok = nss_text().contains("3.132");
     NSS_OK.with(|slot| *slot.borrow_mut() = ok);
     if ok { 0 } else { 1 }
 }

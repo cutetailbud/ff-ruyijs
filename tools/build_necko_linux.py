@@ -8,7 +8,7 @@ vendor/necko-derived/python/bin/python3 beside dist/, as on macOS). It holds:
   verified by SHA-256 and extracted unchanged except for the Linux patches
   below, with src/resource_network/necko_oneshot.py as ruyijs_necko/oneshot.py
   (tools/build.py installs the same file on Windows and macOS);
-- NSS 3.131 and NSPR 4.40 built from the Firefox source tree;
+- NSS 3.132 and NSPR 4.40 built from the Firefox source tree;
 - libnecko_core.so, the Linux implementation of the adapter's native ABI
   (native/necko_posix/src), and with --http3 libnecko_quic.so
   (tools/build_neqo_linux.py).
@@ -186,7 +186,7 @@ def main():
              "--output", target])
     http3 = (target / "libnecko_quic.so").is_file()
     (runtime / "backend.json").write_text(json.dumps({"backend": "standalone-necko+nss",
-        "nss": "3.131", "http": ["http/1.1", "h2"] + (["h3"] if http3 else []), "http3": http3,
+        "nss": "3.132", "http": ["http/1.1", "h2"] + (["h3"] if http3 else []), "http3": http3,
         "python": sys.version.split()[0]}, indent=2) + "\n", encoding="utf-8")
 
 

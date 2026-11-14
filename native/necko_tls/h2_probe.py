@@ -104,7 +104,7 @@ def main() -> int:
     library = ct.CDLL(str(library_path))
     configure_library(library)
     report = {"nss": library.necko_tls_nss_version().decode("ascii")}
-    ok = report["nss"] == "3.131"
+    ok = report["nss"] == "3.132"
     for version in ("100", "159"):
         try:
             item = fetch(library, version)

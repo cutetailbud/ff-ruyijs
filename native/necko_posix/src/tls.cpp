@@ -1,4 +1,4 @@
-// Native NSS 3.131 implementation of the upstream necko_tls ABI.
+// Native NSS 3.132 implementation of the upstream necko_tls ABI.
 #include "tls_io.h"
 #include <nss.h>
 #include <ssl.h>

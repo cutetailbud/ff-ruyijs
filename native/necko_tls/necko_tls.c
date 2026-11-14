@@ -669,9 +669,9 @@ NECKO_EXPORT const char *necko_tls_nss_version(void) {
         return "";
     }
     version = NSS_GetVersion();
-    if (version && strncmp(version, "3.131", 5) == 0 &&
+    if (version && strncmp(version, "3.132", 5) == 0 &&
         (version[5] == '\0' || version[5] == ' ' || version[5] == '.')) {
-        return "3.131";
+        return "3.132";
     }
     return version ? version : "";
 }
