@@ -34,13 +34,14 @@ void AsyncHttp::Launch(uint64_t id) noexcept {
     // The transport thread leases helpers of the owning session's partition.
     auto task = [inbox = inbox_, outcome = job.outcome, method = exchange.method(),
                  url = exchange.url(), headers = exchange.headers(), body = exchange.body(),
-                 remaining = exchange.remaining(), partition = CurrentPartition()]() noexcept {
+                 remaining = exchange.remaining(), partition = CurrentPartition(),
+                 cancel = job.cancel]() noexcept {
       PartitionScope scope(partition);
       outcome->transport = true;
       outcome->result = {};
       try {
         outcome->result.ok = NeckoHttp(method, url, headers, body,
-                                       &outcome->result.response, remaining);
+                                       &outcome->result.response, remaining, cancel.get());
       } catch (const std::bad_alloc&) {
         outcome->result.outcome = AsyncHttpOutcome::OutOfMemory;
       } catch (...) { outcome->result.outcome = AsyncHttpOutcome::LaunchFailure; }

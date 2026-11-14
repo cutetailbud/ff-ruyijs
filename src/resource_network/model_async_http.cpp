@@ -40,10 +40,12 @@ void AsyncHttp::Cancel(const std::shared_ptr<AsyncHttpSource>& source,AsyncHttpT
   if (!source || source->lifetime!=lifetime_ || !ticket.id) return;
   auto found=jobs_.find(ticket.id);
   if (found==jobs_.end() || found->second->source!=source) return;
+  // A running transport stops its helper transfer now (issue #43); its late
+  // outcome still returns the capacity.
+  found->second->cancel->Cancel();
   jobs_.erase(found);
   std::erase(queued_,ticket.id);
   inbox_->TrimLocal([&](uint64_t id){return jobs_.find(id)!=jobs_.end();});
-  // A running transport owns only native inputs; its late result returns capacity.
   PumpQueue();
 }
 Status StartAsyncHttp(const std::shared_ptr<AsyncHttpSource>& source,const NativeHttpRequest& request,

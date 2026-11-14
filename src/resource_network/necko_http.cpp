@@ -113,10 +113,11 @@ std::string OriginOf(const std::string& url) {
   return origin;
 }
 bool Acquire(const PartitionRef& partition, const std::string& origin, ULONGLONG deadline,
-             Lease* lease) {
+             Lease* lease, NeckoCancellation* cancel) {
   auto& pool = Sessions();
   std::unique_lock<std::mutex> guard(pool.lock);
   for (;;) {
+    if (cancel && cancel->Cancelled()) return false;
     Slot* chosen = nullptr;
     std::unique_ptr<Slot> evicted;
     size_t busy = 0, owned = 0;
@@ -162,8 +163,36 @@ bool Acquire(const PartitionRef& partition, const std::string& origin, ULONGLONG
   }
 }
 }
+void NeckoCancellation::Cancel() noexcept {
+  {
+    std::lock_guard<std::mutex> guard(lock_);
+    if (cancelled_) return;
+    cancelled_ = true;
+    if (helper_) helper_->Cancel();
+  }
+  // Wakes a request waiting for a helper. Taking the pool lock first means
+  // that request is either before its cancellation check or already waiting.
+  auto& pool = Sessions();
+  { std::lock_guard<std::mutex> guard(pool.lock); }
+  pool.available.notify_all();
+}
+bool NeckoCancellation::Cancelled() noexcept {
+  std::lock_guard<std::mutex> guard(lock_);
+  return cancelled_;
+}
+bool NeckoCancellation::Attach(NeckoHelper* helper) noexcept {
+  std::lock_guard<std::mutex> guard(lock_);
+  if (cancelled_) return false;
+  helper_ = helper;
+  return true;
+}
+void NeckoCancellation::Detach() noexcept {
+  std::lock_guard<std::mutex> guard(lock_);
+  helper_ = nullptr;
+}
 bool NeckoHttp(const std::string& method, const std::string& url, const HeaderPairs& headers,
-               const std::string& body, HttpResult* result, uint32_t timeoutMs) {
+               const std::string& body, HttpResult* result, uint32_t timeoutMs,
+               NeckoCancellation* cancel) {
   const ULONGLONG deadline = GetTickCount64() + timeoutMs;
   const std::string origin = OriginOf(url);
   const PartitionRef partition = CurrentPartition();
@@ -174,8 +203,9 @@ bool NeckoHttp(const std::string& method, const std::string& url, const HeaderPa
   // the server and must be returned without transport-level retry.
   for (unsigned attempt = 0; attempt != 2; ++attempt) {
     Lease lease;
-    if (!Acquire(partition, origin, deadline, &lease)) {
-      result->error = "Necko session capacity deadline exceeded";
+    if (!Acquire(partition, origin, deadline, &lease, cancel)) {
+      result->error = cancel && cancel->Cancelled() ? "Necko request aborted"
+                                                    : "Necko session capacity deadline exceeded";
       return false;
     }
     auto& session = lease.slot->session;
@@ -188,10 +218,22 @@ bool NeckoHttp(const std::string& method, const std::string& url, const HeaderPa
         return false;
       }
     }
+    if (cancel && !cancel->Attach(&session->worker)) {
+      result->error = "Necko request aborted";
+      return false;
+    }
     HttpResult candidate;
     bool framed = false;
     const bool written = WriteNeckoRequest(session->input, method, url, headers, body, deadline);
     const bool read = written && ReadNeckoResponse(session->output, &candidate, deadline, &framed);
+    if (cancel) cancel->Detach();
+    // A cancelled transfer may have ended its helper, even after a complete
+    // response; that session is not reused and the request is not retried.
+    if (cancel && cancel->Cancelled()) {
+      session.reset();
+      result->error = "Necko request aborted";
+      return false;
+    }
     if (read) {
       *result = std::move(candidate);
       return true;

@@ -1,6 +1,7 @@
 #pragma once
 #include "resource_network/async_http.h"
 #include "resource_network/http_exchange.h"
+#include "resource_network/necko_http.h"
 #include <condition_variable>
 #include <mutex>
 
@@ -61,6 +62,8 @@ struct AsyncHttp::Job {
   HttpExchange exchange;
   AsyncHttpCompletion completion;
   Done legacy;
+  // Shared with its running transport thread; Cancel ends that transfer.
+  std::shared_ptr<NeckoCancellation> cancel = std::make_shared<NeckoCancellation>();
   Job(const std::shared_ptr<AsyncHttpSource>& owner, const NativeHttpRequest& request,
       const AsyncHttpCompletion& callback, Done done)
       : source(owner), outcome(std::make_shared<Outcome>()),

@@ -71,6 +71,11 @@ void Arrived(void* target, AsyncHttpResult&& result) noexcept {
   if (!s.xhrTask(s.xhrTaskContext, task)) JS_ClearPendingException(s.cx);
 }
 }  // namespace
+void XhrCancelTransfer(XhrRecord& r) {
+  const AsyncHttpTicket ticket = r.ticket;
+  r.ticket = {};
+  if (ticket.id && r.owner) CancelAsyncHttp(r.owner->asyncSource, ticket);
+}
 bool XhrDeliver(JS::HandleObject self) {
   auto& r = XhrData(self);
   auto& s = *r.owner;
@@ -91,8 +96,10 @@ bool XhrDeliver(JS::HandleObject self) {
     flight->generation = r.state.generation;
     AsyncHttpTicket ticket;
     if (StartAsyncHttp(s.asyncSource, {r.method, r.url, r.requestHeaders, r.outgoing, RedirectMode::Follow, options},
-                       {flight, Arrived}, &ticket).code == ErrorCode::None)
+                       {flight, Arrived}, &ticket).code == ErrorCode::None) {
+      r.ticket = ticket;
       return true;
+    }
   }
   return s.xhrTask(s.xhrTaskContext, task);
 }

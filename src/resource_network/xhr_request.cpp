@@ -21,6 +21,8 @@ bool Open(JSContext* cx, const JS::CallArgs& args, JS::HandleObject self) {
   if (!PageBaseURL(*r.owner, &base)) return false;
   if (input.empty()) url = base;
   else if (!ResolveURL(base, input, &url)) return XhrException(*r.owner, "SyntaxError");
+  // XHR open() step 12: terminate the ongoing fetch.
+  XhrCancelTransfer(r);
   r.method = std::move(method); r.url = std::move(url);
   r.response = HttpResult{}; r.requestHeaders.clear(); r.outgoing.clear(); r.mime.clear();
   r.prepared.reset();
@@ -52,6 +54,8 @@ bool Send(JSContext* cx, const JS::CallArgs& args, JS::HandleObject self) {
 }
 bool Abort(JS::HandleObject self) {
   auto& r = XhrData(self);
+  // XHR abort() step 1: abort the fetch controller.
+  XhrCancelTransfer(r);
   if (!r.state.abort()) return true;
   r.response = HttpResult{};
   r.prepared.reset();

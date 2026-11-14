@@ -15,6 +15,7 @@ namespace ruyijs::resource_network {
 namespace {
 void Unlink(XhrRecord& r) {
   if (!r.owner) return;
+  XhrCancelTransfer(r);
   if (r.previous) r.previous->next = r.next;
   else r.owner->xhrRecords = r.next;
   if (r.next) r.next->previous = r.previous;
