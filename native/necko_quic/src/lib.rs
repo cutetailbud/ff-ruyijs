@@ -577,10 +577,13 @@ fn command_webtransport(session: &mut Session, body: &Value) -> Result<Value, St
             let id = required_stream(body, "session")?;
             let encoded = body.get("data").and_then(Value::as_str).unwrap_or("");
             let data = b64_decode(encoded).map_err(|_| "webtransport datagram is not base64".to_string())?;
-            let queued = session
+            // Neqo 0.33: the default send group and order (as its own CONNECT-UDP
+            // sends do); only a refused datagram was not queued.
+            let outcome = session
                 .client
-                .webtransport_send_datagram(id, &data, None::<u64>, now)
+                .webtransport_send_datagram(id, &data, None::<u64>, now, SendGroupId::new(0), 0)
                 .map_err(|error| error.to_string())?;
+            let queued = !matches!(outcome, neqo_transport::DatagramQueueOutcome::Rejected);
             Ok(json!({"queued": queued}))
         }
         "reset" => {

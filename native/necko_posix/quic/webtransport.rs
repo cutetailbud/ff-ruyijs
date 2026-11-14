@@ -2,7 +2,7 @@ use std::time::Instant;
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use neqo_common::Header;
 use neqo_http3::{webtransport::ClientSession, SendGroupId};
-use neqo_transport::{StreamId, StreamType};
+use neqo_transport::{DatagramQueueOutcome, StreamId, StreamType};
 use serde_json::{Value, json};
 use crate::{Result, client::Session, err, number, text};
 
@@ -66,7 +66,10 @@ pub fn call(session: &mut Session, v: &Value) -> Result<Value> {
         "datagram" => {
             let data = B64.decode(text(v,"data")?).map_err(err)?;
             if data.len() > 65536 { return Err("Datagram exceeds limit".into()); }
-            if !client.webtransport_send_datagram(id,&data,None,now).map_err(err)? {
+            // Neqo 0.33: the default send group and order (as its own CONNECT-UDP
+            // sends do); only a refused datagram was not queued.
+            let outcome = client.webtransport_send_datagram(id,&data,None,now,SendGroupId::new(0),0).map_err(err)?;
+            if matches!(outcome, DatagramQueueOutcome::Rejected) {
                 return Err("WebTransport datagram queue is full".into());
             }
             Ok(json!({}))
