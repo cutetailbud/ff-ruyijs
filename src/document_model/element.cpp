@@ -21,7 +21,7 @@ static bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
     return Value(cx, value ? DomStringView(*value) : DomStringView(), args.rval());
   }
   NodeSnapshot value;
-  if (!state.Check(state.model.Inspect(entry->key, &value))) return false;
+  if (!state.Check(state.model.Inspect(entry->key, &value, Model::kInspectNames))) return false;
   if (field == Tag) return Value(cx, DomStringView(value.node_name), args.rval());
   return Value(cx, field == Local ? value.local_name : field == Prefix ? value.prefix : value.namespace_uri,
                args.rval());

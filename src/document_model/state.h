@@ -110,6 +110,9 @@ struct Wrapper {
   bool rooted = false;
   bool dead = false;
   bool formSubmitting = false, formConstructing = false, formResetting = false, clickInProgress = false;
+  // Whether the node is an HTMLFormElement: -1 not read yet. A node's
+  // interface never changes, and the resolve hook asks on every lookup (#35).
+  int8_t isForm = -1;
   uint64_t formNavigationVersion = 0;
   uint32_t imageGeneration = 0;
   bool imageComplete = true;

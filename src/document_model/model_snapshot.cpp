@@ -2,46 +2,58 @@
 
 namespace ruyijs::document_model {
 Status Model::Inspect(NodeKey key, NodeSnapshot* result) const noexcept {
+  return Inspect(key, result, kInspectAll);
+}
+Status Model::Inspect(NodeKey key, NodeSnapshot* result, uint32_t parts) const noexcept {
   return Protect([&] {
     const auto& owner = State().owner(key); const auto& node = owner.require(key.node);
     NodeSnapshot value; value.key = key; value.kind = NodeKind(node.node_type());
     value.document_mode = owner.mode() == domain::DocumentMode::Html ? DocumentMode::Html : DocumentMode::Xml;
-    value.node_name = node.node_name16(); value.node_value = node.node_value16();
     value.owner_document = node.node_type() == domain::NodeType::Document ? NodeKey{} : Key(key.document,owner.id());
-    value.parent = Key(key.document,node.parent_id());
-    value.parent_element = owner.get_element(node.parent_id()) ? value.parent : NodeKey{};
-    value.first_child = Key(key.document,node.first_child_id()); value.last_child = Key(key.document,node.last_child_id());
-    value.child_count = node.child_count(); value.root = Key(key.document,owner.root_id(key.node));
-    value.composed_root = Key(key.document, owner.composed_root_id(key.node));
-    value.is_connected = value.composed_root.node == owner.id();
     value.shadow_host = Key(key.document, node.shadow_host_id());
     value.shadow_root = Key(key.document, node.shadow_root_id());
-    if (node.parent_id()) {
+    if (parts & kInspectNames) value.node_name = node.node_name16();
+    if (parts & kInspectValue) value.node_value = node.node_value16();
+    if (parts & kInspectTree) {
+      value.parent = Key(key.document,node.parent_id());
+      value.parent_element = owner.get_element(node.parent_id()) ? value.parent : NodeKey{};
+      value.first_child = Key(key.document,node.first_child_id()); value.last_child = Key(key.document,node.last_child_id());
+      value.child_count = node.child_count();
+    }
+    if (parts & kInspectRoots) {
+      value.root = Key(key.document,owner.root_id(key.node));
+      value.composed_root = Key(key.document, owner.composed_root_id(key.node));
+      value.is_connected = value.composed_root.node == owner.id();
+    }
+    if ((parts & kInspectSiblings) && node.parent_id()) {
       const auto& parent = owner.require(node.parent_id()); size_t index = parent.index_of_child(key.node);
       if (index) value.previous_sibling = Key(key.document,parent.child_ids()[index-1]);
       if (index+1 < parent.child_count()) value.next_sibling = Key(key.document,parent.child_ids()[index+1]);
     }
-    if (const auto* element = owner.get_element(key.node)) {
-      value.local_name = element->tag_name().local16(); value.is_html_element = element->tag_name().html();
-      if (!element->tag_name().namespace16().empty()) value.namespace_uri = DomString(element->tag_name().namespace16());
-      if (!element->tag_name().prefix16().empty()) value.prefix = DomString(element->tag_name().prefix16());
-      value.interface_name = domain::ElementFactory::interface_name_static(element->tag_name());
-    } else if (value.kind == NodeKind::Document) {
-      value.interface_name = value.document_mode == DocumentMode::Html ? "HTMLDocument"
-          : owner.metadata().xml_parsed() ? "XMLDocument" : "Document";
-    } else if (value.kind == NodeKind::DocumentFragment) {
-      value.interface_name = node.shadow_host_id() ? "ShadowRoot" : "DocumentFragment";
-    } else if (value.kind == NodeKind::DocumentType) {
-      value.interface_name = "DocumentType";
-      value.cloneable = static_cast<const domain::DocumentTypeNode&>(node).cloneable();
-      value.public_id = static_cast<const domain::DocumentTypeNode&>(node).public_id();
-      value.system_id = static_cast<const domain::DocumentTypeNode&>(node).system_id();
-    } else if (value.kind == NodeKind::ProcessingInstruction) {
-      value.interface_name = "ProcessingInstruction";
-      value.data_length = static_cast<const domain::CharacterData&>(node).length();
-    } else {
-      value.interface_name = value.kind == NodeKind::Text ? "Text" : "Comment";
-      value.data_length = static_cast<const domain::CharacterData&>(node).length();
+    // Names and values share the per-kind classification.
+    if (parts & (kInspectNames | kInspectValue)) {
+      if (const auto* element = owner.get_element(key.node)) {
+        value.local_name = element->tag_name().local16(); value.is_html_element = element->tag_name().html();
+        if (!element->tag_name().namespace16().empty()) value.namespace_uri = DomString(element->tag_name().namespace16());
+        if (!element->tag_name().prefix16().empty()) value.prefix = DomString(element->tag_name().prefix16());
+        value.interface_name = domain::ElementFactory::interface_name_static(element->tag_name());
+      } else if (value.kind == NodeKind::Document) {
+        value.interface_name = value.document_mode == DocumentMode::Html ? "HTMLDocument"
+            : owner.metadata().xml_parsed() ? "XMLDocument" : "Document";
+      } else if (value.kind == NodeKind::DocumentFragment) {
+        value.interface_name = node.shadow_host_id() ? "ShadowRoot" : "DocumentFragment";
+      } else if (value.kind == NodeKind::DocumentType) {
+        value.interface_name = "DocumentType";
+        value.cloneable = static_cast<const domain::DocumentTypeNode&>(node).cloneable();
+        value.public_id = static_cast<const domain::DocumentTypeNode&>(node).public_id();
+        value.system_id = static_cast<const domain::DocumentTypeNode&>(node).system_id();
+      } else if (value.kind == NodeKind::ProcessingInstruction) {
+        value.interface_name = "ProcessingInstruction";
+        value.data_length = static_cast<const domain::CharacterData&>(node).length();
+      } else {
+        value.interface_name = value.kind == NodeKind::Text ? "Text" : "Comment";
+        value.data_length = static_cast<const domain::CharacterData&>(node).length();
+      }
     }
     *result = std::move(value);
   });

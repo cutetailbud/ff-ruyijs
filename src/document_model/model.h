@@ -285,6 +285,13 @@ class Model final {
 
 
   Status Inspect(NodeKey node, NodeSnapshot* result) const noexcept;
+  // Inspect limited to the parts a getter reads. key, kind, document_mode,
+  // owner_document and the shadow links are always filled; the rest only for
+  // the requested parts. kInspectSiblings scans the parent's child list and
+  // kInspectRoots walks the ancestors, so a getter asks only for what it uses (#35).
+  static constexpr uint32_t kInspectNames = 1, kInspectTree = 2, kInspectSiblings = 4,
+                            kInspectRoots = 8, kInspectValue = 16, kInspectAll = 31;
+  Status Inspect(NodeKey node, NodeSnapshot* result, uint32_t parts) const noexcept;
   // The node type only. Interface receivers use this instead of Inspect,
   // which also names siblings and copies strings they do not read.
   Status Kind(NodeKey node, NodeKind* result) const noexcept;

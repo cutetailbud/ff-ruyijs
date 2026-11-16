@@ -10,10 +10,15 @@ Wrapper* FormObject(JS::HandleObject object) {
   auto* entry = static_cast<Wrapper*>(JS::GetReservedSlot(object, 0).toPrivate());
   if (!entry || entry->dead || !entry->owner || entry->owner->syncing) return nullptr;
   if (entry->owner->Find(entry->key) != entry) return nullptr;
-  NodeSnapshot node;
-  if (entry->owner->model.Inspect(entry->key, &node).code != ErrorCode::None ||
-      std::strcmp(node.interface_name, "HTMLFormElement")) return nullptr;
-  return entry;
+  // Every property lookup that misses a node's own properties (nodeType, id,
+  // ...) passes here: read the interface once per wrapper, never the siblings (#35).
+  if (entry->isForm < 0) {
+    NodeSnapshot node;
+    if (entry->owner->model.Inspect(entry->key, &node, Model::kInspectNames).code != ErrorCode::None)
+      return nullptr;
+    entry->isForm = !std::strcmp(node.interface_name, "HTMLFormElement");
+  }
+  return entry->isForm ? entry : nullptr;
 }
 }
 bool FormResolve(JSContext* cx, JS::HandleObject object, JS::HandleId id, bool* resolved) {

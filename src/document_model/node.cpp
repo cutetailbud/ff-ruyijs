@@ -15,10 +15,27 @@ static bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
   Wrapper* entry = NodeReceiver(cx, args.thisv(), &args);
   if (!entry) return false;
   State& state = *entry->owner;
+  const int32_t field = FunctionSlot(args);
+  if (field == Type) {
+    NodeKind kind = NodeKind::Document;
+    if (!state.Check(state.model.Kind(entry->key, &kind))) return false;
+    args.rval().setInt32(int32_t(kind)); return true;
+  }
+  if (field == Content) {
+    std::optional<DomString> content;
+    return state.Check(state.model.TextContent(entry->key, &content)) && Value(cx, content, args.rval());
+  }
+  // Each property reads only its part: a sibling scan or an ancestor walk is
+  // not paid by nodeName or parentNode (#35).
+  const uint32_t parts =
+      field == Name ? Model::kInspectNames :
+      field == NodeValue ? Model::kInspectValue :
+      field == Previous || field == Next ? Model::kInspectSiblings :
+      field == Connected ? Model::kInspectRoots :
+      field == Owner || field == BaseURI ? 0 : Model::kInspectTree;
   NodeSnapshot value;
-  if (!state.Check(state.model.Inspect(entry->key, &value))) return false;
-  switch (FunctionSlot(args)) {
-    case Type: args.rval().setInt32(int32_t(value.kind)); return true;
+  if (!state.Check(state.model.Inspect(entry->key, &value, parts))) return false;
+  switch (field) {
     case Name: return Value(cx, DomStringView(value.node_name), args.rval());
     case Owner: return state.Wrap(value.owner_document, args.rval());
     case Parent: return state.Wrap(value.parent, args.rval());
@@ -29,10 +46,6 @@ static bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
     case Next: return state.Wrap(value.next_sibling, args.rval());
     case Connected: args.rval().setBoolean(value.is_connected); return true;
     case NodeValue: return Value(cx, value.node_value, args.rval());
-    case Content: {
-      std::optional<DomString> content;
-      return state.Check(state.model.TextContent(entry->key, &content)) && Value(cx, content, args.rval());
-    }
     case BaseURI: {
       // baseURI is the document base; a document without an owned URL reads the
       // realm's environment port, so a detached node still reports it.
