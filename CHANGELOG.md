@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-16
+
 ### Added
 
 - SOCKS proxies on Windows and Linux: `Context(proxy=...)` accepts `socks5://`, `socks5h://`, `socks4://`
