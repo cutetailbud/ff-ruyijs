@@ -1,12 +1,12 @@
 {
   "version": "0.4.0",
   "archive": "ruyijs-runtime-0.4.0-win-amd64.zip",
-  "sha256": "5a5f03dc9560804a9c94c39fc015173947ea3d0965229a19fdd040d6e3b67b36",
-  "size": 44060565,
+  "sha256": "7da3c1add1b0e64fd9e49a8401c7c10d54d3bcba59b79bc12cd05b897aee3698",
+  "size": 44209341,
   "unpacked_limit": 209715200,
-  "shell_sha256": "e983ef1492e429d4d774df758a6d36cc54acc7ed6aa8551601974c4310baefc3",
-  "inventory_sha256": "d7ca107548b03fe7286e94722e0859712d8f4a213280967b8d1f629c574ce20c",
-  "url": "https://github.com/cutetailbud/ff-ruyijs/releases/download/runtime-base-0.4.0/ruyijs-runtime-0.4.0-win-amd64.zip",
+  "shell_sha256": "6c827f07eb328682097125b91e59eb832b19e3478bbf9f31eae7c6e6234a0829",
+  "inventory_sha256": "5fead74942a55c2113945de13274a8ae34752e1ea6b66d028f9146620b2fb8b8",
+  "url": "https://github.com/cutetailbud/ff-ruyijs/releases/download/v0.4.0/ruyijs-runtime-0.4.0-win-amd64.zip",
   "release_api": "",
   "releases_api": "",
   "macos": {
