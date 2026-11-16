@@ -152,6 +152,16 @@ bool BindGeometryPorts(BrowsingContext& context) {
     return true;
   }, &context);
   context.geometry->SetBoxPorts(boxes);
+  context.styling->SetUsedBoxPort([](void* raw, JS::HandleObject element,
+                                     web_styling::UsedBox* out, bool* present) {
+    auto& owner = *static_cast<BrowsingContext*>(raw);
+    web_geometry::Realm::UsedBox used;
+    if (!owner.geometry->MeasureUsed(element, &used, present)) return false;
+    out->width = used.width; out->height = used.height;
+    out->padding = used.padding; out->margin = used.margin;
+    out->border = used.border; out->inset = used.inset;
+    return true;
+  }, &context);
   context.document->SetOffsetGeometryPort([](void* raw, JS::HandleObject element,
                                              document_model::OffsetGeometry* out) {
     auto& owner = *static_cast<BrowsingContext*>(raw);

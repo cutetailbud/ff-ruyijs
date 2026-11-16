@@ -13,6 +13,8 @@
 #include "document_model/state.h"
 #include "js/Wrapper.h"
 
+#include <cmath>
+#include <cstdio>
 #include <memory>
 #include <vector>
 
@@ -31,6 +33,48 @@ std::string BuildComputedBlock(const ComputedStyle& computed) {
   }
   block += computed.customsText;
   return block;
+}
+
+// A used length as Firefox serializes it: px, up to six significant digits
+// after rounding to app units (1/60 px), no trailing zeros.
+std::string UsedPixels(double value) {
+  value = std::round(value * 60) / 60;
+  char buffer[48];
+  std::snprintf(buffer, sizeof buffer, "%.6g", value);
+  std::string text(buffer);
+  if (text == "-0") text = "0";
+  return text + "px";
+}
+// CSSOM resolved values (§9.1): for a rendered element the box properties
+// read their used values, not the specified percentages, calc() or auto (#42).
+void ResolveUsed(State& state, JS::HandleObject element, ComputedStyle* computed) {
+  if (!state.usedBoxPort) return;
+  UsedBox used;
+  bool present = false;
+  if (!state.usedBoxPort(state.usedBoxContext, element, &used, &present)) {
+    JS_ClearPendingException(state.cx);
+    return;
+  }
+  if (!present) return;
+  static const char* const sides[] = {"top", "right", "bottom", "left"};
+  std::vector<std::pair<std::string, std::string>> resolved = {
+      {"width", UsedPixels(used.width)}, {"height", UsedPixels(used.height)}};
+  for (int i = 0; i < 4; ++i) {
+    resolved.push_back({std::string("padding-") + sides[i], UsedPixels(used.padding[i])});
+    resolved.push_back({std::string("margin-") + sides[i], UsedPixels(used.margin[i])});
+  }
+  std::string position;
+  for (const auto& entry : computed->values) if (entry.first == "position") position = entry.second;
+  if (!position.empty() && position != "static")
+    for (int i = 0; i < 4; ++i) {
+      // An auto inset stays auto unless the opposite side fixes it.
+      for (const auto& entry : computed->values)
+        if (entry.first == sides[i] && entry.second != "auto")
+          resolved.push_back({sides[i], UsedPixels(used.inset[i])});
+    }
+  for (auto& entry : computed->values)
+    for (const auto& [name, value] : resolved)
+      if (entry.first == name) { entry.second = value; break; }
 }
 
 bool ViewName(JSContext* cx, JS::HandleValue value, std::string* out,bool page=false) {
@@ -159,6 +203,7 @@ bool GetComputedStyle(JSContext* cx, unsigned argc, JS::Value* vp) {
   }
   ComputedStyle computed;
   if (!ReadComputed(state, element, &computed)) return false;
+  ResolveUsed(state, element, &computed);
   std::string block = BuildComputedBlock(computed);
   if (cacheable) {
     if (!cache.ready || cache.revision != revision || cache.stamp != stamp) {

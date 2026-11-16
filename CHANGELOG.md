@@ -15,6 +15,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- A Wildberries (wbaas / Guardium) challenge scored every ruyijs session risk 100 and kept the seller
+  page at 498; it now scores 15, as Firefox 160 does on the same network, and the page loads (#42). The
+  challenge measures the page, and these read differently from Firefox:
+  - `getComputedStyle` returned specified values for a rendered element's `width`, `height`, `padding-*`,
+    `margin-*` and insets (`calc(33.3% + 0.7px)`, `25%`, `auto`); it returns the used pixel values.
+  - `white-space: pre` collapsed runs of spaces when measuring; text in a narrow block never wrapped, so
+    a block was always one line tall.
+  - A float and a table filled their containing block instead of shrinking to fit; a table had no row
+    and cell layout (cells stacked as blocks, no `border-spacing`, no UA cell padding).
+  - `aspect-ratio` did not size a box with an auto height.
+  - `HTMLProgressElement.value`, `max` and `position` threw.
+  `ci/layout_fingerprint_check.py` compares these against Firefox 160's values.
 - `nodeType`, `tagName` and the other Node and Element property reads no longer slow down with the node's
   position among its siblings: each read built a full snapshot, including a scan of the parent's
   children, and every property lookup on a node asked whether it is a form. 32,768 siblings, 100,000

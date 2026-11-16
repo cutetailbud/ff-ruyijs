@@ -42,6 +42,12 @@ bool BoxFlow::Children(size_t index, size_t positioned, unsigned depth, double* 
     empty_flow[index] = 0;
     return GridChildren(index, positioned, depth, height, width);
   }
+  if (display == "table" || display == "inline-table") {
+    empty_flow[index] = 0;
+    const auto& width_text = nodes[index].style.Slot(BoxKnown::Width);
+    return TableChildren(index, positioned, depth, height, width,
+                         !width_text.empty() && width_text != "auto");
+  }
   const auto& parent = boxes[index];
   double cursor_y = 0, line_x = 0, line_height = 0, extent_x = 0;
   // The adjoining margins not yet resolved: the largest positive and the most

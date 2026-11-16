@@ -95,6 +95,10 @@ void Realm::SetExceptionPort(bool (*port)(void*, const char*, const char*), void
   state_->exceptionPort = port;
   state_->exceptionContext = context;
 }
+void Realm::SetUsedBoxPort(bool (*port)(void*, JS::HandleObject, UsedBox*, bool*), void* context) {
+  state_->usedBoxPort = port;
+  state_->usedBoxContext = context;
+}
 void Realm::SetDocumentNodePort(document_model::StyleNodePort node, void* context) {
   state_->nodePort = node;
   state_->nodeContext = context;

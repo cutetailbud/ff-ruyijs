@@ -1,4 +1,6 @@
 #include "domain/styling/box_layout_internal.h"
+#include <cstdlib>
+#include <string>
 
 namespace ruyijs::domain::styling {
 bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_height,
@@ -16,6 +18,29 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     box.present = node.text_width > 0;
     box.border = box.content = {x, y, node.text_width, node.text_height};
     box.line = node.line_height >= 0 ? node.line_height : node.text_height;
+    // Text that starts a line and does not fit breaks at its spaces, greedily
+    // and without the trailing space; a word wider than the line takes a line
+    // of its own and overflows (#42). The text box spans every line box.
+    const double available = containing[2] - (x - containing[0]);
+    if (node.breakable && node.words.size() > 1 && x == containing[0] && node.text_width > available) {
+      double line = 0, widest = 0;
+      size_t lines = 1;
+      for (size_t i = 0; i < node.words.size(); ++i) {
+        const double word = node.words[i];
+        if (line > 0 && line + node.word_space + word > available + 1e-6) {
+          widest = std::max(widest, line);
+          line = word;
+          ++lines;
+        } else {
+          line += (line > 0 ? node.word_space : 0) + word;
+        }
+      }
+      widest = std::max(widest, line);
+      const double step = node.line_height >= 0 ? node.line_height : node.text_height;
+      box.border[2] = box.content[2] = BoxRound(widest);
+      box.border[3] = box.content[3] = node.text_height + step * double(lines - 1);
+      box.line = step * double(lines);
+    }
     return true;
   }
   const bool parent_bfc = BoxFormattingParent(nodes, index);
@@ -75,12 +100,43 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     height = cb[3]-top-bottom-extra_h-box.margin[0]-box.margin[2];
   bool auto_width = !std::isfinite(width);
   if (auto_width) width = cb[2]-extra_w-box.margin[1]-box.margin[3];
+  // A float is shrink-to-fit (CSS 2 §10.3.5): min(max(min-content, available),
+  // max-content), as an inline-block is. Its placement beside other content
+  // is not modelled; the box keeps its place in the flow (#42).
+  const auto& floating = style.Slot(BoxKnown::Float);
+  const bool floated = !absolute && !flex_item && !floating.empty() && floating != "none" && !BoxReplaced(node);
+  if (auto_width && floated) {
+    // The available width is the containing block's; the minimum is the
+    // longest word, not zero, so a float never collapses below its content.
+    width = std::min(std::max(Intrinsic(index, true, depth), width), Intrinsic(index, false, depth));
+  }
   // An auto-width inline-flex container is shrink-to-fit around its items.
   if (auto_width && !absolute && display == "inline-flex")
     width = std::min(width, Intrinsic(index, false, depth));
   width = BoxLimit(style, true, cb[2], std::max(0.0, width), extra_w);
   if (flex_item) { width = forced_width[index]; auto_width = false; }
   if (index < forced_height.size() && std::isfinite(forced_height[index])) height = forced_height[index];
+  // aspect-ratio (CSS Sizing 4 §5): an auto height follows the width. The
+  // ratio is of the box box-sizing names; "auto && <ratio>" is ignored for a
+  // non-replaced box, which has no natural ratio to prefer (#42).
+  if (!std::isfinite(height) && !BoxReplaced(node) && !inline_box) {
+    const auto& ratio_text = style.Get("aspect-ratio");
+    if (!ratio_text.empty() && ratio_text != "auto") {
+      std::string text = ratio_text;
+      if (text.rfind("auto ", 0) == 0) text = text.substr(5);
+      char* end = nullptr;
+      const double first = std::strtod(text.c_str(), &end);
+      double second = 1;
+      const char* rest = end;
+      while (*rest == ' ') ++rest;
+      if (*rest == '/') second = std::strtod(rest + 1, nullptr);
+      if (end != text.c_str() && std::isfinite(first) && first > 0 && std::isfinite(second) && second > 0) {
+        const double ratio = first / second;
+        height = border_box ? BoxRound((width + extra_w) / ratio) - extra_h : BoxRound(width / ratio);
+        height = std::max(0.0, height);
+      }
+    }
+  }
   box.definite_height = std::isfinite(height);
   if (box.definite_height && !(index < forced_height.size() && std::isfinite(forced_height[index])))
     height = BoxLimit(style, false, percent_h, std::max(0.0, height), extra_h);
@@ -130,7 +186,9 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     }
     if (again && !Children(index, child_positioned, depth, &children_height, &children_width)) return false;
   }
-  if (inline_box || (auto_width && display == "inline-block")) {
+  // An auto-width inline-block or table shrinks to its content's width.
+  if (inline_box || (auto_width && (display == "inline-block" || display == "table" ||
+                                    display == "inline-table"))) {
     box.content[2] = children_width; box.border[2] = BoxRound(children_width+extra_w);
   }
   if (absolute && auto_width && !BoxReplaced(node)) {

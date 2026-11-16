@@ -44,7 +44,7 @@ struct State {
   std::map<std::pair<uint64_t, uint64_t>, std::array<double, 2>> elementScroll;
   // A text run's measurement by font and font configuration (box_text.cpp): a
   // layout rebuilt after one element changed does not reshape every other run.
-  struct TextMeasure { double width = 0, height = 0, normal = 0; };
+  struct TextMeasure { double width = 0, height = 0, normal = 0, space = 0; std::vector<float> words; };
   std::unordered_map<std::string, TextMeasure> textMeasures;
   bool (*rangeContents)(void*, JS::HandleValue, JS::MutableHandleObjectVector) = nullptr;
   void* rangeContext = nullptr;

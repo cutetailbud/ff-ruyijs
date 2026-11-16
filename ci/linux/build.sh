@@ -13,6 +13,7 @@
 #                              ci/atob_check.py, ci/fetch_abort_check.py,
 #                              ci/fetch_abort_transfer_check.py, ci/load_timer_check.py,
 #                              ci/timer_scale_check.py, ci/socks_proxy_check.py,
+#                              ci/layout_fingerprint_check.py,
 #                              ci/network_smoke.py, ci/proxy_smoke.py,
 #                              ci/hello_check.py and ci/engine_check.py
 set -euo pipefail
@@ -93,6 +94,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/load_timer_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/timer_scale_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/socks_proxy_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/layout_fingerprint_check.py"
     # One real page load through the bundled Necko helper, direct and through
     # a local CONNECT proxy.
     "${clean[@]}" "$venv/bin/python" "$root/ci/network_smoke.py"

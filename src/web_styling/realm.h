@@ -4,6 +4,7 @@
 #include "document_model/style_port.h"
 #include "document_model/style_source.h"
 #include "web_styling/load_ports.h"
+#include "web_styling/used_box.h"
 #include "js/RootingAPI.h"
 struct JSContext;
 namespace ruyijs { class PageHelpers; }
@@ -72,6 +73,8 @@ class Realm final {
   bool StyleElement(uint64_t document, uint64_t key, document_model::StyleElementAction,
                      bool disabled, JS::MutableHandleValue);
   void SetExceptionPort(bool (*port)(void*, const char*, const char*), void* context);
+  // The geometry owner's used boxes for getComputedStyle resolved values.
+  void SetUsedBoxPort(bool (*port)(void*, JS::HandleObject, UsedBox*, bool*), void* context);
   void SetTaskPort(bool (*port)(void*, JS::HandleObject), void* context);
  private:
   std::unique_ptr<State> state_;

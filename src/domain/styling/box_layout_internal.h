@@ -49,6 +49,8 @@ struct BoxFlow {
   bool Children(size_t, size_t positioned, unsigned depth, double* height, double* width);
   bool FlexChildren(size_t, size_t positioned, unsigned depth, double* height, double* width);
   bool GridChildren(size_t, size_t positioned, unsigned depth, double* height, double* width);  // box_layout_grid.cpp
+  bool TableChildren(size_t, size_t positioned, unsigned depth, double* height, double* width,
+                     bool definite_width);  // box_layout_table.cpp
   // Content-box min-/max-content width (percentages as zero), and with the
   // node's own padding, border and margins (box_layout_intrinsic.cpp).
   double Intrinsic(size_t, bool minimum, unsigned depth);

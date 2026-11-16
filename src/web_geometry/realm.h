@@ -94,6 +94,16 @@ class Realm final {
   void SetBoxPorts(const BoxPorts&);
   bool MeasureElement(JS::HandleObject, std::array<double, 4>*, bool* present, bool content = false);
   bool MeasureOffset(JS::HandleObject, document_model::OffsetGeometry*);
+  // The used box of an element for getComputedStyle resolved values (#42):
+  // content width and height, padding, margin and border widths (top, right,
+  // bottom, left), and the relative or absolute insets. *present is false for
+  // an element without a box (not rendered, display:none, inline).
+  struct UsedBox {
+    double width = 0, height = 0;
+    std::array<double, 4> padding{}, margin{}, border{};
+    std::array<double, 4> inset{};
+  };
+  bool MeasureUsed(JS::HandleObject, UsedBox*, bool* present);
   // An element scroll container's position (box_scroll.cpp): read, or with
   // |write| clamp and store (*changed when it moved). 0,0 for a non-container.
   bool ElementScroll(JS::HandleObject, bool write, double* x, double* y, bool* changed);

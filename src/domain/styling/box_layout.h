@@ -69,6 +69,11 @@ struct BoxNode {
   // text_height is the primary font content area (inline box height);
   // line_height is the text's contribution to its line box.
   double text_width = 0, text_height = 0, line_height = -1, intrinsic_width = -1, intrinsic_height = -1;
+  // Breakable text: the max-content width of each word and of one space, so
+  // the flow can break the line greedily at a fixed content width (#42).
+  std::vector<float> words;
+  double word_space = 0;
+  size_t column_span = 1;  // A table cell's colspan attribute.
   // HTML width/height attribute percentages (presentational hints that apply
   // when the author's width/height is auto), and an iframe frameborder="0"/"no".
   double attribute_width_percent = -1, attribute_height_percent = -1;
@@ -132,6 +137,10 @@ bool BoxScrollContainer(const std::vector<BoxNode>&, size_t);
 // descendant that is not itself a scroll container.
 void BoxOverflowExtent(const std::vector<BoxNode>&, const std::vector<BoxLayout>&, size_t index,
                        double* right, double* bottom);
+// Whether a node is a replaced element (img, iframe, canvas, video, ...), and
+// one length of its style against a percentage basis (box_layout_values.cpp).
+bool BoxReplacedNode(const BoxNode&);
+double BoxLengthOf(const BoxStyle&, const std::string&, double percent, double fallback);
 BoxRect ProjectBoxRect(const std::vector<BoxNode>&, const std::vector<BoxLayout>&,
                        const BoxViewport&, size_t target);
 }

@@ -21,6 +21,11 @@ void ApplyBoxAttributes(const std::vector<document_model::AttributeSnapshot>& at
     if (attr.name == u"frameborder" && node->tag == "iframe" &&
         (attr.value == u"0" || attr.value == u"no" || attr.value == u"NO"))
       node->no_frame_border = true;
+    if (attr.name == u"colspan" && node->tag == "td" || attr.name == u"colspan" && node->tag == "th") {
+      const auto parsed = std::strtoul(std::string(attr.value.begin(), attr.value.end()).c_str(), nullptr, 10);
+      if (parsed) node->column_span = std::min<size_t>(parsed, 1000);
+      continue;
+    }
     if (attr.name != u"width" && attr.name != u"height") continue;
     const std::string value(attr.value.begin(), attr.value.end());
     const auto parsed = box::CssNumericParse(value);
@@ -42,7 +47,7 @@ bool BoxSameStyle(const box::BoxStyle& a, const box::BoxStyle& b) {
 }
 bool BoxSameLayout(const box::BoxStyle& a, const box::BoxStyle& b) {
   static constexpr const char* kExtraLayoutProps[] = {
-      "-x-lang", "align-content", "align-items", "align-self", "column-gap", "flex-basis",
+      "-x-lang", "align-content", "align-items", "align-self", "aspect-ratio", "column-gap", "flex-basis",
       "flex-direction", "flex-grow", "flex-shrink", "flex-wrap", "font-family", "font-style",
       "font-weight", "grid-auto-rows", "grid-column", "grid-column-end", "grid-column-start",
       "grid-row", "grid-row-end", "grid-row-start", "grid-template-columns", "grid-template-rows",
@@ -63,7 +68,7 @@ bool BoxSameLayout(const box::BoxStyle& a, const box::BoxStyle& b) {
 }
 bool BoxSameNode(const box::BoxNode& a, const box::BoxNode& b) {
   return a.text == b.text && a.breakable == b.breakable && a.no_frame_border == b.no_frame_border &&
-         a.text_width == b.text_width && a.text_height == b.text_height &&
+         a.text_width == b.text_width && a.text_height == b.text_height && a.column_span == b.column_span &&
          a.line_height == b.line_height && a.intrinsic_width == b.intrinsic_width &&
          a.intrinsic_height == b.intrinsic_height &&
          a.attribute_width_percent == b.attribute_width_percent &&
@@ -263,6 +268,7 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
       const auto& measured=previous->nodes[before];
       node.text_width=measured.text_width; node.text_height=measured.text_height;
       node.line_height=measured.line_height; node.breakable=measured.breakable;
+      node.words=measured.words; node.word_space=measured.word_space;
     } else if(!BoxText(s,source,&node)) return false;
   }
   ApplyBoxAttributes(source.attributes, &node);
@@ -441,6 +447,32 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
     s.layoutCache=cache;
   }
   *out=cache; *index=found;
+  return true;
+}
+bool Realm::MeasureUsed(JS::HandleObject element, UsedBox* out, bool* present) {
+  *out={}; *present=false;
+  std::shared_ptr<const LayoutCache> layout; size_t found=size_t(-1); box::BoxViewport viewport;
+  if(!LayoutFor(*state_,element,&layout,&found,&viewport)) return false;
+  if(!layout||found==size_t(-1)||!layout->layout[found].present) return true;
+  const auto& node=layout->nodes[found];
+  const auto& display=node.style.Slot(box::BoxKnown::Display);
+  // An inline non-replaced box has no used width or height (CSSOM resolved value).
+  if(node.text||display=="none"||display=="contents"||(display=="inline"&&!box::BoxReplacedNode(node))) return true;
+  const auto& b=layout->layout[found];
+  out->width=b.content[2]; out->height=b.content[3];
+  out->padding=b.padding; out->margin=b.margin; out->border=b.edge;
+  // Insets: the box's offset from its containing block, as Firefox resolves
+  // a positioned box's top/right/bottom/left.
+  const auto& position=node.style.Slot(box::BoxKnown::Position);
+  if(position!="static") {
+    const auto value=[&](int index,double basis){ return box::BoxLengthOf(node.style,node.style.Slot(index),basis,0); };
+    const size_t parent=node.parent;
+    const double cb_w=parent==size_t(-1)?viewport.width:layout->layout[parent].content[2];
+    const double cb_h=parent==size_t(-1)?viewport.height:layout->layout[parent].content[3];
+    out->inset={value(box::BoxKnown::Top,cb_h),value(box::BoxKnown::Right,cb_w),
+                value(box::BoxKnown::Bottom,cb_h),value(box::BoxKnown::Left,cb_w)};
+  }
+  *present=true;
   return true;
 }
 bool Realm::MeasureOffset(JS::HandleObject element, document_model::OffsetGeometry* out) {

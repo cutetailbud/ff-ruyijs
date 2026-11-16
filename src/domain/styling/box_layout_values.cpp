@@ -149,6 +149,7 @@ bool BoxViewportLength(const std::string& text, double width, double height, dou
   }
   return false;
 }
+bool BoxReplacedNode(const BoxNode& node) { return BoxReplaced(node); }
 bool BoxReplaced(const BoxNode& node) {
   return node.tag == "iframe" || node.tag == "img" || node.tag == "canvas" ||
          node.tag == "video" || node.tag == "object" || node.tag == "embed";
@@ -169,6 +170,9 @@ void BoxEdges(const BoxNode& node, double width, BoxLayout* box) {
     box->padding[i] = std::max(0.0, BoxLengthOf(node.style, node.style.Slot(paddingIndex[i]), width, 0));
     box->edge[i] = std::max(0.0, BoxLengthOf(node.style, node.style.Slot(borderIndex[i]), width, 0));
     if (node.tag == "iframe" && !(node.style.specified_border_mask & (1u << i))) box->edge[i] = node.no_frame_border ? 0 : 2;
+    // UA: td, th { padding: 1px; } (html.css), below the author's padding.
+    if ((node.tag == "td" || node.tag == "th") && !(node.style.specified_padding_mask & (1u << i)))
+      box->padding[i] = 1;
     const bool text_input = node.tag == "input" && (node.input_type.empty() || node.input_type == "text" ||
         node.input_type == "password" || node.input_type == "email" || node.input_type == "url" ||
         node.input_type == "tel" || node.input_type == "search");

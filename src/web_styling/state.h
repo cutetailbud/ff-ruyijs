@@ -4,6 +4,7 @@
 // styling owner and the existing Document Model / Browser Environment ports.
 #ifndef RUYIJS_WEB_STYLING_STATE_H
 #define RUYIJS_WEB_STYLING_STATE_H
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <map>
@@ -12,6 +13,7 @@
 #include <vector>
 #include "document_model/style_source.h"
 #include "domain/styling/media_list_value.h"
+#include "web_styling/used_box.h"
 #include "domain/styling/sheet_set_value.h"
 #include "domain/styling/external_style_cache.h"
 #include "domain/styling/css_rule_value.h"
@@ -94,6 +96,8 @@ struct State {
   document_model::StyleScopeDocumentPort scopeDocument = nullptr;
   document_model::StyleCascadeScopePort cascadeScope = nullptr;
   void* adoptedContext = nullptr;
+  bool (*usedBoxPort)(void*, JS::HandleObject, UsedBox*, bool*) = nullptr;
+  void* usedBoxContext = nullptr;
   bool (*exceptionPort)(void*, const char*, const char*) = nullptr;
   void* exceptionContext = nullptr;
   bool (*postTask)(void*, JS::HandleObject) = nullptr;
