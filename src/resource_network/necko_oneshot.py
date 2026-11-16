@@ -30,17 +30,145 @@ class Framing(ValueError):
     """The request stream itself is unusable; the session ends."""
 
 
+SOCKS_SCHEMES = ("socks4", "socks4a", "socks5", "socks5h")
+SOCKS5_ERRORS = {1: "general failure", 2: "connection not allowed by ruleset", 3: "network unreachable",
+                 4: "host unreachable", 5: "connection refused", 6: "TTL expired",
+                 7: "command not supported", 8: "address type not supported"}
+
+
 def transport_proxies():
     proxy = os.environ.get("RUYIJS_HTTP_PROXY", "")
     if not proxy:
         return {}
     address = urlsplit(proxy)
-    if (len(proxy) > 65536 or address.scheme not in ("http", "https") or
+    if (len(proxy) > 65536 or address.scheme not in ("http", "https") + SOCKS_SCHEMES or
             not address.hostname or address.path not in ("", "/") or
             address.query or address.fragment or any(c in proxy for c in "\r\n\x00")):
         raise ValueError("Invalid HTTP proxy configuration")
     address.port  # Validate a supplied numeric port before opening any socket.
     return {"http": proxy, "https": proxy}
+
+
+# SOCKS 4, 4a, 5 and 5h with a username and password (RFC 1928/1929), as
+# Firefox's nsSOCKSIOLayer speaks them. The transport's own negotiator needs
+# PySocks, which the runtime does not ship. socks5h and socks4a resolve the
+# host at the proxy, socks5 and socks4 here (#39).
+def _socks_exact(connection, size):
+    data = b""
+    while len(data) < size:
+        chunk = connection.read(size - len(data))
+        if not chunk:
+            raise _proxy_error("SOCKS proxy closed the connection during negotiation")
+        data += chunk
+    return data
+
+
+def _proxy_error(message):
+    from requests.exceptions import ProxyError
+    return ProxyError(message)
+
+
+def _socks_field(value, what):
+    from urllib.parse import unquote
+    raw = unquote(value).encode("utf-8")
+    if not 1 <= len(raw) <= 255:
+        raise _proxy_error(f"SOCKS5 {what} must be 1 to 255 bytes")
+    return raw
+
+
+def _socks_resolve(host, port, family=0):
+    import ipaddress
+    import socket
+    rows = socket.getaddrinfo(host, port, family, socket.SOCK_STREAM)
+    if not rows:
+        raise _proxy_error(f"SOCKS: cannot resolve {host}")
+    return ipaddress.ip_address(rows[0][4][0])
+
+
+def _socks_address(host, port, remote_dns, family=0):
+    import ipaddress
+    try:
+        return ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        return None if remote_dns else _socks_resolve(host, port, family)
+
+
+def _socks5(connection, proxy, host, port, remote_dns):
+    credentials = proxy.username is not None
+    connection.write(b"\x05\x02\x00\x02" if credentials else b"\x05\x01\x00")
+    version, method = _socks_exact(connection, 2)
+    if version != 5:
+        raise _proxy_error("SOCKS5 proxy sent an invalid greeting reply")
+    if method == 2:
+        if not credentials:
+            raise _proxy_error("SOCKS5 proxy requires a username and password")
+        user, password = _socks_field(proxy.username, "username"), _socks_field(proxy.password or "", "password")
+        connection.write(b"\x01" + bytes([len(user)]) + user + bytes([len(password)]) + password)
+        if _socks_exact(connection, 2)[1] != 0:
+            raise _proxy_error("SOCKS5 proxy rejected the username or password")
+    elif method != 0:
+        raise _proxy_error("SOCKS5 proxy accepts no offered authentication method")
+    address = _socks_address(host, port, remote_dns)
+    if address is None:
+        name = host.encode("idna")
+        if len(name) > 255:
+            raise _proxy_error("SOCKS5 host name is too long")
+        target = b"\x03" + bytes([len(name)]) + name
+    else:
+        target = (b"\x01" if address.version == 4 else b"\x04") + address.packed
+    connection.write(b"\x05\x01\x00" + target + port.to_bytes(2, "big"))
+    version, reply, _, kind = _socks_exact(connection, 4)
+    if version != 5:
+        raise _proxy_error("SOCKS5 proxy sent an invalid reply")
+    if reply != 0:
+        raise _proxy_error(f"SOCKS5 proxy: {SOCKS5_ERRORS.get(reply, f'error {reply}')}")
+    if kind == 1:
+        _socks_exact(connection, 4)
+    elif kind == 4:
+        _socks_exact(connection, 16)
+    elif kind == 3:
+        _socks_exact(connection, _socks_exact(connection, 1)[0])
+    else:
+        raise _proxy_error("SOCKS5 proxy sent an unknown bound address type")
+    _socks_exact(connection, 2)
+
+
+def _socks4(connection, proxy, host, port, remote_dns):
+    import socket
+    from urllib.parse import unquote
+    user = unquote(proxy.username).encode("utf-8") if proxy.username else b""
+    address = _socks_address(host, port, remote_dns, socket.AF_INET)
+    if address is not None and address.version != 4:
+        raise _proxy_error("SOCKS4 reaches IPv4 addresses only")
+    if address is None:  # SOCKS4a: 0.0.0.x, the name follows the user id
+        request = (b"\x04\x01" + port.to_bytes(2, "big") + b"\x00\x00\x00\x01" + user + b"\x00" +
+                   host.encode("idna") + b"\x00")
+    else:
+        request = b"\x04\x01" + port.to_bytes(2, "big") + address.packed + user + b"\x00"
+    connection.write(request)
+    reply = _socks_exact(connection, 8)
+    if reply[0] != 0 or reply[1] != 0x5A:
+        raise _proxy_error(f"SOCKS4 proxy rejected the request (code {reply[1]})")
+
+
+def socks_negotiate(connection, proxy, target):
+    """Opens the tunnel to `target` (a split URL) through the SOCKS `proxy`."""
+    if proxy.scheme not in SOCKS_SCHEMES:
+        from requests.exceptions import InvalidSchema
+        raise InvalidSchema(f"Unsupported proxy scheme: {proxy.scheme}")
+    port = target.port or (443 if target.scheme == "https" else 80)
+    remote_dns = proxy.scheme in ("socks5h", "socks4a")
+    (_socks5 if proxy.scheme.startswith("socks5") else _socks4)(connection, proxy, target.hostname, port, remote_dns)
+
+
+def install_socks():
+    """Routes the transport's SOCKS negotiation here. The macOS adapter has no
+    SOCKS route and keeps rejecting these URLs."""
+    try:
+        from necko import _socks
+    except ImportError:
+        return
+    _socks.negotiate = socks_negotiate
 
 
 def read_exact(size):
@@ -159,6 +287,7 @@ def session():
 
 
 if __name__ == "__main__":
+    install_socks()
     try:
         if "--webtransport" in sys.argv[1:]:
             from ruyijs_necko.webtransport_worker import main as webtransport

@@ -317,7 +317,10 @@ with Context(proxy="http://127.0.0.1:7890") as ctx:
     ctx.navigate("https://example.com/")
 ```
 
-HTTP, HTTPS, and SOCKS5 proxies are supported per-context.
+Each context has its own proxy. HTTP and HTTPS proxy URLs take `user:pass@`. On Windows and Linux,
+`socks5://`, `socks5h://` (DNS at the proxy), `socks4://` and `socks4a://` URLs work too, with
+`socks5://user:pass@host:port` for username/password authentication; percent-encode reserved
+characters in the password. The macOS transport accepts HTTP(S) proxies only.
 </details>
 
 <details>

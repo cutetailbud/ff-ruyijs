@@ -4,7 +4,8 @@ usage: python ci/package/runtime.py [--dist dist] [--out build/ci-runtime]
 
 The base is the runtime currently pinned in runtime.json (downloaded and
 checked against its SHA-256): it supplies the Necko transport, the embedded
-Python and the MSVC runtime DLLs. js.exe and mozglue.dll are replaced by the
+Python and the MSVC runtime DLLs. The helper entry point ruyijs_necko/oneshot.py
+comes from src/resource_network/necko_oneshot.py. js.exe and mozglue.dll are replaced by the
 ones tools/build.py just built from the firefox/ submodule; LICENSE, NOTICE and
 COMMERCIAL-LICENSE.md come from the repository. The archive is written to
 OUT, and runtime.json in the working tree is updated to pin it, so that
@@ -29,6 +30,7 @@ from wheel_runtime import download_url, validate  # noqa: E402
 REPLACED = ("dist/js.exe", "dist/mozglue.dll")
 LICENSE_FILES = ("LICENSE", "NOTICE", "COMMERCIAL-LICENSE.md")
 EMBEDDED = "vendor/necko-derived/python"
+ONESHOT = {"Lib/site-packages/ruyijs_necko/oneshot.py": "src/resource_network/necko_oneshot.py"}
 # Extension modules of the embedded Python that the Necko helper cannot use:
 # Tk (its zip has no tkinter package), SQLite and winsound. Only _tkinter.pyd
 # and _sqlite3.pyd load the DLLs.
@@ -85,6 +87,10 @@ def main():
     embedded = stage / EMBEDDED
     for name in UNUSED:
         (embedded / name).unlink(missing_ok=True)
+    # The helper entry point is a repository source, as on Linux and macOS
+    # (tools/build_necko_linux.py, tools/build_necko_darwin.py).
+    for name, source in ONESHOT.items():
+        shutil.copy2(ROOT / source, embedded / name)
     # The helpers start from bytecode whichever Python installs the wheel.
     subprocess.run([str(embedded / "python.exe"), "-I", "-B", str(Path(__file__).with_name("compile_embedded.py"))],
                    check=True)
@@ -106,6 +112,7 @@ def main():
         "of the same release (https://github.com/cutetailbud/ff-ruyijs).\n"
         "The Necko transport and the embedded Python under vendor/ are carried over from the\n"
         f"previously pinned runtime {manifest['archive']} (sha256 {manifest['sha256']}),\n"
+        "with ruyijs_necko/oneshot.py from src/resource_network/necko_oneshot.py of this release,\n"
         "without the embedded Python's Tk, SQLite and winsound modules, and with its bytecode\n"
         "compiled by that Python (ci/package/compile_embedded.py).\n"
         "Component license texts are in licenses/ and the embedded Python packages.\n"

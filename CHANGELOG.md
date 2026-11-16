@@ -5,7 +5,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- SOCKS proxies on Windows and Linux: `Context(proxy=...)` accepts `socks5://`, `socks5h://`, `socks4://`
+  and `socks4a://` URLs, with `socks5://user:pass@host:port` for username/password authentication
+  (RFC 1928/1929), as Firefox speaks them. Only HTTP(S) proxy URLs were accepted, although the README
+  listed SOCKS5 (#39). `ci/socks_proxy_check.py` loads pages through a local SOCKS server; the Windows
+  runtime now takes `ruyijs_necko/oneshot.py` from the repository, as Linux and macOS do.
+
 ### Fixed
+
+- `nodeType`, `tagName` and the other Node and Element property reads no longer slow down with the node's
+  position among its siblings: each read built a full snapshot, including a scan of the parent's
+  children, and every property lookup on a node asked whether it is a form. 32,768 siblings, 100,000
+  `nodeType` reads of the last child: 2,268 ms to 28 ms (#35).
 
 - Registering, clearing and running many timers no longer slows down with the square of their number: every
   `setTimeout` re-sorted the whole task queue, and lookup, `clearTimeout` and completion scanned it and the

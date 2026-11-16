@@ -217,8 +217,11 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
     ``timeout`` applies to startup and each request after it acquires the context
     lock. A timeout or broken protocol closes the context and kills its process.
     ``shell`` overrides RUYIJS_SHELL; otherwise select the source or bundled runtime.
-    ``proxy`` selects an explicit HTTP(S) proxy URL for this context's network
-    requests. None or an empty string uses direct connections. It does not
+    ``proxy`` selects an explicit proxy URL for this context's network
+    requests: ``http://`` or ``https://``, or on Windows and Linux also
+    ``socks5://``, ``socks5h://``, ``socks4://`` or ``socks4a://``, each with an
+    optional percent-encoded ``user:pass@``. None or an empty string uses direct
+    connections. It does not
     alter the host environment or other contexts.
     ``tls`` selects the Firefox release (100-160, e.g. ``"120"`` or ``120``)
     whose TLS ClientHello, HTTP/2 settings and HTTP/3 priorities this context's

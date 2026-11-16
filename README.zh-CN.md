@@ -317,7 +317,9 @@ with Context(proxy="http://127.0.0.1:7890") as ctx:
     ctx.navigate("https://example.com/")
 ```
 
-支持 HTTP、HTTPS、SOCKS5 代理，按上下文隔离。
+代理按上下文隔离。HTTP、HTTPS 代理地址支持 `user:pass@`。在 Windows 和 Linux 上还支持
+`socks5://`、`socks5h://`（由代理解析域名）、`socks4://` 和 `socks4a://`，用户名密码认证写作
+`socks5://user:pass@host:port`，密码中的保留字符需做百分号编码。macOS 的传输层目前只支持 HTTP(S) 代理。
 </details>
 
 <details>
