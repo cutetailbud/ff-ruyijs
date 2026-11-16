@@ -15,6 +15,7 @@ EXAMPLES = {
     "datadome": ("DataDome/datadome.py", "DataDome 设备检测"),
     "creepjs": ("creepjs/creepjs.py", "CreepJS"),
     "truepeople": ("truepeople/truepeople.py", "TruePeopleSearch Cloudflare 托管质询"),
+    "wildberries": ("wildberries/wildberries.py", "Wildberries 卖家页 wbaas 挑战与 risk_score"),
 }
 
 
