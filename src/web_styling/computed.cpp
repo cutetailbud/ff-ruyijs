@@ -15,6 +15,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <vector>
 
@@ -45,8 +46,19 @@ std::string UsedPixels(double value) {
   if (text == "-0") text = "0";
   return text + "px";
 }
-// CSSOM resolved values (§9.1): for a rendered element the box properties
-// read their used values, not the specified percentages, calc() or auto (#42).
+// Whether a computed value is a plain absolute length ("21.44px", "0px"),
+// which Firefox returns as computed rather than as the used value.
+bool PlainLength(const std::string& value) {
+  if (value.size() < 3 || value.compare(value.size() - 2, 2, "px")) return false;
+  char* end = nullptr;
+  std::strtod(value.c_str(), &end);
+  return end == value.c_str() + value.size() - 2;
+}
+// CSSOM resolved values (§9.1), as nsComputedDOMStyle gives them for a
+// rendered element: width and height are always the used size; a margin,
+// padding or inset is the used value only when its computed value is not a
+// plain length (a percentage, calc(), auto), so an em margin stays 21.44px
+// and a collapsed body margin stays its own 8px (#42).
 void ResolveUsed(State& state, JS::HandleObject element, ComputedStyle* computed) {
   if (!state.usedBoxPort) return;
   UsedBox used;
@@ -74,7 +86,11 @@ void ResolveUsed(State& state, JS::HandleObject element, ComputedStyle* computed
     }
   for (auto& entry : computed->values)
     for (const auto& [name, value] : resolved)
-      if (entry.first == name) { entry.second = value; break; }
+      if (entry.first == name) {
+        const bool box_size = name == "width" || name == "height";
+        if (box_size || !PlainLength(entry.second)) entry.second = value;
+        break;
+      }
 }
 
 bool ViewName(JSContext* cx, JS::HandleValue value, std::string* out,bool page=false) {
