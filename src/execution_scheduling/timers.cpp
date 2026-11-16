@@ -24,18 +24,43 @@ bool StringHandlerAllowed(JSContext* cx, JS::HandleString code, bool* allowed) {
       JS::CompilationType::Undefined, parameters, body, arguments, body_arg, allowed);
 }
 }  // namespace
+namespace {
+bool PublicKind(Kind kind, bool frame) {
+  return frame ? kind == Kind::Frame : kind == Kind::Timeout || kind == Kind::Interval;
+}
+}  // namespace
 Callback* State::Find(uint64_t id) {
-  for (Callback* cb = callbacks.get(); cb; cb = cb->next.get()) if (cb->id == id) return cb;
-  return nullptr;
+  auto found = callbackIds.find(id);
+  return found == callbackIds.end() ? nullptr : found->second;
+}
+Callback* State::FindHandle(JSObject* global, uint32_t handle, bool frame) {
+  auto found = callbackHandles.find({global, handle, frame});
+  return found == callbackHandles.end() ? nullptr : found->second;
+}
+void State::Link(std::unique_ptr<Callback> callback) {
+  Callback* raw = callback.get();
+  callbackIds[raw->id] = raw;
+  for (bool frame : {false, true})
+    if (raw->publicHandle && PublicKind(raw->kind, frame))
+      callbackHandles[{raw->global, raw->publicHandle, frame}] = raw;
+  if (callbacks) callbacks->previous = raw;
+  raw->next = std::move(callbacks);
+  callbacks = std::move(callback);
 }
 void State::Remove(uint64_t id) {
-  auto* link = &callbacks;
-  while (*link && (*link)->id != id) link = &(*link)->next;
-  if (!*link || (*link)->running) return;
-  argumentSlots -= (*link)->arguments.length();
-  sourceUnits -= (*link)->sourceUnits;
-  auto removed = std::move(*link);
-  *link = std::move(removed->next);
+  Callback* found = Find(id);
+  if (!found || found->running) return;
+  argumentSlots -= found->arguments.length();
+  sourceUnits -= found->sourceUnits;
+  callbackIds.erase(id);
+  for (bool frame : {false, true}) {
+    auto handle = callbackHandles.find({found->global, found->publicHandle, frame});
+    if (handle != callbackHandles.end() && handle->second == found) callbackHandles.erase(handle);
+  }
+  auto& owner = found->previous ? found->previous->next : callbacks;
+  auto removed = std::move(owner);
+  owner = std::move(removed->next);
+  if (owner) owner->previous = removed->previous;
 }
 State::RealmHandles& State::Handles(JSObject* global) {
   for (auto& handles : publicHandles) if (handles.global == global) return handles;
@@ -43,12 +68,7 @@ State::RealmHandles& State::Handles(JSObject* global) {
   return publicHandles.back();
 }
 void State::Cancel(uint32_t handle, bool frame, JSObject* global) {
-  Callback* callback = callbacks.get();
-  for (; callback; callback = callback->next.get()) {
-    if (callback->global == global && callback->publicHandle == handle &&
-        (frame ? callback->kind == Kind::Frame :
-         callback->kind == Kind::Timeout || callback->kind == Kind::Interval)) break;
-  }
+  Callback* callback = handle ? FindHandle(global, handle, frame) : nullptr;
   if (!callback) return;
   const uint64_t id = callback->id;
   // Public timer handles do not cancel posted messages or internal tasks.
@@ -72,10 +92,7 @@ bool State::Register(std::unique_ptr<Callback> callback, int32_t delay,
     auto& handles = Handles(callback->global);
     sequence = frame ? &handles.frames : &handles.timers;
     callback->publicHandle = sequence->Reserve([&](uint32_t value) {
-      for (Callback* live=callbacks.get(); live; live=live->next.get())
-        if (live->global == callback->global && live->publicHandle == value &&
-            (frame ? live->kind == Kind::Frame : live->kind == Kind::Timeout || live->kind == Kind::Interval)) return true;
-      return false;
+      return FindHandle(callback->global, value, frame) != nullptr;
     });
     if (!callback->publicHandle) return Error(cx, "Public timer handles exhausted", true);
   }
@@ -84,8 +101,7 @@ bool State::Register(std::unique_ptr<Callback> callback, int32_t delay,
   argumentSlots += callback->arguments.length();
   sourceUnits += callback->sourceUnits;
   result.setInt32(int32_t(publicId ? callback->publicHandle : 0));
-  callback->next = std::move(callbacks);
-  callbacks = std::move(callback);
+  Link(std::move(callback));
   return true;
 }
 bool Timer(JSContext* cx, unsigned argc, JS::Value* vp) {

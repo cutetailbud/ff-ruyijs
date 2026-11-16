@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Registering, clearing and running many timers no longer slows down with the square of their number: every
+  `setTimeout` re-sorted the whole task queue, and lookup, `clearTimeout` and completion scanned it and the
+  callback list. The queue is now indexed by task id and kept in deadline order, and callbacks are indexed by
+  id and by public handle; the run order is unchanged. 8,000 timers on the logical clock: register 945 ms to
+  13 ms, clear 984 ms to 7 ms, run 1,309 ms to 12 ms (#34). `ci/timer_scale_check.py` checks the scaling on
+  Windows, macOS and Linux.
+
 ## [0.4.0] - 2026-11-14
 
 ### Changed

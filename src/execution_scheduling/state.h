@@ -3,6 +3,9 @@
 #include "execution_scheduling/realm.h"
 #include "domain/execution_scheduling/public_handles.h"
 #include <chrono>
+#include <map>
+#include <tuple>
+#include <unordered_map>
 #include <vector>
 #include "jsapi.h"
 #include "js/Date.h"
@@ -32,6 +35,7 @@ struct Callback {
   JS::PersistentRootedValue handler;
   JS::PersistentRooted<JS::GCVector<JS::Value>> arguments;
   std::unique_ptr<Callback> next;
+  Callback* previous = nullptr;
   explicit Callback(JSContext* cx) : handler(cx), arguments(cx, JS::GCVector<JS::Value>(cx)) {}
 };
 struct State {
@@ -72,7 +76,12 @@ struct State {
   // a removed iframe). Their queued work was dropped and they schedule no more.
   std::vector<JSObject*> retired;
   State* previous = nullptr;
+  // Newest first. Every callback is linked with Link and unlinked with Remove,
+  // which keep the indexes by task id and by public handle in step, so lookup
+  // and cancellation do not walk the list (#34).
   std::unique_ptr<Callback> callbacks;
+  std::unordered_map<uint64_t, Callback*> callbackIds;
+  std::map<std::tuple<JSObject*, uint32_t, bool>, Callback*> callbackHandles;
   size_t argumentSlots = 0, sourceUnits = 0;
   uint32_t microPending = 0, microEnqueued = 0, microExecuted = 0;
   bool frozen = false, initialized = false, clockBound = false;
@@ -106,6 +115,11 @@ struct State {
   bool Owns(JSObject* receiver) const;
   void AddRealm(JS::HandleObject global);
   Callback* Find(uint64_t id);
+  // The live public timer (frame false) or animation frame (frame true) of
+  // `global` with that handle.
+  Callback* FindHandle(JSObject* global, uint32_t handle, bool frame);
+  // Links a callback whose model task is scheduled (its id is set).
+  void Link(std::unique_ptr<Callback> callback);
   void Remove(uint64_t id);
   void Cancel(uint32_t handle, bool frame, JSObject* global);
   RealmHandles& Handles(JSObject* global);

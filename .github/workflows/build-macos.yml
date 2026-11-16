@@ -170,6 +170,7 @@ jobs:
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/fetch_abort_check.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/fetch_abort_transfer_check.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/load_timer_check.py"
+          wheel-test/bin/python "$GITHUB_WORKSPACE/ci/timer_scale_check.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/network_smoke.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/proxy_smoke.py"
           wheel-test/bin/python "$GITHUB_WORKSPACE/ci/hello_check.py"

@@ -38,7 +38,7 @@ bool IdleRequest(JSContext* cx,unsigned argc,JS::Value* vp){
  if(!callback->arguments.append(JS::ObjectValue(*factory)))return false;
  uint32_t handle=uint32_t(JS::GetReservedSlot(factory,INext).toNumber());callback->idleHandle=handle;
  s.SyncClock();if(!s.Accept(s.model.ScheduleIdle(!timeout.isUndefined(),duration,&callback->id)))return false;
- ++s.argumentSlots;callback->next=std::move(s.callbacks);s.callbacks=std::move(callback);
+ ++s.argumentSlots;s.Link(std::move(callback));
  JS::SetReservedSlot(factory,INext,JS::DoubleValue(uint32_t(handle+1)));args.rval().setNumber(handle);return true;
 }
 bool IdleCancel(JSContext* cx,unsigned argc,JS::Value* vp){
