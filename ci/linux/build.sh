@@ -13,6 +13,8 @@
 #                              ci/atob_check.py, ci/fetch_abort_check.py,
 #                              ci/fetch_abort_transfer_check.py, ci/load_timer_check.py,
 #                              ci/timer_scale_check.py, ci/selection_check.py,
+#                              ci/cascade_collection_check.py, ci/node_getter_check.py,
+#                              ci/timer_scaling_check.py,
 #                              ci/socks_proxy_check.py,
 #                              ci/layout_fingerprint_check.py,
 #                              ci/network_smoke.py, ci/proxy_smoke.py,
@@ -105,6 +107,11 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/load_timer_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/timer_scale_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/selection_check.py"
+    # Cascade rule index, computed style cache, live collections (#36); narrow
+    # node getters (#37); timer queue ordering and scaling (#38).
+    "${clean[@]}" "$venv/bin/python" "$root/ci/cascade_collection_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/node_getter_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/timer_scaling_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/socks_proxy_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/layout_fingerprint_check.py"
     # One real page load through the bundled Necko helper, direct and through
