@@ -31,6 +31,10 @@ struct Job {
   std::u16string injectPath, storeName;
   CursorStep step;
   JS::PersistentRootedObject cursor;
+  // An open request whose upgradeneeded returned with requests still queued in
+  // its versionchange transaction: complete/success wait for them (Pump).
+  bool upgrading = false;
+  uint32_t connection = 0;
   Job(State* s, JSContext* cx, JS::HandleObject r, Key k, uint64_t v, bool d)
       : owner(s), request(cx,r), key(std::move(k)), version(v), remove(d), cursor(cx) {}
 };
@@ -123,6 +127,13 @@ bool IndexMethod(JSContext*,unsigned,JS::Value*);
 bool StoreMember(JSContext*,unsigned,JS::Value*);
 bool StoreSetName(JSContext*,unsigned,JS::Value*);
 bool EnqueueJob(State&,std::unique_ptr<Job>,JS::HandleObject tx);
+// The IDBObjectStore a request source (store, index or cursor) reads.
+JSObject* SourceStore(JSObject* source);
+// An upgrade whose upgradeneeded has returned: once no request of its
+// versionchange transaction is queued, it completes (or aborts) and the open
+// request succeeds (or fails). Pump calls it again until then.
+bool FinishUpgrade(Job&);
+bool UpgradePending(const Store&,const Job&);
 bool OpenCursor(State&,JS::HandleObject source,JS::HandleObject tx,const std::u16string* index,JS::HandleValue range,
                 JS::HandleValue direction,bool keyOnly,JS::MutableHandleValue request);
 bool CursorJob(Job&,const char** error,JS::MutableHandleValue result);

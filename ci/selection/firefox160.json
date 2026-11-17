@@ -1,0 +1,644 @@
+{
+ "api": [
+  [
+   "bidi.none",
+   "ok null"
+  ],
+  [
+   "composed.none",
+   "ok []"
+  ],
+  [
+   "bidi",
+   "ok null"
+  ],
+  [
+   "bidi.set",
+   "ok 1"
+  ],
+  [
+   "composed",
+   "ok [[\"StaticRange\",true,1,2,false]]"
+  ],
+  [
+   "composed.opts",
+   "ok 1"
+  ],
+  [
+   "composed.legacy",
+   "ok 1"
+  ],
+  [
+   "lengths",
+   "ok \"getRangeAt:1,addRange:1,removeRange:1,removeAllRanges:0,empty:0,getComposedRanges:0,collapse:1,setPosition:1,collapseToStart:0,collapseToEnd:0,extend:1,setBaseAndExtent:4,selectAllChildren:1,modify:0,deleteFromDocument:0,containsNode:1,toString:0\""
+  ],
+  [
+   "desc.direction",
+   "ok [\"function\",\"undefined\",true]"
+  ],
+  [
+   "desc.bidi",
+   "ok [\"function\",\"function\",true]"
+  ],
+  [
+   "collapse.noargs",
+   "TypeError|TypeError|Selection.collapse: At least 1 argument required, but only 0 passed"
+  ],
+  [
+   "collapse.undef",
+   "ok 0"
+  ],
+  [
+   "addRange.bad",
+   "TypeError|TypeError|Selection.addRange: Argument 1 does not implement interface Range."
+  ],
+  [
+   "containsNode.null",
+   "TypeError|TypeError|Selection.containsNode: Argument 1 is not an object."
+  ],
+  [
+   "extend.foreign",
+   "ok 1"
+  ],
+  [
+   "modify.args",
+   "ok [1]"
+  ],
+  [
+   "modify.bad",
+   "ok [0]"
+  ]
+ ],
+ "text": [
+  [
+   "div2",
+   "ok \"a\\r\\nb\""
+  ],
+  [
+   "p2",
+   "ok \"a\\r\\n\\r\\nb\""
+  ],
+  [
+   "br",
+   "ok \"a\\r\\nb\""
+  ],
+  [
+   "brend",
+   "ok \"a\\r\\n\""
+  ],
+  [
+   "text.div",
+   "ok \"a\\r\\nb\\r\\nc\""
+  ],
+  [
+   "li",
+   "ok \"    a\\r\\n    b\""
+  ],
+  [
+   "h1p",
+   "ok \"a\\r\\n\\r\\nb\""
+  ],
+  [
+   "span",
+   "ok \"abc\""
+  ],
+  [
+   "nested",
+   "ok \"a\\r\\nb\""
+  ],
+  [
+   "ws",
+   "ok \" a b \""
+  ],
+  [
+   "nbsp",
+   "ok \"a b\""
+  ],
+  [
+   "pre",
+   "ok \"a\\r\\n b\""
+  ],
+  [
+   "table",
+   "ok \"a\\tb\\r\\nc\""
+  ],
+  [
+   "hidden",
+   "ok \"ab\""
+  ],
+  [
+   "script",
+   "ok \"ab\""
+  ],
+  [
+   "tab",
+   "ok \"a b\""
+  ],
+  [
+   "img",
+   "ok \"axb\""
+  ],
+  [
+   "blockquote",
+   "ok \"    a\\r\\n\\r\\nb\""
+  ],
+  [
+   "p.div",
+   "ok \"a\\r\\nb\""
+  ],
+  [
+   "empty.p",
+   "ok \"a\\r\\n\\r\\nb\""
+  ],
+  [
+   "input",
+   "ok \"ab\""
+  ],
+  [
+   "textarea",
+   "ok \"axb\""
+  ],
+  [
+   "partial",
+   "ok \"bc\\r\\n\\r\\nd\""
+  ],
+  [
+   "partial.end.block",
+   "ok \"bc\\r\\n\\r\\n\""
+  ],
+  [
+   "ce.input",
+   "ok [\"\",1,\"Caret\"]"
+  ],
+  [
+   "multi",
+   "ok \"ae\""
+  ],
+  [
+   "platform",
+   "ok \"Win32\""
+  ]
+ ],
+ "ranges": [
+  [
+   "order",
+   "ok [[2,\"#text:abc\",0,\"#text:abc\",1,\"ag\"],true,true]"
+  ],
+  [
+   "overlap",
+   "ok [[2,\"#text:abc\",1,\"#text:abc\",3,\"abc\"],false]"
+  ],
+  [
+   "dup.collapsed",
+   "ok [1,\"#text:abc\",1,\"#text:abc\",1,\"\"]"
+  ],
+  [
+   "collapse.multi",
+   "ok [1,\"#text:abc\",0,\"#text:abc\",0,\"\"]"
+  ],
+  [
+   "collapseToEnd.multi",
+   "ok [1,\"#text:ghi\",1,\"#text:ghi\",1,\"\"]"
+  ],
+  [
+   "extend.multi",
+   "ok [2,\"#text:ghi\",0,\"#text:def\",2,\"a\\r\\n\\r\\nf\\r\\n\\r\\n\"]"
+  ],
+  [
+   "remove.first",
+   "ok [1,\"#text:ghi\",0,\"#text:ghi\",1,\"g\"]"
+  ],
+  [
+   "remove.primary",
+   "ok [1,\"#text:abc\",0,\"#text:abc\",1,\"a\"]"
+  ],
+  [
+   "delete.multi",
+   "ok [[1,\"#text:df\",1,\"#text:df\",1,\"\"],\"<p>bc</p><p>df</p>\"]"
+  ],
+  [
+   "backward.then.add",
+   "ok [[2,\"backward\"],[2,\"#text:abc\",3,\"#text:abc\",2,\"abc\"],\"backward\"]"
+  ]
+ ],
+ "edit_keys": [
+  [
+   "space.end",
+   "ok [\"ab&nbsp;\",\"#text:ab_\",3]"
+  ],
+  [
+   "space.then",
+   "ok [\"ab c\",\"#text:ab c\",4]"
+  ],
+  [
+   "space.two",
+   "ok [\"ab&nbsp;&nbsp;\",\"#text:ab__\",4]"
+  ],
+  [
+   "space.two.then",
+   "ok [\"ab&nbsp; c\",\"#text:ab_ c\",5]"
+  ],
+  [
+   "space.three.then",
+   "ok [\"ab&nbsp; &nbsp;c\",\"#text:ab_ _c\",6]"
+  ],
+  [
+   "space.mid",
+   "ok [\"a b\",\"#text:a b\",2]"
+  ],
+  [
+   "space.start",
+   "ok [\"&nbsp;ab\",\"#text:_ab\",1]"
+  ],
+  [
+   "space.empty",
+   "ok [\"&nbsp;\",\"#text:_\",1]"
+  ],
+  [
+   "space.before.space",
+   "ok [\"a&nbsp; b\",\"#text:a_ b\",2]"
+  ],
+  [
+   "space.after.space",
+   "ok [\"a&nbsp; b\",\"#text:a_ b\",3]"
+  ],
+  [
+   "typed",
+   "ok [\"hello world\",\"#text:hello world\",11]"
+  ],
+  [
+   "enter.end.p",
+   "ok [\"<p>abc</p><p><br></p>\",\"P\",0]"
+  ],
+  [
+   "enter.end.p.type",
+   "ok [\"<p>abc</p><p>x</p>\",\"#text:x\",1]"
+  ],
+  [
+   "enter.start.p",
+   "ok [\"<p><br></p><p>abc</p>\",\"#text:abc\",0]"
+  ],
+  [
+   "enter.empty",
+   "ok [\"<div><br></div><div><br></div>\",\"DIV\",0]"
+  ],
+  [
+   "enter.empty.type",
+   "ok [\"<div><br></div><div>x</div>\",\"#text:x\",1]"
+  ],
+  [
+   "enter.text.end",
+   "ok [\"<div>abc</div><div><br></div>\",\"DIV\",0]"
+  ],
+  [
+   "enter.text.end.type",
+   "ok [\"<div>abc</div><div>x</div>\",\"#text:x\",1]"
+  ],
+  [
+   "enter.div",
+   "ok [\"<div>a</div><div>bc</div>\",\"#text:bc\",0]"
+  ],
+  [
+   "enter.h1",
+   "ok [\"<h1>a</h1><h1>bc</h1>\",\"#text:bc\",0]"
+  ],
+  [
+   "enter.h1.end",
+   "ok [\"<h1>abc</h1><div><br></div>\",\"DIV\",0]"
+  ],
+  [
+   "enter.li",
+   "ok [\"<ul><li>a</li><li>bc</li></ul>\",\"#text:bc\",0]"
+  ],
+  [
+   "enter.bold",
+   "ok [\"<p>a<b>b</b></p><p><b>c</b>d</p>\",\"#text:c\",0]"
+  ],
+  [
+   "enter.twice",
+   "ok [\"<p>abc</p><p><br></p><p><br></p>\",\"P\",0]"
+  ],
+  [
+   "br.end",
+   "ok [\"abc<br><br>\",\"DIV\",2]"
+  ],
+  [
+   "br.end.type",
+   "ok [\"abc<br>x\",\"#text:x\",1]"
+  ],
+  [
+   "br.p.end",
+   "ok [\"<p>abc<br><br></p>\",\"P\",2]"
+  ],
+  [
+   "bs.text",
+   "ok [\"ac\",\"#text:ac\",1]"
+  ],
+  [
+   "bs.all",
+   "ok [\"<br>\",\"DIV\",0]"
+  ],
+  [
+   "bs.all.p",
+   "ok [\"<p><br></p>\",\"P\",0]"
+  ],
+  [
+   "bs.all.p.type",
+   "ok [\"<p>x</p>\",\"#text:x\",1]"
+  ],
+  [
+   "bs.empty.p",
+   "ok [\"<p>ab</p>\",\"#text:ab\",2]"
+  ],
+  [
+   "bs.join.div",
+   "ok [\"<div>abcd</div>\",\"#text:abcd\",2]"
+  ],
+  [
+   "bs.join.text",
+   "ok [\"abcd\",\"#text:ab\",2]"
+  ],
+  [
+   "bs.br",
+   "ok [\"abcd\",\"#text:abcd\",2]"
+  ],
+  [
+   "bs.surrogate",
+   "ok [\"a\",\"#text:a\",1]"
+  ],
+  [
+   "bs.nbsp",
+   "ok [\"ab\",\"#text:ab\",2]"
+  ],
+  [
+   "bs.word.space",
+   "ok [\"a&nbsp;\",\"#text:a_\",2]"
+  ],
+  [
+   "del.fwd",
+   "ok [\"ac\",\"#text:ac\",1]"
+  ],
+  [
+   "type.after.br",
+   "ok [\"abx\",\"#text:abx\",3]"
+  ],
+  [
+   "type.before.br.only",
+   "ok [\"x\",\"#text:x\",1]"
+  ],
+  [
+   "type.p.br",
+   "ok [\"<p>x</p>\",\"#text:x\",1]"
+  ],
+  [
+   "cjk",
+   "ok [\"你好a\",\"#text:你好a\",3]"
+  ],
+  [
+   "events",
+   "ok [[true,true,true],[[\"input\",\"insertText\",\"X\",\"InputEvent\",true,false,true,true],[\"input\",\"deleteContentBackward\",null,\"InputEvent\",true,false,true,true],[\"input\",\"insertParagraph\",null,\"InputEvent\",true,false,true,true]]]"
+  ],
+  [
+   "queryCommand",
+   "ok [\"insertText:true:true\",\"delete:true:true\",\"insertParagraph:true:true\",\"insertLineBreak:true:true\",\"forwardDelete:true:true\",\"bold:true:true\",\"selectAll:true:true\",\"undo:true:true\"]"
+  ],
+  [
+   "exec.noedit",
+   "ok false"
+  ]
+ ],
+ "edit_spaces": [
+  [
+   "n1.end",
+   "ok \"ab&nbsp;\""
+  ],
+  [
+   "n2.end",
+   "ok \"ab&nbsp;&nbsp;\""
+  ],
+  [
+   "n3.end",
+   "ok \"ab&nbsp; &nbsp;\""
+  ],
+  [
+   "n4.end",
+   "ok \"ab&nbsp; &nbsp;&nbsp;\""
+  ],
+  [
+   "n5.end",
+   "ok \"ab&nbsp; &nbsp; &nbsp;\""
+  ],
+  [
+   "n6.end",
+   "ok \"ab&nbsp; &nbsp; &nbsp;&nbsp;\""
+  ],
+  [
+   "n1.then",
+   "ok \"ab c\""
+  ],
+  [
+   "n2.then",
+   "ok \"ab&nbsp; c\""
+  ],
+  [
+   "n3.then",
+   "ok \"ab&nbsp; &nbsp;c\""
+  ],
+  [
+   "n4.then",
+   "ok \"ab&nbsp; &nbsp; c\""
+  ],
+  [
+   "n5.then",
+   "ok \"ab&nbsp; &nbsp; &nbsp;c\""
+  ],
+  [
+   "n6.then",
+   "ok \"ab&nbsp; &nbsp; &nbsp; c\""
+  ],
+  [
+   "mid.one",
+   "ok \"abc&nbsp;\""
+  ],
+  [
+   "start.one",
+   "ok \"&nbsp;ab\""
+  ],
+  [
+   "start.then",
+   "ok \"&nbsp;cab\""
+  ],
+  [
+   "mid.space.then",
+   "ok \"a cb\""
+  ],
+  [
+   "del.after",
+   "ok \"ab\""
+  ],
+  [
+   "cjk.space",
+   "ok \"你好 a\""
+  ]
+ ],
+ "edit_points": [
+  [
+   "div0.p",
+   "ok [\"X<p>abc</p>\",\"#text:X\",1]"
+  ],
+  [
+   "div1.p",
+   "ok [\"<p>abc</p>X\",\"#text:X\",1]"
+  ],
+  [
+   "div0.text",
+   "ok [\"Xabc\",\"#text:Xabc\",1]"
+  ],
+  [
+   "div1.text",
+   "ok [\"abcX\",\"#text:abcX\",4]"
+  ],
+  [
+   "div0.b",
+   "ok [\"X<b>abc</b>\",\"#text:X\",1]"
+  ],
+  [
+   "p0",
+   "ok [\"<p>Xabc</p>\",\"#text:Xabc\",1]"
+  ],
+  [
+   "p1",
+   "ok [\"<p>abcX</p>\",\"#text:abcX\",4]"
+  ],
+  [
+   "div0.2p",
+   "ok [\"<p>abc</p>X<p>def</p>\",\"#text:X\",1]"
+  ],
+  [
+   "div.br",
+   "ok [\"X\",\"#text:X\",1]"
+  ],
+  [
+   "div.pbr",
+   "ok [\"X<p><br></p>\",\"#text:X\",1]"
+  ],
+  [
+   "div.empty",
+   "ok [\"X\",\"#text:X\",1]"
+  ],
+  [
+   "replace.sel",
+   "ok [\"<p>你好abcc</p>\",\"#text:你好abcc\",5]"
+  ],
+  [
+   "replace.all",
+   "ok [\"X\",\"#text:X\",1]"
+  ],
+  [
+   "del.all",
+   "ok [\"<br>\",\"DIV\",0]"
+  ],
+  [
+   "del.range",
+   "ok [\"aef\",\"#text:aef\",1]"
+  ],
+  [
+   "bs.after.b",
+   "ok [\"a<b>b</b>d\",\"#text:b\",1]"
+  ],
+  [
+   "bs.empty.b",
+   "ok [\"ad\",\"#text:a\",1]"
+  ],
+  [
+   "bs.img",
+   "ok [\"ad\",\"#text:ad\",1]"
+  ],
+  [
+   "enter.p.mid.type",
+   "ok [\"<p>a</p><p>Xbc</p>\",\"#text:Xbc\",1]"
+  ],
+  [
+   "enter.br.p",
+   "ok [\"<p>abc<br>X</p>\",\"#text:X\",1]"
+  ],
+  [
+   "ce.false",
+   "ok [false,\"a<span contenteditable=\\\"false\\\">b</span>c\"]"
+  ],
+  [
+   "plaintext",
+   "ok [\"<div>ab</div><div>X</div>\",\"#text:X\",1]"
+  ]
+ ],
+ "edit_blocks": [
+  [
+   "enter.mid.text",
+   "ok [\"<div>a</div><div>bc</div>\",\"#text:bc\",0]"
+  ],
+  [
+   "enter.mid.text.type",
+   "ok [\"<div>a</div><div>Xbc</div>\",\"#text:Xbc\",1]"
+  ],
+  [
+   "enter.start.text",
+   "ok [\"<div><br></div><div>abc</div>\",\"#text:abc\",0]"
+  ],
+  [
+   "enter.text.then.div",
+   "ok [\"<div>ab</div><div><br></div><div>cd</div>\",\"DIV\",0]"
+  ],
+  [
+   "enter.div.end.type",
+   "ok [\"<div>ab</div><div>X</div>\",\"#text:X\",1]"
+  ],
+  [
+   "enter.inline.mid",
+   "ok [\"<div>a<b>b</b></div><div><b>c</b></div>\",\"#text:c\",0]"
+  ],
+  [
+   "bs.br.only",
+   "ok [\"<div>x</div>\",\"DIV\",0]"
+  ],
+  [
+   "bs.div.empty",
+   "ok [\"<div>ab</div>\",\"#text:ab\",2]"
+  ],
+  [
+   "bs.from.empty.div.to.text",
+   "ok [\"ab\",\"#text:ab\",2]"
+  ],
+  [
+   "bs.p.into.p",
+   "ok [\"<p>abcd</p>\",\"#text:abcd\",2]"
+  ],
+  [
+   "bs.after.br.text",
+   "ok [\"abcd\",\"#text:abcd\",2]"
+  ],
+  [
+   "bs.trailing.br",
+   "ok [\"ab\",\"DIV\",1]"
+  ],
+  [
+   "bs.at.host.start",
+   "ok [\"ab\",\"#text:ab\",0]"
+  ],
+  [
+   "enter.then.bs",
+   "ok [\"<div>abc</div>\",\"#text:abc\",3]"
+  ],
+  [
+   "enter.then.bs.type",
+   "ok [\"<div>abcX</div>\",\"#text:abcX\",4]"
+  ],
+  [
+   "type.enter.type.lines",
+   "ok [\"<div>a</div><div>b</div><div>c</div>\",\"#text:c\",1]"
+  ],
+  [
+   "bs.lines",
+   "ok [\"<div><br></div>\",\"DIV\",0]"
+  ]
+ ]
+}

@@ -38,7 +38,7 @@ bool Write(State& s, JS::HandleObject cursor, JS::HandleObject store, JS::Handle
   std::u16string mode;
   JS::RootedValue modeValue(cx, JS::GetReservedSlot(tx, TxMode));
   if (!Text(cx, modeValue, &mode)) return false;
-  if (mode != u"readwrite") return Throw(s, "ReadOnlyError");
+  if (mode != u"readwrite" && mode != u"versionchange") return Throw(s, "ReadOnlyError");
   if (!native.gotValue || native.keyOnly) return Throw(s, "InvalidStateError");
   JS::RootedObject none(cx);
   auto job = std::make_unique<Job>(&s, cx, none, Key{}, 0, false);

@@ -84,15 +84,19 @@ bool Press(JSContext* cx, JS::HandleObject target, const std::string& name, Sche
   }
   if (down && press && (code == 13 || code == 8)) {
     const bool lineBreak = code == 13;
+    std::u16string inputType = u"insertLineBreak";
     bool multiline = false;
     if (lineBreak && !document_model::Multiline(cx, target, &multiline)) return false;
     if (lineBreak && !multiline) {
       // Enter in a single-line control submits its form (no beforeinput).
       if (!document_model::ImplicitSubmit(cx, target, clock.ClockMilliseconds())) return false;
     } else if (lineBreak) {
-      bool inserted = false;
+      // A textarea inserts a line break; an editing host splits the paragraph.
+      bool inserted = false, editing = false;
+      if (!document_model::Editing(cx, target, &editing)) return false;
+      if (editing) inputType = u"insertParagraph";
       Init probe(cx);
-      if (!probe.Text("inputType", u"insertLineBreak").Flag("bubbles", true).Flag("cancelable", true)
+      if (!probe.Text("inputType", inputType).Flag("bubbles", true).Flag("cancelable", true)
               .Flag("composed", true).Send(target, "beforeinput", clock, &before)) return false;
       if (before && !document_model::InsertText(cx, target, u"\n", &inserted)) return false;
       changed = inserted;
@@ -103,7 +107,7 @@ bool Press(JSContext* cx, JS::HandleObject target, const std::string& name, Sche
       if (before && !document_model::DeleteBackward(cx, target, &changed)) return false;
     }
     Init input(cx);
-    if (changed && !input.Text("inputType", lineBreak ? u"insertLineBreak" : u"deleteContentBackward")
+    if (changed && !input.Text("inputType", lineBreak ? inputType : std::u16string(u"deleteContentBackward"))
             .Flag("bubbles", true).Flag("cancelable", false).Flag("composed", true).Send(target, "input", clock))
       return false;
   }

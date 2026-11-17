@@ -188,6 +188,14 @@ bool Collect(State& state, CollectionRecord& record) {
     }
   }
   record.items.swap(nodes);
+  // A live view's cached wrapper per index describes `items`, which this
+  // collect just replaced: drop it, or a read would hand out the wrapper of
+  // the node that used to be at that index (an innerHTML rebuild leaves the
+  // old nodes detached but still named here). MaterializeCollection re-wraps
+  // from the new keys — the same key still finds its one wrapper, so identity
+  // holds — and `materialized` stays, so it can delete the indices a shrunken
+  // list no longer has. Static lists (querySelectorAll) keep their own objects.
+  if (record.live) record.objects.clear();
   if (record.filter != CollectionFilter::All) record.strings.swap(strings);
   return true;
 }

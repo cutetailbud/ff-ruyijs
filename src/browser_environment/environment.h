@@ -168,6 +168,9 @@ class Environment final {
   bool ReadSourceSnapshot(SourceSnapshot* result);
   // The profile's navigator.language (the browser locale), "" when unset.
   bool ReadLanguage(std::string* result);
+  // The profile's navigator.platform ("Win32", "MacIntel", "Linux x86_64"...),
+  // "" when unset. Selection/innerText serialization picks its line break by it.
+  bool ReadPlatform(std::string* result);
   // locale.osLocale: the OS locale Firefox uses for Intl and untagged text
   // ("" when the host's own OS locale applies).
   bool ReadOsLocale(std::string* result);
@@ -191,6 +194,7 @@ class Environment final {
   // absent), honoured only in a secure context.
   bool CommitAgentCluster(const std::string& header);
  private:
+  bool ReadNavigatorText(const char* name, std::string* result);
   State* state_;
 };
 }

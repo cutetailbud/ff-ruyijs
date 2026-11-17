@@ -12,7 +12,8 @@
 #   ci/linux/build.sh test     installs the wheel in a fresh venv; ci/smoke_test.py,
 #                              ci/atob_check.py, ci/fetch_abort_check.py,
 #                              ci/fetch_abort_transfer_check.py, ci/load_timer_check.py,
-#                              ci/timer_scale_check.py, ci/socks_proxy_check.py,
+#                              ci/timer_scale_check.py, ci/selection_check.py,
+#                              ci/socks_proxy_check.py,
 #                              ci/layout_fingerprint_check.py,
 #                              ci/network_smoke.py, ci/proxy_smoke.py,
 #                              ci/hello_check.py and ci/engine_check.py
@@ -93,6 +94,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/fetch_abort_transfer_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/load_timer_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/timer_scale_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/selection_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/socks_proxy_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/layout_fingerprint_check.py"
     # One real page load through the bundled Necko helper, direct and through

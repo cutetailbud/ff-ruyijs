@@ -5,6 +5,7 @@
 // Editing and activation default actions are in user_actions.cpp.
 #include "document_model/html_element_internal.h"
 #include "document_model/focus_internal.h"
+#include "document_model/editing.h"
 #include "interaction/realm.h"
 #include "runtime/runtime.h"
 #include "js/PropertyAndElement.h"
@@ -68,8 +69,14 @@ bool MoveFocus(State& s, NodeKey document, NodeKey next) {
         !Fire(s, previous, "blur", false, after) || !Fire(s, previous, "focusout", true, after)) return false;
   }
   if (!next.node) return true;
-  return s.Check(s.model.SetFocusedElement(document, next)) &&
-         Fire(s, next, "focus", false, before) && Fire(s, next, "focusin", true, before);
+  if (!s.Check(s.model.SetFocusedElement(document, next))) return false;
+  // Focusing an editing host places the caret in it (when the window has focus,
+  // which a headless page always has: the selection is not elsewhere in it).
+  NodeKey host;
+  if (Same(document, s.main) && EditHost(s, next, &host) && Same(host, next) && !EditFocusCaret(s, host))
+    return false;
+  if (JS_IsExceptionPending(cx)) return false;
+  return Fire(s, next, "focus", false, before) && Fire(s, next, "focusin", true, before);
 }
 NodeKey OwnerDocument(State& s, NodeKey key) {
   NodeSnapshot node;

@@ -89,7 +89,10 @@ bool StoreConnection(State& s, JS::HandleObject store, Key* database, JS::Mutabl
   Connection* connection = FindConnection(s, db);
   if (!connection) return false;
   *database = connection->key;
+  // An upgrade-created store (null StoreTransaction) runs in its connection's
+  // versionchange transaction.
   JS::Value value = JS::GetReservedSlot(store, StoreTransaction);
+  if (!value.isObject()) value = JS::GetReservedSlot(db, DbUpgrade);
   tx.set(value.isObject() ? &value.toObject() : nullptr);
   return true;
 }
@@ -175,7 +178,7 @@ bool StoreMember(JSContext* cx, unsigned argc, JS::Value* vp) {
   std::u16string mode;
   JS::RootedValue modeValue(cx, JS::GetReservedSlot(tx, TxMode));
   if (!Text(cx, modeValue, &mode)) return false;
-  if (mode != u"readwrite") return Throw(*s, "ReadOnlyError");
+  if (mode != u"readwrite" && mode != u"versionchange") return Throw(*s, "ReadOnlyError");
   Query query;
   if (member == MDelete && !ReadRange(*s, args[0], &query.range, false)) return false;
   {

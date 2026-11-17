@@ -21,6 +21,12 @@ bool Pump(JSContext* cx,unsigned n,JS::Value* vp) {
     Job& job=*store.jobs[i];
     if (job.done || (!job.kind && waiting.count(job.key))) continue;
     State& s=*job.owner;JSAutoRealm realm(cx,s.kit.page);
+    if (job.upgrading) {
+      if (UpgradePending(store,job)) { waiting.insert(job.key);continue; }
+      if (!FinishUpgrade(job)) return false;
+      completed=job.done;if(completed)break;
+      continue;
+    }
     if (job.kind) {
       if(!DataJob(job))return false;
       completed=job.done;if(completed)break;
@@ -62,9 +68,11 @@ bool Pump(JSContext* cx,unsigned n,JS::Value* vp) {
 // transactions and closes its databases. Records and versions persist.
 bool Adopt(State& s) {
   Store& store=*s.store;
-  for (const auto& job:store.jobs)
+  for (const auto& job:store.jobs) {
     if (job->kind==3 && !job->done)
       { JS::RootedObject tx(s.cx,job->request); EndTransaction(s,tx,false); }
+    if (job->upgrading) store.model.Revert(job->connection);
+  }
   store.jobs.clear();
   for (const auto& connection:store.connections) store.model.Close(connection->id);
   store.connections.clear();

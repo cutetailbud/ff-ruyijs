@@ -47,21 +47,53 @@ bool Complete(Job& job) {
     JS::SetReservedSlot(db,DbUpgrade,JS::ObjectValue(*upgrade));
     JS::SetReservedSlot(job.request,TransactionSlot,JS::ObjectValue(*upgrade));
     if (!VersionEvent(s,job.request,"upgradeneeded",result.oldVersion,result.version,false)) return false;
-    JS::SetReservedSlot(db,8,JS::BooleanValue(false));
-    if (JS::GetReservedSlot(upgrade,TxActive).toInt32()==2 || !s.store->model.Active(result.connection)) {
-      JS::SetReservedSlot(upgrade,TxActive,JS::Int32Value(2));
-      s.store->model.Revert(result.connection);
-      if (s.store->model.Active(result.connection)) s.store->model.Close(result.connection);
-      JS::SetReservedSlot(job.request,TransactionSlot,JS::NullValue());
-      return s.events.Fire(upgrade,"abort",true,false) && Fail(job,"AbortError");
-    }
-    JS::SetReservedSlot(upgrade,TxActive,JS::Int32Value(1));
-    s.store->model.Settle(result.connection);
-    if (!s.events.Fire(upgrade,"complete",false,false)) return false;
-    JS::SetReservedSlot(job.request,TransactionSlot,JS::NullValue());
+    // Requests the upgrade queued (put/get/cursors on its stores) run first;
+    // the database stays in its upgrade until they and their callbacks finish.
+    job.upgrading=true;job.connection=result.connection;
+    return UpgradePending(*s.store,job) || FinishUpgrade(job);
   }
   JS::SetReservedSlot(db,8,JS::BooleanValue(false));
   if (!s.store->model.Active(result.connection)) return Fail(job,"AbortError");
+  job.done=true;
+  return s.events.Fire(job.request,"success",false,false);
+}
+bool UpgradePending(const Store& store,const Job& open) {
+  JSObject* db=&JS::GetReservedSlot(open.request,ResultSlot).toObject();
+  JSObject* upgrade=&JS::GetReservedSlot(db,DbUpgrade).toObject();
+  // An abort() ends the upgrade at once; its queued requests then fail in order.
+  if (JS::GetReservedSlot(upgrade,TxActive).toInt32()==2) return false;
+  for (const auto& job:store.jobs)
+    if (job->kind && job->kind!=3 && !job->done &&
+        JS::GetReservedSlot(job->request,TransactionSlot).toObjectOrNull()==upgrade) return true;
+  return false;
+}
+bool FinishUpgrade(Job& job) {
+  auto& s=*job.owner;JSContext* cx=s.cx;JSAutoRealm realm(cx,s.kit.page);
+  JS::RootedObject db(cx,&JS::GetReservedSlot(job.request,ResultSlot).toObject());
+  JS::RootedObject upgrade(cx,&JS::GetReservedSlot(db,DbUpgrade).toObject());
+  const uint32_t connection=job.connection;
+  job.upgrading=false;
+  JS::SetReservedSlot(db,8,JS::BooleanValue(false));
+  if (JS::GetReservedSlot(upgrade,TxActive).toInt32()==2 || !s.store->model.Active(connection)) {
+    JS::SetReservedSlot(upgrade,TxActive,JS::Int32Value(2));
+    // The requests still queued in the aborted upgrade fail before its abort
+    // event (their error callbacks may queue other transactions' requests).
+    for (size_t i=0;i<s.store->jobs.size();++i) {
+      Job& pending=*s.store->jobs[i];
+      if (pending.kind && pending.kind!=3 && !pending.done &&
+          JS::GetReservedSlot(pending.request,TransactionSlot).toObjectOrNull()==upgrade.get() &&
+          !DataJob(pending)) return false;
+    }
+    s.store->model.Revert(connection);
+    if (s.store->model.Active(connection)) s.store->model.Close(connection);
+    JS::SetReservedSlot(job.request,TransactionSlot,JS::NullValue());
+    return s.events.Fire(upgrade,"abort",true,false) && Fail(job,"AbortError");
+  }
+  JS::SetReservedSlot(upgrade,TxActive,JS::Int32Value(1));
+  s.store->model.Settle(connection);
+  if (!s.events.Fire(upgrade,"complete",false,false)) return false;
+  JS::SetReservedSlot(job.request,TransactionSlot,JS::NullValue());
+  if (!s.store->model.Active(connection)) return Fail(job,"AbortError");
   job.done=true;
   return s.events.Fire(job.request,"success",false,false);
 }

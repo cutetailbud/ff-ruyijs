@@ -1,0 +1,36 @@
+(async () => {
+  const engine = new URLSearchParams(location.search).get('engine');
+  const rows = [];
+  const put = (k, v) => rows.push([k, v]);
+  const run = (k, f) => { try { put(k, 'ok ' + JSON.stringify(f())); } catch (e) { put(k, e.name); } };
+  document.body.innerHTML = '<div id=h contenteditable></div>';
+  const sel = getSelection(), h = document.getElementById('h');
+  const name = (n) => n === null ? null : n.nodeName + (n.nodeType === 3 ? ':' + n.data : '');
+  const at = (html, path, off, text) => { h.innerHTML = html; let n = h; for (const i of path) n = n.childNodes[i]; sel.collapse(n, off);
+    document.execCommand('insertText', false, text); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; };
+  run('div0.p', () => at('<p>abc</p>', [], 0, 'X'));
+  run('div1.p', () => at('<p>abc</p>', [], 1, 'X'));
+  run('div0.text', () => at('abc', [], 0, 'X'));
+  run('div1.text', () => at('abc', [], 1, 'X'));
+  run('div0.b', () => at('<b>abc</b>', [], 0, 'X'));
+  run('p0', () => at('<p>abc</p>', [0], 0, 'X'));
+  run('p1', () => at('<p>abc</p>', [0], 1, 'X'));
+  run('div0.2p', () => at('<p>abc</p><p>def</p>', [], 1, 'X'));
+  run('div.br', () => at('<br>', [], 0, 'X'));
+  run('div.pbr', () => at('<p><br></p>', [], 0, 'X'));
+  run('div.empty', () => at('', [], 0, 'X'));
+  run('replace.sel', () => { h.innerHTML = '<p>abc</p>'; const t = h.firstChild.firstChild; sel.setBaseAndExtent(t, 0, t, 2);
+    for (const c of '你好abc') document.execCommand('insertText', false, c); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; });
+  run('replace.all', () => { h.innerHTML = '<p>abc</p><p>def</p>'; sel.selectAllChildren(h); document.execCommand('insertText', false, 'X'); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; });
+  run('del.all', () => { h.innerHTML = '<p>abc</p><p>def</p>'; sel.selectAllChildren(h); document.execCommand('delete'); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; });
+  run('del.range', () => { h.innerHTML = 'abcdef'; sel.setBaseAndExtent(h.firstChild, 1, h.firstChild, 4); document.execCommand('delete'); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; });
+  run('bs.after.b', () => { h.innerHTML = 'a<b>bc</b>d'; sel.collapse(h.lastChild, 0); document.execCommand('delete'); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; });
+  run('bs.empty.b', () => { h.innerHTML = 'a<b>c</b>d'; sel.collapse(h.childNodes[1].firstChild, 1); document.execCommand('delete'); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; });
+  run('bs.img', () => { h.innerHTML = 'a<img src=x.png>d'; sel.collapse(h.lastChild, 0); document.execCommand('delete'); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; });
+  run('enter.p.mid.type', () => { h.innerHTML = '<p>abc</p>'; sel.collapse(h.firstChild.firstChild, 1); document.execCommand('insertParagraph'); document.execCommand('insertText', false, 'X'); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; });
+  run('enter.br.p', () => { h.innerHTML = '<p>abc</p>'; sel.collapse(h.firstChild.firstChild, 3); document.execCommand('insertLineBreak'); document.execCommand('insertText', false, 'X'); return [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; });
+  run('ce.false', () => { h.innerHTML = 'a<span contenteditable=false>b</span>c'; sel.collapse(h.childNodes[1].firstChild, 1); return [document.execCommand('insertText', false, 'X'), h.innerHTML]; });
+  run('plaintext', () => { h.setAttribute('contenteditable', 'plaintext-only'); h.innerHTML = 'ab'; sel.collapse(h.firstChild, 2); document.execCommand('insertParagraph'); document.execCommand('insertText', false, 'X'); const r = [h.innerHTML, name(sel.anchorNode), sel.anchorOffset]; h.setAttribute('contenteditable', ''); return r; });
+  window.__result = JSON.stringify(rows);
+  try { await fetch('/report?engine=' + engine, { method: 'POST', body: JSON.stringify(rows) }); } catch (e) {}
+})();

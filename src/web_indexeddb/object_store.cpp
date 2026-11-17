@@ -40,15 +40,19 @@ JSObject* NewRequest(State& s,JS::HandleObject source,JS::HandleObject tx) {
 // Data jobs run in request order, ahead of their transaction's completion job.
 // The catalog transaction a request runs in: its source's object store's
 // (a cursor's source is a store or an index, an index's is its store).
-uint32_t SourceTxId(JSObject* source) {
+JSObject* SourceStore(JSObject* source) {
   for(int depth=0;source && depth<3;++depth) {
     const JSClass* clasp=JS::GetClass(source);
-    if(clasp==&kStoreClass)return uint32_t(JS::GetReservedSlot(source,StoreTxId).toInt32());
+    if(clasp==&kStoreClass)return source;
     if(clasp==&kIndexClass)source=&JS::GetReservedSlot(source,IndexStore).toObject();
     else if(clasp==&kCursorClass || clasp==&kCursorValueClass)source=&JS::GetReservedSlot(source,CursorSource).toObject();
-    else return 0;
+    else return nullptr;
   }
-  return 0;
+  return nullptr;
+}
+uint32_t SourceTxId(JSObject* source) {
+  source=SourceStore(source);
+  return source?uint32_t(JS::GetReservedSlot(source,StoreTxId).toInt32()):0;
 }
 bool EnqueueJob(State& s,std::unique_ptr<Job> job,JS::HandleObject tx) {
   if(job->request && JS::GetClass(job->request)==&kRequestClass)
@@ -77,6 +81,8 @@ bool StoreMethod(JSContext* cx,unsigned n,JS::Value* vp) {
   int op=WebKit::Slot(args);Query query;JS::RootedValue queryInput(cx);
   if(!PrepareQuery(cx,args,op,&query,&queryInput))return false;
   JS::RootedValue tv(cx,JS::GetReservedSlot(self,StoreTransaction));
+  // An upgrade-created store runs in its connection's versionchange transaction.
+  if(!tv.isObject())tv=JS::GetReservedSlot(&JS::GetReservedSlot(self,StoreDatabase).toObject(),DbUpgrade);
   if(!tv.isObject())return Throw(caller,"TransactionInactiveError");
   JS::RootedObject tx(cx,&tv.toObject());
   if(JS::GetReservedSlot(tx,TxActive).toInt32())return Throw(caller,"TransactionInactiveError");
@@ -86,7 +92,7 @@ bool StoreMethod(JSContext* cx,unsigned n,JS::Value* vp) {
   const bool write=op==Put || op==Add;
   bool generate=false,autoIncrement=false;
   if(write) {
-    if(mode!=u"readwrite")return Throw(caller,"ReadOnlyError");
+    if(mode!=u"readwrite" && mode!=u"versionchange")return Throw(caller,"ReadOnlyError");
     {
       Key database;JS::RootedObject ignored(cx);std::u16string storeName;
       JS::RootedValue nameValue(cx,JS::GetReservedSlot(self,StoreName));

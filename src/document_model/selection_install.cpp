@@ -14,16 +14,24 @@ bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
   JS::RootedObject receiver(cx, args.thisv().isObject()
       ? js::CheckedUnwrapStatic(&args.thisv().toObject()) : nullptr);
   if (document) {
-    if (!DocumentReceiver(cx, receiver)) return false;
+    Wrapper* entry = DocumentReceiver(cx, receiver);
+    if (!entry) return false;
     state.Observe("Document", "getSelection", int(ApiAccess::Call));
-    args.rval().setNull(); return true;
+    // Firefox returns the browsing context's Selection for the window's own
+    // document (editors such as ProseMirror read root.getSelection()); a
+    // document without one (DOMParser, createHTMLDocument) has none.
+    if (entry->owner != &state || entry->key.document != state.main.document ||
+        entry->key.node != state.main.node) {
+      args.rval().setNull(); return true;
+    }
+  } else {
+    // The page class is the shared runtime's realm identity, not a JS prototype.
+    // Any genuine page Window is accepted; the factory belongs to the callee.
+    if (!args.thisv().isNullOrUndefined() &&
+        (!receiver || JS::GetClass(receiver) != JS::GetClass(state.page)))
+      return TypeError(cx, "Window receiver is incompatible");
+    state.Observe("Window", "getSelection", int(ApiAccess::Call));
   }
-  // The page class is the shared runtime's realm identity, not a JS prototype.
-  // Any genuine page Window is accepted; the factory belongs to the callee.
-  if (!args.thisv().isNullOrUndefined() &&
-      (!receiver || JS::GetClass(receiver) != JS::GetClass(state.page)))
-    return TypeError(cx, "Window receiver is incompatible");
-  state.Observe("Window", "getSelection", int(ApiAccess::Call));
   if (!state.selection) {
     JS::RootedObject prototype(cx, state.Find("Selection")->prototype);
     state.selection = JS_NewObjectWithGivenProto(cx, &kSelectionClass, prototype);

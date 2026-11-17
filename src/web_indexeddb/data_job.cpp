@@ -47,7 +47,19 @@ bool DataJob(Job& job) {
     return !JS::GetReservedSlot(db,9).toBoolean() || FinishClose(s,db);
   }
   JS::RootedValue value(cx,JS::UndefinedValue());const char* error=nullptr;
-  if(state==2) error="AbortError";
+  // A request of the versionchange transaction (catalog id 0) runs in its own
+  // catalog transaction over the upgraded database, committed when it ends:
+  // an aborted upgrade reverts the whole database (Model::Revert).
+  bool upgrade=false;
+  if(!id && state!=2) {
+    JS::RootedObject store(cx,SourceStore(&JS::GetReservedSlot(job.request,SourceSlot).toObject()));
+    Key database;JS::RootedObject ignored(cx);std::u16string storeName;
+    JS::RootedValue nameValue(cx,store?JS::GetReservedSlot(store,StoreName):JS::UndefinedValue());
+    if(!store || !StoreConnection(s,store,&database,&ignored) || !Text(cx,nameValue,&storeName) ||
+       !(id=s.store->model.Begin(database,storeName,true))) {
+      JS_ClearPendingException(cx);error="InvalidStateError";
+    } else { upgrade=true;job.txId=id; }
+  }
   else if(job.kind==Put) {
     if(job.generate && !GenerateKey(job,id,&error)) return false;
   }
@@ -68,6 +80,10 @@ bool DataJob(Job& job) {
     if(!CursorJob(job,&error,&value))return false;
   } else {
     if(!QueryResult(job,&value,&error))return false;
+  }
+  if(upgrade) {
+    if(!s.store->model.End(id,!error) && !error)error="QuotaExceededError";
+    job.txId=0;
   }
   JS::SetReservedSlot(job.request,ReadySlot,JS::BooleanValue(true));job.done=true;
   if(error) {

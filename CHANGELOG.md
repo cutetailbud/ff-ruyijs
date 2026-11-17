@@ -5,6 +5,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `Context.type()` on a `contenteditable` element changed nothing and fired no `input` (#44). Typed text,
+  Backspace and Enter now edit an editing host at the window's selection, as measured in Firefox 160:
+  text joins the Text node at the caret and replaces a selected range, runs of spaces alternate with
+  no-break spaces, Enter splits the block (`insertParagraph`), an emptied block keeps its `<br>`.
+  `document.execCommand` runs `insertText`, `delete`, `forwardDelete`, `insertParagraph` and
+  `insertLineBreak` the same way. Focusing an editing host places the caret in it.
+- `Selection` kept no state: `addRange`, `collapse`, `setBaseAndExtent`, `extend`, `selectAllChildren` and
+  the other methods now hold real ranges, with `anchorNode`/`focusNode`, `direction`, `type`,
+  `getRangeAt`, `containsNode`, `deleteFromDocument`, `getComposedRanges` and `toString()` (Firefox's
+  plain-text serialization); `selectionchange` fires at the document. `document.getSelection()` returned
+  null; it returns the window's `Selection` (#44).
+- A `put`, `add`, `get`, cursor or index request on an object store inside `onupgradeneeded` threw
+  `TransactionInactiveError`. The versionchange transaction now runs its requests before it completes
+  and the open request succeeds; an aborted upgrade fails them and reverts the database (#44).
+- A live `NodeList` or `HTMLCollection` (`childNodes`, `children`, `getElementsBy*`) that script had
+  indexed kept handing out the old node at that index after the subtree was rebuilt, for example by
+  `innerHTML`.
+
+`ci/selection_check.py` compares these with Firefox 160 captures. Not covered yet: a `Range`'s boundaries
+do not follow later tree changes (a removed node's range is not moved to its parent), and
+`Selection.modify()` moves by character inside one Text node only.
+
 ## [0.4.1] - 2026-11-16
 
 ### Added

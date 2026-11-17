@@ -70,13 +70,15 @@ bool Environment::ReadOsLocale(std::string* result) {
   *result = text.get();
   return true;
 }
-bool Environment::ReadLanguage(std::string* result) {
+bool Environment::ReadLanguage(std::string* result) { return ReadNavigatorText("language", result); }
+bool Environment::ReadPlatform(std::string* result) { return ReadNavigatorText("platform", result); }
+bool Environment::ReadNavigatorText(const char* name, std::string* result) {
   result->clear();
   if (!state_) return false;
   JSAutoRealm realm(state_->cx, state_->page);
   if (!state_->Baseline()) return false;
   uint32_t field = 0;
-  while (field < std::size(kNavigatorFields) && std::strcmp(kNavigatorFields[field].name, "language")) ++field;
+  while (field < std::size(kNavigatorFields) && std::strcmp(kNavigatorFields[field].name, name)) ++field;
   JS::RootedValue value(state_->cx);
   if (field == std::size(kNavigatorFields) ||
       !state_->Read(Kind::Navigator, field, ValueType::String, &value)) return false;

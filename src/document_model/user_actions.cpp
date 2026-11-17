@@ -1,6 +1,7 @@
 // Default actions of host user input (ARCHITECTURE.md, host user input): text
 // insertion into input/textarea, the click's activation behavior (form controls,
 // hyperlinks) and Enter's implicit submission. Each runs in the node's own realm.
+#include "document_model/editing.h"
 #include "document_model/focus_internal.h"
 #include "document_model/form_submission.h"
 #include "document_model/model_hyperlink.h"
@@ -33,6 +34,15 @@ bool FollowHyperlink(State& s, NodeKey key) {
 }
 }  // namespace
 
+// An editing host (or content inside one) edits at the window's selection.
+bool EditIn(State& s, NodeKey key, EditCommand command, DomStringView text, bool* done, bool* changed) {
+  NodeKey host;
+  *done = false;
+  if (!EditHost(s, key, &host)) return false;
+  if (!host.node) return true;
+  *done = true;
+  return EditRun(s, host, command, text, changed);
+}
 bool InsertText(JSContext* cx, JS::HandleObject element, DomStringView text, bool* inserted) {
   *inserted = false;
   Wrapper* entry = Element(cx, element);
@@ -41,6 +51,12 @@ bool InsertText(JSContext* cx, JS::HandleObject element, DomStringView text, boo
   NodeSnapshot node;
   if (!s.Check(s.model.Inspect(entry->key, &node))) return false;
   const DomString tag = Tag(node);
+  if (tag != u"input" && tag != u"textarea") {
+    bool done = false;
+    const bool lineBreak = text == DomStringView(u"\n");
+    return EditIn(s, entry->key, lineBreak ? EditCommand::InsertParagraph : EditCommand::InsertText,
+                  lineBreak ? DomStringView() : text, &done, inserted);
+  }
   bool disabled = false, submit = false;
   if ((tag != u"input" && tag != u"textarea") || Has(s, entry->key, u"readonly") ||
       !s.Check(s.model.FormControlInfo(entry->key, &disabled, &submit)) || disabled) return true;
@@ -54,14 +70,29 @@ bool InsertText(JSContext* cx, JS::HandleObject element, DomStringView text, boo
   *inserted = true;
   return s.Check(s.model.InputRange(entry->key, text, end, end, true));
 }
-// Whether `element` is a textarea, where Enter inserts a line break.
+// Whether Enter inserts a line break in `element`: a textarea or an editing
+// host (where it splits the paragraph, inputType insertParagraph).
 bool Multiline(JSContext* cx, JS::HandleObject element, bool* multiline) {
   *multiline = false;
   Wrapper* entry = Element(cx, element);
   if (!entry) return false;
   NodeSnapshot node;
   if (!entry->owner->Check(entry->owner->model.Inspect(entry->key, &node))) return false;
-  *multiline = Tag(node) == u"textarea";
+  NodeKey host;
+  if (Tag(node) != u"input" && !EditHost(*entry->owner, entry->key, &host)) return false;
+  *multiline = Tag(node) == u"textarea" || host.node;
+  return true;
+}
+bool Editing(JSContext* cx, JS::HandleObject element, bool* editing) {
+  *editing = false;
+  Wrapper* entry = Element(cx, element);
+  if (!entry) return false;
+  NodeSnapshot node;
+  if (!entry->owner->Check(entry->owner->model.Inspect(entry->key, &node))) return false;
+  if (Tag(node) == u"input" || Tag(node) == u"textarea") return true;
+  NodeKey host;
+  if (!EditHost(*entry->owner, entry->key, &host)) return false;
+  *editing = host.node;
   return true;
 }
 // Backspace's default action: removes the character before the caret.
@@ -73,8 +104,12 @@ bool DeleteBackward(JSContext* cx, JS::HandleObject element, bool* deleted) {
   NodeSnapshot node;
   if (!s.Check(s.model.Inspect(entry->key, &node))) return false;
   const DomString tag = Tag(node);
+  if (tag != u"input" && tag != u"textarea") {
+    bool done = false;
+    return EditIn(s, entry->key, EditCommand::DeleteBackward, DomStringView(), &done, deleted);
+  }
   bool disabled = false, submit = false;
-  if ((tag != u"input" && tag != u"textarea") || Has(s, entry->key, u"readonly") ||
+  if (Has(s, entry->key, u"readonly") ||
       !s.Check(s.model.FormControlInfo(entry->key, &disabled, &submit)) || disabled) return true;
   if (tag == u"textarea") {
     double start = 0, end = 0;
