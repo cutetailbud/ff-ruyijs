@@ -37,6 +37,10 @@ void Realm::SetTaskPort(TaskPort port, void* context) {
   state_->task = port;
   state_->taskContext = context;
 }
+void Realm::SetLogicalClockPort(LogicalClockPort port, void* context) {
+  state_->logicalClock = port;
+  state_->logicalClockContext = context;
+}
 void Realm::SetEnvironmentPort(EnvironmentPort port, void* context) {
   state_->environment = port;
   state_->environmentContext = context;

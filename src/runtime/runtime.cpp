@@ -209,7 +209,9 @@ bool RunSession(JSContext* cx, const SessionOptions& session, js::cli::OptionPar
   BindWorkerTasks(*main->workers, *scheduling);
   struct WorkerTaskBinding {
     web_workers::Realm& workers;
-    ~WorkerTaskBinding() { workers.Stop(); workers.SetTaskPort(nullptr, nullptr); }
+    ~WorkerTaskBinding() {
+      workers.Stop(); workers.SetTaskPort(nullptr, nullptr); workers.SetLogicalClockPort(nullptr, nullptr);
+    }
   } workerTaskBinding{*main->workers};
   struct IndexedDBTaskPort {
     web_indexeddb::Realm& realm;

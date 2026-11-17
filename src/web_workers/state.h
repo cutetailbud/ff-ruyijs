@@ -33,6 +33,13 @@ struct WorkerRecord {
   bool terminated = false;
   uint64_t workerId = 0, parentSequence = 0, childSequence = 0;
   WorkerMessageToken lastIncoming;
+  // A reply may be on its way: the process just started or the page posted to
+  // it, and no frame has come back since. On a logical clock poll.cpp waits up
+  // to `patience` ms of wall time for such a worker (`waited` so far); a worker
+  // that let it run out gets a short one until it answers again.
+  static constexpr double kPatienceMs = 5000, kSilentPatienceMs = 250;
+  bool awaiting = true;
+  double waited = 0, patience = kPatienceMs;
   void Stop() {
     if (!terminated) { terminated = true; --budget->active; }
     process.Stop();
@@ -59,6 +66,8 @@ using RemotePortDeliver = bool (*)(void* context, uint32_t id, JS::HandleValue v
 using RemotePortClose = void (*)(void* context, uint32_t id);
 inline constexpr char kBroadcastFrame = '\x07';
 using TaskPort = bool (*)(void*, JS::HandleObject, double);
+// True when the owning document runs on the logical clock (configure_clock).
+using LogicalClockPort = bool (*)(void*);
 using EnvironmentPort = bool (*)(void*, std::string*);
 // Resolves a Worker script URL against the creating document's base URL and
 // reports whether it is same-origin with the document. False: invalid URL.
@@ -106,6 +115,8 @@ struct State {
   JS::PersistentRootedObjectVector active, sharedObjects;
   TaskPort task = nullptr;
   void* taskContext = nullptr;
+  LogicalClockPort logicalClock = nullptr;
+  void* logicalClockContext = nullptr;
   bool scheduled = false;
   size_t cursor = 0;
   std::shared_ptr<Budget> budget;

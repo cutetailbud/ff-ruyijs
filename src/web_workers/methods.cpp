@@ -39,6 +39,10 @@ bool WorkerPostMessage(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (!record->terminated && !record->process.Queue(std::move(frame))) {
     if (record->process.Running()) return WebKit::Fail(cx, "Worker message queue is full");
     record->Stop(); record->owner->Prune();
+  } else if (!record->terminated && !record->awaiting) {
+    // Posts while a reply is still outstanding share that wait (poll.cpp).
+    record->awaiting = true;
+    record->waited = 0;
   }
   args.rval().setUndefined(); return true;
 }

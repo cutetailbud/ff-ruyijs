@@ -13,6 +13,7 @@ namespace ruyijs::web_workers {
 struct State;
 using ObjectUrlPort = bool (*)(void*, const std::string&, std::string*, std::string*);
 using TaskPort = bool (*)(void*, JS::HandleObject, double);
+using LogicalClockPort = bool (*)(void*);
 using EnvironmentPort = bool (*)(void*, std::string*);
 using ServiceSink = bool (*)(void*, uint64_t, std::string_view);
 // A BroadcastChannel frame from one of this realm's worker processes; `from`
@@ -37,6 +38,7 @@ class Realm final {
   void SetScriptUrlPort(ScriptUrlPort, void*);
   void SetServiceFactory(ServiceFactory, void*);
   void SetTaskPort(TaskPort, void*);
+  void SetLogicalClockPort(LogicalClockPort, void*);
   void SetMessagePortFactory(RemotePortFactory, void*);
   void SetMessagePortDeliver(RemotePortDeliver, void*);
   void SetMessagePortClose(RemotePortClose, void*);

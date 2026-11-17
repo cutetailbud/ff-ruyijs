@@ -25,6 +25,9 @@ bool InstallNestedWorkers(web_workers::Realm& workers, NestedWorkerPorts& ports)
   workers.SetTaskPort([](void* context, JS::HandleObject task, double delay) {
     return static_cast<execution_scheduling::Realm*>(context)->PostDelayedTask(task, delay);
   }, &ports.scheduling);
+  workers.SetLogicalClockPort([](void* context) {
+    return static_cast<execution_scheduling::Realm*>(context)->Inspect().logical;
+  }, &ports.scheduling);
   workers.SetObjectUrlPort([](void* context, const std::string& url, std::string* bytes, std::string* type) {
     return static_cast<web_platform::Realm*>(context)->ReadObjectUrl(url, bytes, type);
   }, &ports.platform);
@@ -62,6 +65,7 @@ bool InstallNestedWorkers(web_workers::Realm& workers, NestedWorkerPorts& ports)
 void UnbindNestedWorkers(web_workers::Realm& workers) {
   workers.Stop();
   workers.SetTaskPort(nullptr, nullptr);
+  workers.SetLogicalClockPort(nullptr, nullptr);
   workers.SetObjectUrlPort(nullptr, nullptr);
   workers.SetEnvironmentPort(nullptr, nullptr);
   workers.SetScriptUrlPort(nullptr, nullptr);
