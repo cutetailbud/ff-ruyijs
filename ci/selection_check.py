@@ -22,6 +22,9 @@ from pathlib import Path
 
 from ruyijs import Context
 
+# Rows print CJK text; a Windows runner's console is cp1252.
+sys.stdout.reconfigure(errors="backslashreplace")
+
 HERE = Path(__file__).resolve().parent / "selection"
 # Rows that differ from Firefox 160 today, by probe.
 KNOWN_GAPS = {
