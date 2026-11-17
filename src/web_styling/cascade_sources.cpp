@@ -145,14 +145,32 @@ bool ReadCascadeSources(State& caller, JS::HandleObject element,
 // order, disabled flags, sheet media and every rule's text. Media results also
 // depend on the environment, which the layout cache keys separately.
 bool CascadeStamp(State& caller, JS::HandleObject element, uint64_t* stamp) {
+  return CascadeStamp(caller, element, stamp, false);
+}
+bool CascadeStamp(State& caller, JS::HandleObject element, uint64_t* stamp,
+                  bool includeEnvironment) {
   uint64_t hash = 1469598103934665603ull;
-  const bool ok = VisitCascadeSheets(caller, element, [&](State&, const SheetCache& cache) {
+  bool media = false;
+  State* owner = nullptr;
+  const bool ok = VisitCascadeSheets(caller, element, [&](State& state, const SheetCache& cache) {
+    if (!owner) owner = &state;
     const unsigned char flags = (cache.disabled ? 1 : 0) | (cache.rules.empty() ? 2 : 0);
     Mix(&hash, &flags, 1);
     Mix(&hash, cache.media.text());
     MixRules(&hash, cache.rules);
+    if (includeEnvironment && !cache.disabled && !cache.rules.empty() && !media)
+      media = !cache.media.text().empty() || HasMedia(cache.rules);
     return true;
   });
+  if (ok && includeEnvironment && media && owner) {
+    ruyijs::domain::styling::CssMediaEnvironment environment;
+    if (!ReadConditionEnvironment(*owner, &environment)) return false;
+    const double numbers[] = {environment.width, environment.height, environment.deviceWidth,
+                              environment.deviceHeight, environment.ratio, environment.color};
+    Mix(&hash, numbers, sizeof numbers);
+    Mix(&hash, &environment.touch, sizeof environment.touch);
+    for (const auto& [name, value] : environment.profile) { Mix(&hash, name); Mix(&hash, value); }
+  }
   *stamp = hash;
   return ok;
 }

@@ -70,6 +70,37 @@ struct CollectionRecord {
   Collection* cache = nullptr;  // The original native identity cache, not a GC root.
 };
 
+inline uint64_t TargetCollectionRevision(const Model& model, const CollectionRecord& record) noexcept {
+  switch (record.kind) {
+    case CollectionKind::NodeList:
+      if (record.filter != CollectionFilter::RadioGroup && record.filter != CollectionFilter::Name)
+        return model.TreeRevision();
+      return model.StructureRevision();
+    case CollectionKind::HTMLCollection:
+      switch (record.filter) {
+        case CollectionFilter::Children:
+        case CollectionFilter::TagName:
+        case CollectionFilter::TagNameNS:
+        case CollectionFilter::SelectOptions:
+        case CollectionFilter::TableRows:
+        case CollectionFilter::TableBodies:
+        case CollectionFilter::TableCells:
+          return model.TreeRevision();
+        case CollectionFilter::ClassNames:
+          return model.ClassRevision();
+        default:
+          return model.StructureRevision();
+      }
+    case CollectionKind::TokenList:
+      if (record.argument.empty() || record.argument == u"class")
+        return model.ClassRevision();
+      return model.StructureRevision();
+    case CollectionKind::AttributeMap:
+      return model.StructureRevision();
+  }
+  return model.StructureRevision();
+}
+
 // One cached JS object per live collection. The scope Wrapper traces this
 // object, which in turn traces that wrapper through reserved slot 2. The cache
 // is weak: trace refreshes its address; finalize clears it for safe-point reap.

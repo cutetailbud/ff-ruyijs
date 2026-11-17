@@ -63,7 +63,10 @@ Status Model::SetTitle(NodeKey document, DomStringView value) noexcept {
   });
 }
 Status Model::SetFocusedElement(NodeKey document, NodeKey element) noexcept {
-  return Protect([&] { State().document(document).set_focused(element.node); });
+  return Protect([&] {
+    State().document(document).set_focused(element.node);
+    State().TouchStyle();
+  });
 }
 Status Model::FocusedElement(NodeKey document, NodeKey* element) const noexcept {
   return Protect([&] {
@@ -108,6 +111,7 @@ void Model::Publish(DraftId draft) noexcept { if (impl_) State().drafts.erase(dr
 uint64_t Model::Revision() const noexcept { return impl_ ? impl_->revision : 0; }
 uint64_t Model::StructureRevision() const noexcept { return impl_ ? impl_->structure : 0; }
 uint64_t Model::TreeRevision() const noexcept { return impl_ ? impl_->tree : 0; }
+uint64_t Model::ClassRevision() const noexcept { return impl_ ? impl_->classes : 0; }
 void Model::Rollback(DraftId draft) noexcept {
   if (!impl_) return;
   auto found = State().drafts.find(draft); if (found == State().drafts.end()) return;

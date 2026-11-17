@@ -81,14 +81,18 @@ struct Model::Impl {
   Limits limits;
   DocumentId next_document = 0;
   DraftId next_draft = 0;
-  uint64_t revision = 0;
-  // Bumped by every mutation except an inline-style write: no collection or
-  // token view depends on the style attribute (StructureRevision).
-  uint64_t structure = 0;
+  uint64_t revision = 1;
+  // Bumped by every mutation except an in-place update to an existing style
+  // attribute or a no-op attribute write/remove: adding or removing style still
+  // changes Element.attributes (NamedNodeMap) membership (StructureRevision).
+  uint64_t structure = 1;
   // Bumped by tree changes only (nodes inserted, removed or moved, text and
   // other character data); attribute writes leave it (TreeRevision).
-  uint64_t tree = 0;
-  void Touch() noexcept { ++revision; ++structure; ++tree; }
+  uint64_t tree = 1;
+  // Bumped by tree changes and class-attribute changes (ClassRevision).
+  uint64_t classes = 1;
+  void Touch() noexcept { ++revision; ++structure; ++tree; ++classes; }
+  void TouchClass() noexcept { ++revision; ++structure; ++classes; }
   void TouchAttribute() noexcept { ++revision; ++structure; }
   void TouchStyle() noexcept { ++revision; }
   // Real-change log; see Model::SetMutationRecording. Bounded, oldest first.

@@ -28,7 +28,31 @@ ParsedSelector ParsedSelector::Parse(const std::string& input,unsigned depth,boo
     result.c_+=int(!part.type.empty())+int(part.pseudo_element)+part.function_c;
     result.compounds_.push_back(std::move(part));need=false;combinator=' ';
   }
-  if(need||result.compounds_.empty()) result.valid_=false;
+  if(need||result.compounds_.empty()) {result.valid_=false;return result;}
+  for(size_t i=result.compounds_.size()-1;i>0;--i) {
+    char rel=result.compounds_[i].combinator;
+    if(rel!=' '&&rel!='>') break;
+    const auto& anc=result.compounds_[i-1];
+    if(!anc.type.empty()&&anc.type!="*") result.ancestor_bloom_|=SelectorBloomHash('t',anc.type);
+    for(const auto& id:anc.ids) if(!id.empty()) result.ancestor_bloom_|=SelectorBloomHash('#',id);
+    for(const auto& cls:anc.classes) if(!cls.empty()) result.ancestor_bloom_|=SelectorBloomHash('.',cls);
+  }
+  for(size_t i=0;i<result.compounds_.size();++i) {
+    const auto& part=result.compounds_[i];
+    if(i>0&&(part.combinator=='+'||part.combinator=='~')) result.sibling_sensitive_=true;
+    for(const auto& pseudo:part.pseudos) {
+      if(pseudo=="first-child"||pseudo=="last-child"||pseudo=="only-child") result.edge_child_=true;
+      else if(pseudo=="first-of-type"||pseudo=="last-of-type"||pseudo=="only-of-type") result.sibling_sensitive_=true;
+    }
+    for(const auto& fn:part.functions) {
+      if(fn.name=="has"||fn.name.starts_with("nth-")) result.sibling_sensitive_=true;
+      for(const auto& sub:fn.selectors) {
+        if(!sub) continue;
+        result.edge_child_|=sub->edge_child_;
+        result.sibling_sensitive_|=sub->sibling_sensitive_;
+      }
+    }
+  }
   return result;
 }
 bool ParsedSelector::ParseCompound(const std::string& text,SelectorCompound* out,unsigned depth,bool strict,bool inHas) {
