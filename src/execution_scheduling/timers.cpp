@@ -24,53 +24,73 @@ bool StringHandlerAllowed(JSContext* cx, JS::HandleString code, bool* allowed) {
       JS::CompilationType::Undefined, parameters, body, arguments, body_arg, allowed);
 }
 }  // namespace
-namespace {
-bool PublicKind(Kind kind, bool frame) {
-  return frame ? kind == Kind::Frame : kind == Kind::Timeout || kind == Kind::Interval;
-}
-}  // namespace
 Callback* State::Find(uint64_t id) {
-  auto found = callbackIds.find(id);
-  return found == callbackIds.end() ? nullptr : found->second;
+  auto it = callbackById.find(id);
+  return it != callbackById.end() ? it->second : nullptr;
 }
-Callback* State::FindHandle(JSObject* global, uint32_t handle, bool frame) {
-  auto found = callbackHandles.find({global, handle, frame});
-  return found == callbackHandles.end() ? nullptr : found->second;
-}
-void State::Link(std::unique_ptr<Callback> callback) {
+void State::Track(std::unique_ptr<Callback> callback) {
   Callback* raw = callback.get();
-  callbackIds[raw->id] = raw;
-  for (bool frame : {false, true})
-    if (raw->publicHandle && PublicKind(raw->kind, frame))
-      callbackHandles[{raw->global, raw->publicHandle, frame}] = raw;
-  if (callbacks) callbacks->previous = raw;
+  callbackById[raw->id] = raw;
+  if (raw->publicHandle) {
+    auto& handles = Handles(raw->global);
+    if (raw->kind == Kind::Frame) handles.activeFrames[raw->publicHandle] = raw->id;
+    else if (raw->kind == Kind::Timeout || raw->kind == Kind::Interval)
+      handles.activeTimers[raw->publicHandle] = raw->id;
+  }
+  if (raw->kind == Kind::Idle && raw->idleHandle && raw->arguments.length() > 0 &&
+      raw->arguments[0].isObject()) {
+    activeIdles[{&raw->arguments[0].toObject(), raw->idleHandle}] = raw->id;
+  }
+  raw->prev = nullptr;
+  if (callbacks) callbacks->prev = raw;
   raw->next = std::move(callbacks);
   callbacks = std::move(callback);
 }
 void State::Remove(uint64_t id) {
-  Callback* found = Find(id);
-  if (!found || found->running) return;
-  argumentSlots -= found->arguments.length();
-  sourceUnits -= found->sourceUnits;
-  callbackIds.erase(id);
-  for (bool frame : {false, true}) {
-    auto handle = callbackHandles.find({found->global, found->publicHandle, frame});
-    if (handle != callbackHandles.end() && handle->second == found) callbackHandles.erase(handle);
+  auto it = callbackById.find(id);
+  if (it == callbackById.end() || it->second->running) return;
+  Callback* cb = it->second;
+  callbackById.erase(it);
+  if (cb->publicHandle) {
+    if (RealmHandles* handles = FindHandles(cb->global)) {
+      auto& active = cb->kind == Kind::Frame ? handles->activeFrames : handles->activeTimers;
+      auto hit = active.find(cb->publicHandle);
+      if (hit != active.end() && hit->second == id) active.erase(hit);
+    }
   }
-  auto& owner = found->previous ? found->previous->next : callbacks;
-  auto removed = std::move(owner);
-  owner = std::move(removed->next);
-  if (owner) owner->previous = removed->previous;
+  if (cb->kind == Kind::Idle && cb->idleHandle && cb->arguments.length() > 0 &&
+      cb->arguments[0].isObject()) {
+    auto hit = activeIdles.find({&cb->arguments[0].toObject(), cb->idleHandle});
+    if (hit != activeIdles.end() && hit->second == id) activeIdles.erase(hit);
+  }
+  argumentSlots -= cb->arguments.length();
+  sourceUnits -= cb->sourceUnits;
+  std::unique_ptr<Callback> removed;
+  if (cb->next) cb->next->prev = cb->prev;
+  if (cb->prev) {
+    removed = std::move(cb->prev->next);
+    cb->prev->next = std::move(removed->next);
+  } else {
+    removed = std::move(callbacks);
+    callbacks = std::move(removed->next);
+  }
+}
+State::RealmHandles* State::FindHandles(JSObject* global) {
+  for (auto& handles : publicHandles) if (handles.global == global) return &handles;
+  return nullptr;
 }
 State::RealmHandles& State::Handles(JSObject* global) {
-  for (auto& handles : publicHandles) if (handles.global == global) return handles;
-  publicHandles.push_back({global, {}, {}});
+  if (RealmHandles* existing = FindHandles(global)) return *existing;
+  publicHandles.push_back({global, {}, {}, {}, {}});
   return publicHandles.back();
 }
 void State::Cancel(uint32_t handle, bool frame, JSObject* global) {
-  Callback* callback = handle ? FindHandle(global, handle, frame) : nullptr;
-  if (!callback) return;
-  const uint64_t id = callback->id;
+  RealmHandles* handles = FindHandles(global);
+  if (!handles) return;
+  const auto& active = frame ? handles->activeFrames : handles->activeTimers;
+  auto hit = active.find(handle);
+  if (hit == active.end()) return;
+  const uint64_t id = hit->second;
   // Public timer handles do not cancel posted messages or internal tasks.
   // Retirement uses Drop directly to cancel every task owned by that realm.
   model.Cancel(id, frame);
@@ -91,8 +111,9 @@ bool State::Register(std::unique_ptr<Callback> callback, int32_t delay,
   if (publicId) {
     auto& handles = Handles(callback->global);
     sequence = frame ? &handles.frames : &handles.timers;
+    const auto& active = frame ? handles.activeFrames : handles.activeTimers;
     callback->publicHandle = sequence->Reserve([&](uint32_t value) {
-      return FindHandle(callback->global, value, frame) != nullptr;
+      return active.find(value) != active.end();
     });
     if (!callback->publicHandle) return Error(cx, "Public timer handles exhausted", true);
   }
@@ -101,7 +122,7 @@ bool State::Register(std::unique_ptr<Callback> callback, int32_t delay,
   argumentSlots += callback->arguments.length();
   sourceUnits += callback->sourceUnits;
   result.setInt32(int32_t(publicId ? callback->publicHandle : 0));
-  Link(std::move(callback));
+  Track(std::move(callback));
   return true;
 }
 bool Timer(JSContext* cx, unsigned argc, JS::Value* vp) {
