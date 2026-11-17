@@ -87,6 +87,144 @@ void SplitAttributeArgument(DomStringView argument, DomStringView* namespace_uri
   *name = argument.substr(second + 1);
 }
 
+namespace {
+bool SameKey(NodeKey a, NodeKey b) { return a.document == b.document && a.node == b.node; }
+DomString Lower(DomStringView value) {
+  DomString out(value);
+  for (auto& c : out) if (c >= u'A' && c <= u'Z') c = char16_t(c + 32);
+  return out;
+}
+bool HasToken(DomStringView list, DomStringView token) {
+  for (size_t i = 0; i < list.size();) {
+    while (i < list.size() && (list[i] == u' ' || list[i] == u'\t' || list[i] == u'\n' ||
+                               list[i] == u'\f' || list[i] == u'\r')) ++i;
+    size_t begin = i;
+    while (i < list.size() && list[i] != u' ' && list[i] != u'\t' && list[i] != u'\n' &&
+           list[i] != u'\f' && list[i] != u'\r') ++i;
+    if (i != begin && DomStringView(list).substr(begin, i - begin) == token) return true;
+  }
+  return false;
+}
+// True when every previous sibling on the way up to `scope` is not an element,
+// so `node` is the first element in that subtree. False when it is not, or
+// when it is not under `scope`.
+bool FirstElement(State& state, NodeKey scope, NodeKey node, bool* first) {
+  *first = false;
+  if (!node.node || SameKey(node, scope)) return true;
+  for (NodeKey current = node; !SameKey(current, scope);) {
+    NodeSnapshot self;
+    if (!state.Check(state.model.Inspect(current, &self))) return false;
+    for (NodeKey sib = self.previous_sibling; sib.node;) {
+      NodeSnapshot prev;
+      if (!state.Check(state.model.Inspect(sib, &prev))) return false;
+      if (prev.kind == NodeKind::Element) return true;
+      sib = prev.previous_sibling;
+    }
+    if (!self.parent.node) return true;
+    current = self.parent;
+  }
+  *first = true;
+  return true;
+}
+bool CollectionMember(State& state, const CollectionRecord& record, NodeKey node, bool* member) {
+  *member = false;
+  NodeSnapshot self;
+  if (!state.Check(state.model.Inspect(node, &self))) return false;
+  if (self.kind != NodeKind::Element || SameKey(node, record.scope)) return true;
+  const DomString local = self.local_name ? *self.local_name : DomString();
+  const bool fold = self.is_html_element && self.document_mode == DocumentMode::Html;
+  auto tag = [&](DomStringView expected) {
+    if (expected == u"*") return true;
+    const DomString folded = fold ? Lower(expected) : DomString(expected);
+    return local == folded;
+  };
+  switch (record.filter) {
+    case CollectionFilter::Children:
+      *member = SameKey(self.parent, record.scope);
+      return true;
+    case CollectionFilter::TagName:
+      *member = tag(record.argument);
+      return true;
+    case CollectionFilter::All:
+      *member = true;
+      return true;
+    case CollectionFilter::ClassNames: {
+      std::optional<DomString> value;
+      if (!state.Check(state.model.GetAttribute(node, u"class", &value))) return false;
+      const DomStringView present = value ? DomStringView(*value) : DomStringView();
+      bool any = false;
+      for (size_t i = 0; i < record.argument.size();) {
+        while (i < record.argument.size() && (record.argument[i] == u' ' || record.argument[i] == u'\t' ||
+               record.argument[i] == u'\n' || record.argument[i] == u'\f' || record.argument[i] == u'\r')) ++i;
+        size_t begin = i;
+        while (i < record.argument.size() && record.argument[i] != u' ' && record.argument[i] != u'\t' &&
+               record.argument[i] != u'\n' && record.argument[i] != u'\f' && record.argument[i] != u'\r') ++i;
+        if (i == begin) continue;
+        any = true;
+        if (!HasToken(present, DomStringView(record.argument).substr(begin, i - begin))) return true;
+      }
+      *member = any;
+      return true;
+    }
+    case CollectionFilter::TagNameNS: {
+      DomStringView ns, loc;
+      SplitNamespaceArgument(record.argument, &ns, &loc);
+      const DomStringView space = self.namespace_uri ? DomStringView(*self.namespace_uri) : DomStringView();
+      if (ns != u"*" && space != ns) return true;
+      if (loc == u"*") { *member = true; return true; }
+      const DomString expected = fold ? Lower(loc) : DomString(loc);
+      *member = local == expected;
+      return true;
+    }
+    case CollectionFilter::LinkHref:
+    case CollectionFilter::AnchorName: {
+      if (!self.is_html_element) return true;
+      const bool link = record.filter == CollectionFilter::LinkHref;
+      if (local != u"a" && !(link && local == u"area")) return true;
+      std::optional<DomString> attr;
+      if (!state.Check(state.model.GetAttribute(node, link ? u"href" : u"name", &attr))) return false;
+      *member = attr.has_value();
+      return true;
+    }
+    default:
+      return true;
+  }
+}
+}  // namespace
+
+bool FastNamedItemId(State& state, const CollectionRecord& record, DomStringView name,
+                     NodeKey* hit, bool* taken) {
+  *taken = false;
+  if (name.empty() || record.kind != CollectionKind::HTMLCollection) return true;
+  switch (record.filter) {
+    case CollectionFilter::Children:
+    case CollectionFilter::TagName:
+    case CollectionFilter::ClassNames:
+    case CollectionFilter::TagNameNS:
+    case CollectionFilter::LinkHref:
+    case CollectionFilter::AnchorName:
+    case CollectionFilter::All:
+      break;
+    default:
+      // Rows, form controls, options, and window/all name lists are not a
+      // plain tree-order element filter. An earlier name match could still
+      // win, so the scan stays the answer.
+      return true;
+  }
+  bool unique = false;
+  NodeKey holder;
+  if (!state.Check(state.model.LookupUniqueId(record.scope, name, &holder, &unique))) return false;
+  if (!unique) return true;
+  bool first = false, member = false;
+  if (!FirstElement(state, record.scope, holder, &first)) return false;
+  if (!first) return true;
+  if (!CollectionMember(state, record, holder, &member)) return false;
+  if (!member) return true;
+  *hit = holder;
+  *taken = true;
+  return true;
+}
+
 bool CollectionIndex(State& state, CollectionRecord& record, size_t index,
                      JS::MutableHandleValue result) {
   JSContext* cx = state.cx;

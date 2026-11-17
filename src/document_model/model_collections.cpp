@@ -10,8 +10,20 @@ Status Model::QuerySelector(NodeKey key, DomStringView text,
   Status parsed = Selector::Parse(text, &selector);
   if (parsed.code != ErrorCode::None) return parsed;
   return Protect([&] {
+    const auto& owner = State().owner(key);
+    std::string ident;
+    // Only a Document root. Element, fragment, and shadow scopes keep the walk
+    // so an id outside that subtree cannot be returned. A unique connected
+    // holder is the only match; every other index answer falls through.
+    if (key.node == owner.id() && selector.PureId(&ident)) {
+      domain::NodeId hit = 0;
+      if (owner.lookup_element_id(domain::from_utf8(ident), &hit) && hit) {
+        *result = {Key(key.document, hit)};
+        return;
+      }
+    }
     std::vector<uint64_t> found;
-    selector.Select(State().owner(key), key.node, &found);
+    selector.Select(owner, key.node, &found);
     std::vector<NodeKey> output;
     for (uint64_t node : found) output.push_back(Key(key.document, node));
     result->swap(output);
@@ -61,6 +73,18 @@ Status Model::ChildrenElements(NodeKey key, std::vector<NodeKey>* result) const 
   });
 }
 
+Status Model::LookupUniqueId(NodeKey scope, DomStringView name, NodeKey* hit, bool* unique) const noexcept {
+  return Protect([&] {
+    *unique = false;
+    *hit = {};
+    if (name.empty()) return;
+    const auto& owner = State().owner(scope);
+    domain::NodeId node = 0;
+    if (!owner.lookup_element_id(name, &node) || !node) return;
+    *unique = true;
+    *hit = Key(scope.document, node);
+  });
+}
 Status Model::ElementsByName(NodeKey key, DomStringView name,
                              std::vector<NodeKey>* result) const noexcept {
   return Protect([&] {

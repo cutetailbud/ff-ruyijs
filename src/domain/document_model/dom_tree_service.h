@@ -194,6 +194,9 @@ class DomTreeService {
       target.get_element(copy)->script_state().started = element->script_state().started;
       try { for (const auto& a : element->attributes16())
               target.get_element(copy)->set_attribute_ns16(a.namespace_uri, a.name, a.value);
+        // Attributes are copied directly, so an id on the clone is a new holder.
+        if (const auto ident = target.get_element(copy)->get_attribute16(u"id"))
+          target.note_element_id(copy, {}, *ident);
         if (element->tag_name().html() && element->tag_name().local16() == u"input") {
           target.get_element(copy)->input_current_value() = element->input_current_value();
           auto& state = target.get_element(copy)->input_check_state();

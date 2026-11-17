@@ -110,6 +110,16 @@ bool ParsedSelector::ParseCompound(const std::string& text,SelectorCompound* out
   }
   return !text.empty();
 }
+bool ParsedSelector::pure_id(std::string* id) const {
+  if (!valid_ || compounds_.size() != 1) return false;
+  const auto& part = compounds_.front();
+  if (part.combinator != ' ' || part.pseudo_element || !part.type.empty() ||
+      !part.classes.empty() || !part.attributes.empty() || !part.pseudos.empty() ||
+      !part.functions.empty() || part.ids.size() != 1 || part.ids.front().empty())
+    return false;
+  if (id) *id = part.ids.front();
+  return true;
+}
 bool ParsedSelector::has_pseudo_element() const noexcept {
   for(const auto& part:compounds_) if(part.pseudo_element) return true;
   return false;

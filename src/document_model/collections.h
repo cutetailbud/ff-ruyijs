@@ -137,6 +137,12 @@ void SplitAttributeArgument(DomStringView argument, DomStringView* namespace_uri
 DomString NamespaceArgument(DomStringView namespace_uri, DomStringView local);
 void SplitNamespaceArgument(DomStringView argument, DomStringView* namespace_uri,
                             DomStringView* local);
+// HTMLCollection.namedItem id fast path. `taken` is set only when `name` is a
+// unique connected id, that element belongs to this collection, and it is the
+// first element in the scope — so an earlier name attribute cannot win. Table,
+// form, select, window, and document.all collections are left to the scan.
+// False means the owner call failed.
+bool FastNamedItemId(State&, const CollectionRecord&, DomStringView name, NodeKey* hit, bool* taken);
 // Shared prototype members: length getter and the from-record iterator.
 bool CollectionLength(JSContext*, unsigned, JS::Value*);
 bool CollectionForEach(JSContext*, unsigned, JS::Value*);
