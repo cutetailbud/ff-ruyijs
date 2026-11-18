@@ -70,8 +70,12 @@ Status Model::SetInnerHtml(NodeKey key, DomStringView markup) noexcept {
       const auto old = inert.require(content.node).child_ids();
       try {
         const auto parsed = inert.require(root).child_ids();
-        for (auto child : old) inert.remove_child(content.node, child);
+        for (auto child : old) {
+          inert.remove_child(content.node, child);
+          State().NoteRangeRemove(content, child, 0);
+        }
         for (auto child : parsed) inert.append_child(content.node, child);
+        if (!parsed.empty()) State().NoteRangeInsert(content, 0, uint32_t(parsed.size()));
         State().NoteReplace(content, parsed, old);
       } catch (...) {
         inert.remove_node(root);
@@ -91,8 +95,12 @@ Status Model::SetInnerHtml(NodeKey key, DomStringView markup) noexcept {
     try {
       // Copies: the fragment root is emptied as each child moves into place.
       const auto parsed = owner.require(root).child_ids();
-      for (auto child : old) owner.remove_child(key.node, child);
+      for (auto child : old) {
+        owner.remove_child(key.node, child);
+        State().NoteRangeRemove(key, child, 0);
+      }
       for (auto child : parsed) owner.append_child(key.node, child);
+      if (!parsed.empty()) State().NoteRangeInsert(key, 0, uint32_t(parsed.size()));
       // The replacement is one record with both sides, taken at the same
       // change point that moved the nodes.
       State().NoteReplace(key, parsed, old);

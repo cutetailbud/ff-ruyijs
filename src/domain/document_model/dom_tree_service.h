@@ -135,9 +135,8 @@ class DomTreeService {
     }
     return true;
   }
-  // Merges adjacent CharacterData siblings of the same node type and drops the
-  // ones left empty, in tree order for the whole subtree. Text and Comment
-  // merge only with their own kind, so a Text never absorbs a Comment.
+  // Merges adjacent exclusive Text siblings and drops empty Text nodes, in tree
+  // order for the whole subtree (WHATWG DOM §4.4: Comments are untouched).
   static void normalize(DocumentAggregate& doc, NodeId root) {
     std::vector<NodeId> stack{root};
     while (!stack.empty()) {
@@ -147,16 +146,16 @@ class DomTreeService {
       const std::vector<NodeId> children = doc.require(key).child_ids();
       for (NodeId child : children) {
         const auto type = doc.require(child).node_type();
-        if (type != NodeType::Text && type != NodeType::Comment) {
+        if (type != NodeType::Text) {
           previous = 0; stack.push_back(child); continue;
         }
         auto& data = static_cast<CharacterData&>(doc.require(child));
-        if (previous && doc.require(previous).node_type() == type) {
+        if (data.data16().empty()) { doc.remove_child(key, child); continue; }
+        if (previous) {
           auto& kept = static_cast<CharacterData&>(doc.require(previous));
           kept.set_node_value16(kept.data16() + data.data16());
-          doc.remove_node(child); continue;
+          doc.remove_child(key, child); continue;
         }
-        if (data.data16().empty()) { doc.remove_node(child); continue; }
         previous = child;
       }
     }

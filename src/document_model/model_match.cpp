@@ -37,7 +37,60 @@ Status Model::ElementsByTagNameNS(NodeKey scope, DomStringView namespace_uri, Do
 }
 Status Model::Normalize(NodeKey node) noexcept {
   return Protect([&] {
-    domain::DomTreeService::normalize(State().owner(node),node.node);
+    auto& doc = State().owner(node);
+    doc.require(node.node);
+    // Tree-order walk matching WHATWG DOM §4.4 Node.prototype.normalize():
+    // only exclusive Text descendants are removed (when empty) or merged into
+    // their preceding Text sibling, updating live Ranges and MutationNotices.
+    std::vector<domain::NodeId> stack{node.node};
+    while (!stack.empty()) {
+      const domain::NodeId cur_parent = stack.back();
+      stack.pop_back();
+      const NodeKey parent_key = Key(node.document, cur_parent);
+      const std::vector<domain::NodeId> children = doc.require(cur_parent).child_ids();
+      std::vector<domain::NodeId> recurse;
+      domain::NodeId kept = 0;
+      for (domain::NodeId child : children) {
+        if (!doc.get_node(child)) continue;
+        const auto type = doc.require(child).node_type();
+        if (type != domain::NodeType::Text) {
+          kept = 0;
+          if (doc.require(child).has_children()) recurse.push_back(child);
+          continue;
+        }
+        auto& text = static_cast<domain::CharacterData&>(doc.require(child));
+        const int cur_idx = doc.require(cur_parent).index_of_child(child);
+        if (cur_idx < 0) continue;
+        if (text.data16().empty()) {
+          NodeKey prev_sib, next_sib;
+          if (State().mutationRecording) State().Neighbours(parent_key, child, &prev_sib, &next_sib);
+          doc.remove_child(cur_parent, child);
+          State().NoteRangeRemove(parent_key, child, uint32_t(cur_idx));
+          State().NoteRemoved(parent_key, {child}, prev_sib, next_sib);
+          continue;
+        }
+        if (!kept) {
+          kept = child;
+          continue;
+        }
+        auto& kept_node = static_cast<domain::CharacterData&>(doc.require(kept));
+        const DomString old_kept = kept_node.data16();
+        const DomString extra = text.data16();
+        const uint32_t kept_len = uint32_t(old_kept.size());
+        const NodeKey kept_key = Key(node.document, kept);
+        const NodeKey merged_key = Key(node.document, child);
+        kept_node.set_node_value16(old_kept + extra);
+        State().NoteRangeData(kept_key, kept_len, 0, uint32_t(extra.size()));
+        State().NoteData(kept_key, &old_kept);
+        State().NoteRangeMerge(kept_key, kept_len, merged_key, parent_key, uint32_t(cur_idx));
+        NodeKey prev_sib, next_sib;
+        if (State().mutationRecording) State().Neighbours(parent_key, child, &prev_sib, &next_sib);
+        doc.remove_child(cur_parent, child);
+        State().NoteRangeRemove(parent_key, child, uint32_t(cur_idx));
+        State().NoteRemoved(parent_key, {child}, prev_sib, next_sib);
+      }
+      for (auto it = recurse.rbegin(); it != recurse.rend(); ++it) stack.push_back(*it);
+    }
     State().Touch();
   });
 }

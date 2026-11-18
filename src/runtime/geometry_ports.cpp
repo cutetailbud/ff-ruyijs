@@ -178,6 +178,21 @@ bool BindGeometryPorts(BrowsingContext& context) {
     }
     return owner.geometry->MeasureOffset(element, out);
   }, &context);
+  context.document->SetPointQueryPort([](void* raw, JS::HandleObject root_element,
+                                         double x, double y, bool all,
+                                         std::vector<document_model::NodeKey>* out) {
+    auto& owner = *static_cast<BrowsingContext*>(raw);
+    out->clear();
+    if (owner.parent) {
+      JS::RootedObject frame(owner.cx);
+      if (!owner.parent->document->WrapNode(owner.frame_element, &frame)) return false;
+      std::array<double, 4> rect{};
+      bool present = false;
+      if (!owner.parent->geometry->MeasureElement(frame, &rect, &present, true)) return false;
+      if (!present) return true;
+    }
+    return owner.geometry->HitTestPoint(root_element, x, y, all, out);
+  }, &context);
   BindElementScroll(context);
   JS::RootedObject graphics(context.cx, context.document->svgPrototype(false));
   JS::RootedObject text(context.cx, context.document->svgPrototype(true));

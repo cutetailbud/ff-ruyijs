@@ -41,6 +41,10 @@ void Model::SetTreeSink(void (*sink)(void*, DocumentId, const std::vector<NodeKe
   impl_->treeSink = sink;
   impl_->treeSinkContext = context;
 }
+void Model::SetRangeSink(const RangeSink& sink) noexcept {
+  if (!impl_) return;
+  impl_->rangeSink = sink;
+}
 void Model::SetReclaimSink(void (*sink)(void*), void* context) noexcept {
   if (!impl_) return;
   impl_->reclaim = sink;

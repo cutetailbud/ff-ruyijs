@@ -14,20 +14,17 @@ bool Place(Wrapper& parent, Wrapper& child, bool replace) {
     return false;
   NodeSnapshot original;
   if (!child.owner->Check(child.owner->model.Inspect(child.key, &original))) return false;
-  RangeRemovalPlan ranges;
   ParentRemovalPlan removal;
   if (original.kind == NodeKind::DocumentFragment) {
-    if (!ranges.Add(*child.owner, child.key) || !removal.Add(*child.owner, child.key)) return false;
+    if (!removal.Add(*child.owner, child.key)) return false;
   } else if (original.parent.node &&
       (!replace || child.owner != &target || !Same(original.parent, parent.key))) {
-    if (!ranges.Add(*child.owner, original.parent, child.key) ||
-        !removal.Add(*child.owner, original.parent, child.key)) return false;
+    if (!removal.Add(*child.owner, original.parent, child.key)) return false;
   }
-  if (replace && (!ranges.Add(target, parent.key) || !removal.Add(target, parent.key))) return false;
+  if (replace && !removal.Add(target, parent.key)) return false;
   ChildListChange change;
   if (child.owner == &target && child.key.document == parent.key.document) {
     if (!target.Check(target.model.PrepareChildListChange(parent.key, child.key, replace, &change))) return false;
-    ranges.Commit();
     if (!removal.Commit()) return false;
     return target.Check(target.model.CommitChildListChange(change));
   }
@@ -40,7 +37,6 @@ bool Place(Wrapper& parent, Wrapper& child, bool replace) {
     return false;
   {
     AdoptionPublication publishing(target);
-    ranges.Commit();
     if (!removal.Commit()) return false;
     if (!transfer.Commit() || !target.Check(target.model.CommitChildListChange(change))) return false;
   }

@@ -5,8 +5,8 @@
 // new range) create one, and getRangeAt returns those same objects. The most
 // recently added range is the primary one anchor/focus describe; the
 // direction belongs to it. A range whose boundary left the document selects
-// nothing; like every Range of this runtime its boundaries are not moved by
-// later tree or character-data changes (offsets are clamped where read).
+// nothing; every Range of this runtime maintains live boundary points across
+// tree, character-data, splitText and normalize mutations (Model::RangeSink).
 #include "document_model/selection.h"
 #include "document_model/editing.h"
 #include "document_model/focus_internal.h"
