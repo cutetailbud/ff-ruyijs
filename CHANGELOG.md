@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-20
+
 ### Added
 
 - `Context(http_timeout=..., http_read_timeout=...)`: seconds one page HTTP request may take (default 15,
