@@ -61,12 +61,14 @@ def build_urlpattern(root, donor, build):
     # The donor already owns Rust's allocator and standard runtime. Combining
     # the crate rlibs avoids a second std/init array from a Rust staticlib.
     archive = directory / "target/release/libruyijs_urlpattern.a"
-    members = sorted((directory / "target/release/deps").glob("*.rlib"))
+    # Cargo 1.100 lays each unit out on its own: release/build/<package>/<hash>/out.
+    members = (sorted((directory / "target/release/deps").glob("*.rlib")) or
+               sorted((directory / "target/release/build").rglob("*.rlib")))
     if archive.is_file() and all(p.stat().st_mtime_ns <= archive.stat().st_mtime_ns for p in members):
         return
     if archive.exists():
         archive.unlink()
-    libraries = sorted((directory / "target/release/deps").glob("*.rlib"))
+    libraries = members
     script = "CREATE " + str(archive) + "\n" + "".join("ADDLIB " + str(path) + "\n" for path in libraries) + "SAVE\nEND\n"
     subprocess.run(["ar", "-M"], input=script, text=True, check=True)
 

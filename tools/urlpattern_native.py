@@ -109,7 +109,12 @@ def build(native):
     (directory / 'cargo.log').write_text(completed.stdout + completed.stderr, 'utf8')
     if completed.returncode:
         raise RuntimeError('urlpattern cargo build: ' + (completed.stdout + completed.stderr)[-10000:])
-    rlibs = sorted(str(p) for p in (target_dir / target_triple(native) / 'release/deps').glob('*.rlib'))
+    release = target_dir / target_triple(native) / 'release'
+    found = list((release / 'deps').glob('*.rlib'))
+    if not found:
+        # Cargo 1.100 lays each unit out on its own: release/build/<package>/<hash>/out.
+        found = list((release / 'build').rglob('*.rlib'))
+    rlibs = sorted(str(p) for p in found)
     if library.exists():
         library.unlink()
     archived = subprocess.run(native.archive(library, rlibs), cwd=directory, env=env,
