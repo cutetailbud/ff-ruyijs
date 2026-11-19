@@ -16,12 +16,26 @@ from ruyijs_necko import RequestControl, open_response
 from ruyijs_necko.timing import snapshot
 
 LIMIT = 8 * 1024 * 1024  # ResourceNetwork Limits::body_bytes, after decompression.
+
+
+def seconds(name, default):
+    """A positive number of seconds from the environment (at most an hour), else the default."""
+    try:
+        value = float(os.environ.get(name) or default)
+    except ValueError:
+        return default
+    return value if 0 < value <= 3600 else default
+
+
 # One request's whole budget. Firefox's connection timeout is 90 s
 # (network.http.connection-timeout), so connecting gets no shorter limit of its
 # own: TCP, the proxy CONNECT and TLS share this budget with the response, and a
 # busy proxy queueing many tunnels no longer fails at an arbitrary 5 s.
-BUDGET = 15
-READ = 10
+# READ bounds the wait for each next byte. Context(http_timeout=...,
+# http_read_timeout=...) sets both; the page side allows the redirect chain 5 s
+# more (#45).
+BUDGET = seconds("RUYIJS_HTTP_TIMEOUT", 15)
+READ = seconds("RUYIJS_HTTP_READ_TIMEOUT", 10)
 # Firefox network.http.request.max-attempts; one request's total deadline still applies.
 ATTEMPTS = RequestControl.MAX_ATTEMPTS
 

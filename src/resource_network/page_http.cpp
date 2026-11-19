@@ -8,6 +8,7 @@
 #include "domain/resource_network/request_defaults.h"
 #include "domain/resource_network/cors.h"
 #include <chrono>
+#include <cstdlib>
 #include <map>
 #include <mutex>
 #include <string>
@@ -40,6 +41,22 @@ std::string PreflightKey(const std::string& origin, const std::string& url, bool
   return CurrentPartition()->key + '\n' + origin + '\n' + url + '\n' + (credentials ? '1' : '0');
 }
 bool IsInitiator(const char* initiator, const char* name) { return std::string_view(initiator) == name; }
+// One request's whole budget in seconds, redirects included: Context(http_timeout=...)
+// sets RUYIJS_HTTP_TIMEOUT for the process, or for an engine session's partition,
+// and the Necko helper reads the same value for each hop (#45). The chain gets
+// 5 s more than one hop, so the helper's own deadline error reaches the page.
+uint32_t ChainLimitMs() {
+  std::string text;
+  if (const auto partition = CurrentPartition())
+    for (const auto& [name, value] : partition->environment)
+      if (name == "RUYIJS_HTTP_TIMEOUT") text = value;
+  if (text.empty())
+    if (const char* inherited = std::getenv("RUYIJS_HTTP_TIMEOUT")) text = inherited;
+  char* end = nullptr;
+  const double seconds = text.empty() ? 0 : std::strtod(text.c_str(), &end);
+  const bool valid = end && *end == '\0' && seconds > 0 && seconds <= 3600;
+  return uint32_t(((valid ? seconds : 15) + 5) * 1000);
+}
 }
 bool ResolveURL(std::string_view base, std::string_view input, std::string* url) {
   UrlValue resolved;
@@ -52,8 +69,9 @@ bool ResolveURL(std::string_view base, std::string_view input, std::string* url)
 // record, and a hop that needs no transport (blob: URL, resource directory).
 bool HttpExchange::Prepare(HttpResult* local) {
   const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - started_).count();
-  if (elapsed >= 20000) { Fail("HTTP redirect chain timed out"); return false; }
-  remaining_ = uint32_t(20000 - elapsed);
+  const auto limit = ChainLimitMs();
+  if (elapsed >= limit) { Fail("HTTP redirect chain timed out"); return false; }
+  remaining_ = uint32_t(limit - elapsed);
   crossOriginTainted_ = crossOriginTainted_ || source_.origin() != address_.origin();
   const bool network = address_.protocol() == "http:" || address_.protocol() == "https:";
   const bool crossOrigin = source_.origin() != address_.origin();

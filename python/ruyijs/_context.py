@@ -196,6 +196,17 @@ def pipe_broken(error):
         os.name == "nt" and isinstance(error, OSError) and error.winerror == 109)
 
 
+def _http_seconds(name, value):
+    """An HTTP time limit as the environment value the helpers read, or None for the default."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a number of seconds or None")
+    if not math.isfinite(value) or not 0 < value <= 3600:
+        raise ValueError(f"{name} must be more than 0 and at most 3600 seconds")
+    return repr(float(value))
+
+
 def _tls_version(value):
     """Normalize a TLS profile choice ("120", 120, "120.0", "firefox-120")."""
     if value is None:
@@ -228,6 +239,12 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
     Necko transport sends. None keeps Firefox 160 (or NECKO_FIREFOX if set).
     It changes the network fingerprint only; pair it with a matching
     ``configure_fingerprint`` user agent when the page should agree.
+    ``http_timeout`` (default 15) bounds one page HTTP request in seconds,
+    from connecting to the last body byte; a redirect chain gets 5 s more.
+    ``http_read_timeout`` (default 10) bounds the wait for each next byte. Both
+    are at most 3600. ``timeout`` above is the host's wait for a command and
+    does not change them. Response bodies are buffered, so a stream such as
+    server-sent events resolves once it ends within ``http_timeout``.
 
     ``engine`` runs this context as a session of a shared ``Engine`` process
     instead of starting a process of its own (``Engine.context`` does the
@@ -241,7 +258,8 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
     """
 
     def __init__(self, shell=None, timeout=10.0, environment=None, mode="default", proxy=None,
-                 tls=None, *, engine=None, network=None, prewarm=None):
+                 tls=None, *, engine=None, network=None, prewarm=None, http_timeout=None,
+                 http_read_timeout=None):
         if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout must be a finite positive number")
         self.timeout = float(timeout)
@@ -252,6 +270,8 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
         if proxy and any(c in proxy for c in "\x00\r\n"):
             raise ValueError("proxy URL contains invalid characters")
         tls_version = _tls_version(tls)
+        http_limits = {"RUYIJS_HTTP_TIMEOUT": _http_seconds("http_timeout", http_timeout),
+                       "RUYIJS_HTTP_READ_TIMEOUT": _http_seconds("http_read_timeout", http_read_timeout)}
         if engine is None:
             from ._engine import default_engine
             engine = default_engine()
@@ -272,7 +292,9 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
             try:
                 self._pipe = Pipe()
                 self._session = engine._open(self, self._pipe.name, mode, proxy or "",
-                                             tls_version or "", network, prewarm)
+                                             tls_version or "", network, prewarm,
+                                             http_limits["RUYIJS_HTTP_TIMEOUT"] or "",
+                                             http_limits["RUYIJS_HTTP_READ_TIMEOUT"] or "")
                 self._pipe.connect(time.monotonic() + self.timeout)
                 self._closed = False
                 if environment is not None:
@@ -285,6 +307,9 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
         # Capture transport settings for this child without changing os.environ.
         child_environment = process_environment(self.shell)
         child_environment["RUYIJS_HTTP_PROXY"] = proxy or ""
+        for name, value in http_limits.items():
+            if value is not None:
+                child_environment[name] = value
         if tls_version is not None:
             # The Necko child inherits this and builds its TLS profile from it.
             child_environment["NECKO_FIREFOX"] = tls_version

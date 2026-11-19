@@ -72,12 +72,14 @@ class Engine final {
   ~Engine() { Stop(); }
 
   bool Open(JS::HandleObject request, JS::MutableHandleValue value) {
-    std::string pipe, mode, proxy, tls, network;
+    std::string pipe, mode, proxy, tls, network, httpTimeout, httpReadTimeout;
     if (!StringProperty(cx_, request, "pipe", &pipe) ||
         !StringProperty(cx_, request, "mode", &mode, "default") ||
         !StringProperty(cx_, request, "proxy", &proxy, "") ||
         !StringProperty(cx_, request, "tls", &tls, "") ||
-        !StringProperty(cx_, request, "network", &network, "")) return false;
+        !StringProperty(cx_, request, "network", &network, "") ||
+        !StringProperty(cx_, request, "httpTimeout", &httpTimeout, "") ||
+        !StringProperty(cx_, request, "httpReadTimeout", &httpReadTimeout, "")) return false;
     if (mode != "default" && mode != "debug") {
       JS_ReportErrorASCII(cx_, "ruyijs mode must be default or debug");
       return false;
@@ -106,6 +108,11 @@ class Engine final {
     auto partition = std::make_shared<TransportPartition>();
     partition->environment.emplace_back("RUYIJS_HTTP_PROXY", proxy);
     if (!tls.empty()) partition->environment.emplace_back("NECKO_FIREFOX", tls);
+    // Context(http_timeout=..., http_read_timeout=...): the helpers' deadlines and
+    // the page's redirect chain read these (#45).
+    if (!httpTimeout.empty()) partition->environment.emplace_back("RUYIJS_HTTP_TIMEOUT", httpTimeout);
+    if (!httpReadTimeout.empty())
+      partition->environment.emplace_back("RUYIJS_HTTP_READ_TIMEOUT", httpReadTimeout);
     if (network.empty()) {
       partition->key = "session:" + std::to_string(record->id);
       record->partition = partition;
@@ -116,7 +123,7 @@ class Engine final {
         shared.partition = partition;
       } else if (shared.partition->environment != partition->environment) {
         if (!shared.sessions) networks_.erase(network);
-        JS_ReportErrorASCII(cx_, "Network partition %s already uses another proxy or tls",
+        JS_ReportErrorASCII(cx_, "Network partition %s already uses another proxy, tls or HTTP timeout",
                             network.c_str());
         return false;
       }

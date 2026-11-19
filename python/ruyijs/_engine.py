@@ -85,13 +85,15 @@ class Engine:
         """[{"session": id, "running": bool, "network": name}, ...] of live sessions."""
         return self._control("status")
 
-    def _open(self, context, pipe_name, mode, proxy, tls, network, prewarm):
+    def _open(self, context, pipe_name, mode, proxy, tls, network, prewarm, http_timeout="",
+              http_read_timeout=""):
         if network is not None and (not isinstance(network, str) or not network or "\0" in network):
             raise ValueError("network must be a nonempty string without NUL, or None")
         prewarm = self.prewarm if prewarm is None else prewarm
         _check_prewarm(prewarm)
         reply = self._control("open", pipe=pipe_name, mode=mode, proxy=proxy, tls=tls,
-                              network=network or "", prewarm=prewarm)
+                              network=network or "", prewarm=prewarm, httpTimeout=http_timeout,
+                              httpReadTimeout=http_read_timeout)
         self._contexts.add(context)
         return int(reply["session"])
 
