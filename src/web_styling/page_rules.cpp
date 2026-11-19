@@ -12,8 +12,10 @@ bool PageSelectorGet(JSContext* cx,unsigned argc,JS::Value* vp) {
 bool PageSelectorSet(JSContext* cx,unsigned argc,JS::Value* vp) {
   auto args=JS::CallArgsFromVp(argc,vp);JS::RootedObject self(cx);std::string text,parsed;
   if(!CssReceiver(cx,args.thisv(),&kPageRuleClass,&self)||!CssString(cx,args.get(0),&text)) return false;
-  if(RuleSlotValue(self,RuleParent).isObject()&&ruyijs::domain::styling::CssPageSelector(text,&parsed))
+  if(RuleSlotValue(self,RuleParent).isObject()&&ruyijs::domain::styling::CssPageSelector(text,&parsed)) {
     RuleDataOf(self).selector=std::move(parsed);
+    ++RuleOwnerOf(self).cssomGeneration;
+  }
   args.rval().setUndefined();return true;
 }
 }

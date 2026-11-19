@@ -43,6 +43,7 @@ bool InsertCssRule(JSContext* cx, JS::HandleObject self, const std::string& text
     return state.Throw("HierarchyRequestError","A page rule cannot contain another page rule");
   if (!ShiftRuleWrappers(cx, self, index, true)) return false;
   rows.insert(rows.begin() + index, std::move(parsed.rules[0]));
+  ++state.cssomGeneration;
   return true;
 }
 bool SheetInsert(JSContext* cx, unsigned argc, JS::Value* vp) {
@@ -67,7 +68,9 @@ bool DeleteCssRule(JSContext* cx, JS::HandleObject self, uint32_t index) {
   auto& rows=ContainerRows(self);
   if (index >= rows.size()) return state.Throw("IndexSizeError", "rule index out of range");
   if (!ShiftRuleWrappers(cx, self, index, false)) return false;
-  rows.erase(rows.begin() + index);return true;
+  rows.erase(rows.begin() + index);
+  ++state.cssomGeneration;
+  return true;
 }
 bool SheetDelete(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
@@ -79,8 +82,9 @@ bool SheetDelete(JSContext* cx, unsigned argc, JS::Value* vp) {
   args.rval().setUndefined();return true;
 }
 void ParseSheet(SheetCache& cache, const document_model::StyleSheetSource& source) {
-  auto parsed=ruyijs::domain::styling::ParseCssRuleValues(source.text);
+  auto parsed=ruyijs::domain::styling::ParseCssRuleValues(source.Text());
   cache.rules=std::move(parsed.rules);
+  cache.digestGeneration=0;
 }
 bool ReplaceRuleRows(JSContext* cx, JS::HandleObject self, const std::string& text) {
   auto& cache = SheetDataOf(self);
@@ -97,6 +101,8 @@ bool ReplaceRuleRows(JSContext* cx, JS::HandleObject self, const std::string& te
     if (value.isObject()) { JS::RootedObject rule(cx,&value.toObject());if(!DetachRule(rule)) return false; }
   }
   cache.rules.swap(parsed.rules);
+  cache.digestGeneration = 0;
+  ++SheetOwnerOf(self).cssomGeneration;
   JS::SetReservedSlot(self, SheetWrappers, JS::ObjectValue(*wrappers));
   return true;
 }

@@ -25,6 +25,7 @@ bool TextSet(JSContext* cx,unsigned argc,JS::Value* vp) {
     RuleDataOf(self).selector=css::CssKeyText(positions);
     RuleDataOf(self).key_positions=std::move(positions);
   }
+  ++RuleOwnerOf(self).cssomGeneration;
   args.rval().setUndefined();return true;
 }
 bool ListGet(JSContext* cx,unsigned argc,JS::Value* vp) {
@@ -52,6 +53,7 @@ bool Call(JSContext* cx,unsigned argc,JS::Value* vp) {
           rows.reserve(rows.size()+1);
           if(!ShiftRuleWrappers(cx,self,uint32_t(rows.size()),true)) return false;
           rows.push_back(std::move(parsed.rules[0]));
+          ++state.cssomGeneration;
         }
       }
     } else {

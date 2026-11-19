@@ -5,6 +5,7 @@
 #ifndef RUYIJS_DOCUMENT_MODEL_STYLE_SOURCE_H
 #define RUYIJS_DOCUMENT_MODEL_STYLE_SOURCE_H
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -39,6 +40,8 @@ struct StyleSheetSource {
   uint64_t scopeDocument = 0, scopeNode = 0;
   std::string href, documentURL, origin, resourceOrigin;
   std::string text;
+  std::shared_ptr<const std::string> sharedText;
+  const std::string& Text() const noexcept { return sharedText ? *sharedText : text; }
   std::string title, media, titleAttribute, typeAttribute;
   std::string rel, crossOrigin;
   bool external = false, presented = false, hasCrossOrigin = false;

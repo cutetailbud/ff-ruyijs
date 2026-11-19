@@ -9,22 +9,22 @@
 namespace ruyijs::document_model {
 namespace css = ruyijs::domain::styling;
 namespace {
-std::vector<css::CssDeclarationValue> Rows(DomStringView block) {
-  return css::CssDeclarations(StyleSourceText(block));
+const css::CssParsedBlock& Parsed(DomStringView block) {
+  return css::CssDeclarationsCached(StyleSourceText(block));
 }
 }  // namespace
-size_t InlineCount(DomStringView block) { return Rows(block).size(); }
+size_t InlineCount(DomStringView block) { return Parsed(block).rows.size(); }
 DomString InlineItem(DomStringView block, size_t index) {
-  const auto rows = Rows(block);
+  const auto& rows = Parsed(block).rows;
   return index < rows.size() ? StyleSourceWide(rows[index].name) : DomString();
 }
 DomString InlineValue(DomStringView block, DomStringView name, bool* important) {
-  return StyleSourceWide(css::CssLookupDeclaration(Rows(block), StyleSourceText(name), important));
+  return StyleSourceWide(css::CssLookupDeclaration(Parsed(block), StyleSourceText(name), important));
 }
-DomString InlineText(DomStringView block) { return StyleSourceWide(css::CssSerializeBlock(Rows(block))); }
+DomString InlineText(DomStringView block) { return StyleSourceWide(css::CssSerializeBlockCached(Parsed(block))); }
 DomString InlineSet(DomStringView block, DomStringView name, DomStringView value, bool important,
                     bool remove, DomString* old) {
-  auto text = css::CssSerializeBlock(Rows(block));
+  auto text = css::CssSerializeBlockCached(Parsed(block));
   const auto previous = css::CssSetDeclaration(text, StyleSourceText(name), StyleSourceText(value), important, remove);
   if (old) *old = StyleSourceWide(previous);
   return StyleSourceWide(text);

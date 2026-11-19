@@ -1,39 +1,86 @@
 // getComputedStyle and the declaration views (T17): the computed block and a
 // CSS rule's style. The cascade runs in the imported styling owner; this file
-// turns an Element into the domain's cascade input, serializes the result into
-// the view's one store, and answers the members of Document Model's single
-// CSSStyleDeclaration/CSSStyleProperties prototype through the style port.
+// turns an Element into the domain's cascade input, caches structured records
+// keyed by document/cascade/viewport state, resolves layout-dependent box
+// properties lazily, and answers live CSSStyleDeclaration/CSSStyleProperties
+// members through the style port.
 #include "web_styling/internal.h"
 #include "web_styling/computed_source.h"
+#include "web_styling/condition_environment.h"
 #include "web_styling/realm.h"
 #include "web_styling/page_descriptors.h"
 #include "domain/styling/css_page_value.h"
 #include "domain/styling/css_components.h"
+#include "domain/styling/stylesheet.h"
 #include "document_model/style_port.h"
 #include "document_model/state.h"
+#include "js/Realm.h"
 #include "js/Wrapper.h"
 
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 namespace ruyijs::web_styling {
 namespace {
 using document_model::StyleMember;
-// The serialized declaration block of a computed style. Custom properties are
-// already serialized once per shared map in ReadComputed (computed.customsText),
-// so appending them here is a single string copy, not a per-element rebuild.
-std::string BuildComputedBlock(const ComputedStyle& computed) {
+namespace css = ruyijs::domain::styling;
+
+std::string BuildStandardBlock(const ComputedStyle& computed) {
   std::string block;
+  block.reserve(computed.values.size() * 24);
   for (const auto& entry : computed.values) {
     // -x-lang is the internal language of nsStyleFont, not a CSS property.
     if (entry.first == "-x-lang") continue;
     block += detail::Serialize(entry.first, entry.second, false);
   }
-  block += computed.customsText;
   return block;
+}
+
+const std::string& SerializedCustoms(
+    const std::shared_ptr<const std::map<std::string, css::CssProperty>>& customs) {
+  static const std::string kEmpty;
+  if (!customs || customs->empty()) return kEmpty;
+  struct CustomsMemo {
+    const void* identity = nullptr;
+    std::string text;
+  };
+  thread_local std::vector<CustomsMemo> memo;
+  const void* id = customs.get();
+  for (size_t i = 0; i < memo.size(); ++i) {
+    if (memo[i].identity == id) {
+      if (i) std::rotate(memo.begin(), memo.begin() + i, memo.begin() + i + 1);
+      return memo.front().text;
+    }
+  }
+  std::string text;
+  text.reserve(customs->size() * 32);
+  for (const auto& [name, prop] : *customs) {
+    text += name + ": " + css::CssClean(prop.value) + ";";
+  }
+  if (memo.size() >= 8) memo.pop_back();
+  memo.insert(memo.begin(), {id, std::move(text)});
+  return memo.front().text;
+}
+
+std::string BuildComputedBlock(const ComputedStyle& computed) {
+  std::string block = BuildStandardBlock(computed);
+  block += SerializedCustoms(computed.customs);
+  return block;
+}
+
+void RebuildStandardRows(ComputedRecord* record) {
+  record->standardRows = css::CssDeclarations(BuildStandardBlock(record->style));
+  record->standardIndex.clear();
+  record->standardIndex.reserve(record->standardRows.size());
+  for (size_t i = 0; i < record->standardRows.size(); ++i) {
+    record->standardIndex.emplace(record->standardRows[i].name, i);
+  }
+  record->serializedReady = false;
+  record->serializedBlock.clear();
 }
 
 // A used length as Firefox serializes it: px, up to six significant digits
@@ -93,9 +140,152 @@ void ResolveUsed(State& state, JS::HandleObject element, ComputedStyle* computed
       }
 }
 
+bool NeedsUsedLayout(std::string_view canonicalName) {
+  return canonicalName == "width" || canonicalName == "height" ||
+         canonicalName == "padding" || canonicalName == "padding-top" ||
+         canonicalName == "padding-right" || canonicalName == "padding-bottom" ||
+         canonicalName == "padding-left" ||
+         canonicalName == "margin" || canonicalName == "margin-top" ||
+         canonicalName == "margin-right" || canonicalName == "margin-bottom" ||
+         canonicalName == "margin-left" ||
+         canonicalName == "inset" || canonicalName == "top" ||
+         canonicalName == "right" || canonicalName == "bottom" ||
+         canonicalName == "left";
+}
+
+uint64_t ViewportFingerprint(State& state) {
+  css::CssMediaEnvironment env;
+  if (!ReadConditionEnvironment(state, &env)) {
+    JS_ClearPendingException(state.cx);
+    return 0;
+  }
+  uint64_t hash = 1469598103934665603ull;
+  const double nums[] = {env.width, env.height, env.deviceWidth, env.deviceHeight, env.ratio, env.color};
+  const auto* bytes = reinterpret_cast<const unsigned char*>(nums);
+  for (size_t i = 0; i < sizeof nums; ++i) { hash ^= bytes[i]; hash *= 1099511628211ull; }
+  hash ^= static_cast<uint64_t>(env.touch);
+  hash *= 1099511628211ull;
+  return hash;
+}
+
+void EnsureUsedResolved(State& state, JS::HandleObject element, ComputedRecord* record) {
+  if (record->usedResolved) return;
+  record->usedResolved = true;
+  JSAutoRealm realm(state.cx, state.page);
+  JS::RootedObject stateElement(state.cx, element);
+  if (!JS_WrapObject(state.cx, &stateElement)) {
+    JS_ClearPendingException(state.cx);
+    return;
+  }
+  ResolveUsed(state, stateElement, &record->style);
+  RebuildStandardRows(record);
+}
+
+const std::string& EnsureSerializedComputed(State& state, JS::HandleObject element,
+                                            ComputedRecord* record) {
+  EnsureUsedResolved(state, element, record);
+  if (!record->serializedReady) {
+    record->serializedBlock = BuildComputedBlock(record->style);
+    record->serializedReady = true;
+  }
+  return record->serializedBlock;
+}
+
+bool ObtainComputedRecord(State& state, JS::HandleObject element,
+                          std::shared_ptr<ComputedRecord>* out) {
+  JSAutoRealm realm(state.cx, state.page);
+  JS::RootedObject stateElement(state.cx, element);
+  if (!JS_WrapObject(state.cx, &stateElement)) return false;
+
+  JSObject* raw = js::CheckedUnwrapStatic(stateElement);
+  document_model::Wrapper* wrapper = raw && JS::GetClass(raw) == &document_model::kNodeClass
+      ? static_cast<document_model::Wrapper*>(JS::GetReservedSlot(raw, 0).toPrivate()) : nullptr;
+
+  uint64_t revision = 0, stamp = 0, viewport = 0;
+  bool connected = false;
+  const bool cacheable = wrapper && wrapper->owner && !wrapper->dead &&
+      CascadeStamp(state, stateElement, &stamp);
+  if (cacheable) {
+    connected = wrapper->owner->model.IsConnected(wrapper->key);
+    revision = connected
+        ? ((wrapper->owner->model.ConnectedRevision() << 1) | 1ull)
+        : (wrapper->owner->model.Revision() << 1);
+    viewport = ViewportFingerprint(state);
+  }
+
+  auto& cache = state.computedBlocks;
+  if (cacheable && connected) {
+    if (!cache.ready || cache.document != wrapper->key.document ||
+        cache.revision != revision || cache.stamp != stamp || cache.viewport != viewport) {
+      cache.records.clear();
+      cache.reader = std::make_unique<ComputedStyleReader>(state);
+      cache.document = wrapper->key.document;
+      cache.revision = revision;
+      cache.stamp = stamp;
+      cache.viewport = viewport;
+      cache.ready = true;
+    } else {
+      const auto found = cache.records.find(wrapper->key.node);
+      if (found != cache.records.end()) {
+        *out = found->second;
+        return true;
+      }
+    }
+  }
+
+  auto record = std::make_shared<ComputedRecord>();
+  if (cacheable && connected) {
+    if (!cache.reader) cache.reader = std::make_unique<ComputedStyleReader>(state);
+    if (!cache.reader->Read(stateElement, &record->style)) return false;
+  } else {
+    if (!ReadComputed(state, stateElement, &record->style)) return false;
+    record->usedResolved = true;  // Disconnected elements have no UsedBox.
+  }
+  RebuildStandardRows(record.get());
+  if (cacheable && connected) {
+    cache.records.insert_or_assign(wrapper->key.node, record);
+  }
+  *out = std::move(record);
+  return true;
+}
+
+std::string LookupComputedProperty(State& state, JS::HandleObject element,
+                                   ComputedRecord* record, const std::string& inputName) {
+  const auto wanted = detail::Lower(inputName);
+  if (wanted.size() >= 2 && wanted[0] == '-' && wanted[1] == '-') {
+    if (!record->style.customs) return {};
+    const auto it = record->style.customs->find(inputName);
+    return it == record->style.customs->end() ? std::string() : css::CssClean(it->second.value);
+  }
+  const auto canon = css::CssCanonicalDeclarationName(wanted);
+  if (canon.empty()) return {};
+  if (NeedsUsedLayout(canon)) EnsureUsedResolved(state, element, record);
+  bool important = false;
+  if (css::CssShorthandName(canon) || canon == "border-image") {
+    return css::CssLookupDeclaration(record->standardRows, canon, &important);
+  }
+  const auto it = record->standardIndex.find(canon);
+  return it == record->standardIndex.end() ? std::string() : record->standardRows[it->second].value;
+}
+
+size_t ComputedPropertyCount(const ComputedRecord& record) {
+  return record.standardRows.size() + (record.style.customs ? record.style.customs->size() : 0);
+}
+
+std::string ComputedPropertyNameAt(const ComputedRecord& record, size_t index) {
+  if (index < record.standardRows.size()) return record.standardRows[index].name;
+  if (!record.style.customs) return {};
+  size_t rem = index - record.standardRows.size();
+  if (rem >= record.style.customs->size()) return {};
+  auto it = record.style.customs->begin();
+  std::advance(it, rem);
+  return it->first;
+}
+
 bool ViewName(JSContext* cx, JS::HandleValue value, std::string* out,bool page=false) {
   if (!detail::ToAscii(cx, value, out)) return false;
-  *out = page?(out->starts_with("--")?*out:detail::Lower(*out)):detail::Dashed(*out);
+  *out = page ? (out->starts_with("--") ? *out : detail::Lower(*out))
+              : (out->starts_with("--") ? *out : detail::Dashed(*out));
   return true;
 }
 bool Text(JSContext* cx, const std::string& text, JS::MutableHandleValue out) {
@@ -106,7 +296,7 @@ bool Text(JSContext* cx, const std::string& text, JS::MutableHandleValue out) {
 }
 }  // namespace
 
-const JSClass kStyleViewClass = {"CSSStyleDeclaration", JSCLASS_HAS_RESERVED_SLOTS(3)};
+const JSClass kStyleViewClass = {"CSSStyleDeclaration", JSCLASS_HAS_RESERVED_SLOTS(4)};
 
 bool OwnsDeclaration(JSObject* object) {
   return JS::GetClass(object)==&kStyleViewClass||JS::GetClass(object)==&kPageDescriptorsClass;
@@ -114,7 +304,8 @@ bool OwnsDeclaration(JSObject* object) {
 
 // The style declaration port: Document Model's one CSSStyleDeclaration and
 // CSSStyleProperties prototype runs these members on a view. Slot 0 holds a
-// computed block, slot 1 this owner's State, slot 2 the rule a rule view edits.
+// static block (getDefaultComputedStyle), slot 1 this owner's State, slot 2 the
+// rule a rule view edits, and slot 3 the Element of a live getComputedStyle view.
 static bool DispatchDeclaration(State& caller, JSContext* cx, StyleMember member, JS::HandleObject self,
     const JS::CallArgs& args, const char* property, const char* accessor,bool pageNamed) {
   const bool page=JS::GetClass(self)==&kPageDescriptorsClass;
@@ -149,6 +340,34 @@ static bool DispatchDeclaration(State& caller, JSContext* cx, StyleMember member
     JS::RootedValue priority(cx, JS::UndefinedValue());
     return detail::SetRuleProperty(caller, self, property, args.get(0), priority, false, args.rval());
   }
+
+  const auto& elementSlot = JS::GetReservedSlot(storage, 3);
+  if (!page && !rule && elementSlot.isObject()) {
+    JS::RootedObject element(cx, &elementSlot.toObject());
+    std::shared_ptr<ComputedRecord> record;
+    if (!ObtainComputedRecord(state, element, &record)) return false;
+    switch (member) {
+      case StyleMember::CssTextGet:
+        return Text(cx, EnsureSerializedComputed(state, element, record.get()), args.rval());
+      case StyleMember::Length:
+        args.rval().setNumber(double(ComputedPropertyCount(*record)));
+        return true;
+      case StyleMember::Item: {
+        uint32_t index = 0;
+        if (!JS::ToUint32(cx, args.get(0), &index)) return false;
+        return Text(cx, ComputedPropertyNameAt(*record, index), args.rval());
+      }
+      case StyleMember::NamedGet:
+        return Text(cx, LookupComputedProperty(state, element, record.get(), property), args.rval());
+      default: {
+        std::string name;
+        if (!ViewName(cx, args.get(0), &name, false)) return false;
+        if (member == StyleMember::Priority) return Text(cx, "", args.rval());
+        return Text(cx, LookupComputedProperty(state, element, record.get(), name), args.rval());
+      }
+    }
+  }
+
   std::string block, name, value;
   if (!page&&!detail::ReadViewBlock(cx, self, &block)) return false;
   bool important = false;
@@ -198,40 +417,15 @@ bool GetComputedStyle(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (args.length() == 0 || !args.get(0).isObject())
     return WebKit::Fail(cx, "getComputedStyle requires an Element");
   JS::RootedObject element(cx, &args.get(0).toObject());
-  // The pseudo-element argument has no box to resolve against in this runtime,
-  // so it is ignored and the element's own declaration is returned (D37).
-  JSObject* raw = js::CheckedUnwrapStatic(element);
-  document_model::Wrapper* wrapper = raw && JS::GetClass(raw) == &document_model::kNodeClass
-      ? static_cast<document_model::Wrapper*>(JS::GetReservedSlot(raw, 0).toPrivate()) : nullptr;
-  uint64_t revision = 0, stamp = 0;
-  const bool cacheable = wrapper && wrapper->owner && !wrapper->dead &&
-      CascadeStamp(state, element, &stamp);
-  if (cacheable) revision = wrapper->owner->model.Revision();
-  auto& cache = state.computedBlocks;
-  if (cacheable && cache.ready && cache.revision == revision && cache.stamp == stamp) {
-    auto found = cache.blocks.find(wrapper->key.node);
-    if (found != cache.blocks.end()) {
-      JS::RootedObject view(cx);
-      if (!state.NewStyleView(found->second, &view)) return false;
-      args.rval().setObject(*view);
-      return true;
-    }
-  }
-  ComputedStyle computed;
-  if (!ReadComputed(state, element, &computed)) return false;
-  ResolveUsed(state, element, &computed);
-  std::string block = BuildComputedBlock(computed);
-  if (cacheable) {
-    if (!cache.ready || cache.revision != revision || cache.stamp != stamp) {
-      cache.blocks.clear();
-      cache.revision = revision;
-      cache.stamp = stamp;
-      cache.ready = true;
-    }
-    cache.blocks.insert_or_assign(wrapper->key.node, block);
+  bool isElement = false;
+  if (!state.chainPort(state.chainContext, element, nullptr, &isElement)) return false;
+  if (!isElement) return WebKit::Fail(cx, "getComputedStyle requires an Element");
+  if (args.length() > 1 && !args.get(1).isNullOrUndefined()) {
+    JS::RootedString pseudo(cx, JS::ToString(cx, args[1]));
+    if (!pseudo) return false;
   }
   JS::RootedObject view(cx);
-  if (!state.NewStyleView(block, &view)) return false;
+  if (!state.NewStyleView("", &view, nullptr, element)) return false;
   args.rval().setObject(*view);
   return true;
 }

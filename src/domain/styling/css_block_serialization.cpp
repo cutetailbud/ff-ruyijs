@@ -5,7 +5,7 @@
 #include "domain/styling/css_box_value.h"
 #include "domain/styling/css_font_value.h"
 #include <algorithm>
-#include <set>
+#include <unordered_set>
 
 namespace ruyijs::domain::styling {
 namespace {
@@ -73,28 +73,57 @@ std::string CssLookupDeclaration(const std::vector<CssDeclarationValue>& rows, c
   return {};
 }
 
+std::string CssLookupDeclaration(const CssParsedBlock& block, const std::string& inputName,
+                                 bool* important) {
+  const auto name=CssCanonicalDeclarationName(inputName);
+  *important = false;
+  if (CssShorthandName(name)) return Shorthand(block.rows, name, important);
+  if (!block.index.empty()) {
+    const auto it = block.index.find(name);
+    if (it == block.index.end()) return {};
+    const auto& row = block.rows[it->second];
+    *important = row.important;
+    return row.value;
+  }
+  for (const auto& row : block.rows)
+    if (row.name == name) { *important = row.important; return row.value; }
+  return {};
+}
+
 std::string CssSerializeBlock(const std::vector<CssDeclarationValue>& rows) {
-  std::set<std::string> done;
+  std::unordered_set<std::string> done;
+  done.reserve(rows.size());
   std::string out;
+  out.reserve(rows.size() * 20);
   for (const auto& row : rows) {
     if (done.count(row.name)) continue;
     std::string name = row.name, value = row.value;
     bool important = row.important;
-    for (const char* shorthand : kShorthands) {
-      const auto names = Longhands(shorthand);
-      if (std::find(names.begin(), names.end(), row.name) == names.end()) continue;
-      if (std::any_of(names.begin(), names.end(), [&](const auto& n) { return done.count(n) != 0; })) continue;
-      bool flag = false;
-      auto text = Shorthand(rows, shorthand, &flag);
-      if (text.empty()) continue;
-      name = shorthand; value = std::move(text); important = flag;
-      done.insert(names.begin(), names.end());
-      break;
+    if (!(row.name.size() >= 2 && row.name[0] == '-' && row.name[1] == '-')) {
+      for (const char* shorthand : kShorthands) {
+        const auto names = Longhands(shorthand);
+        if (std::find(names.begin(), names.end(), row.name) == names.end()) continue;
+        if (std::any_of(names.begin(), names.end(), [&](const auto& n) { return done.count(n) != 0; })) continue;
+        bool flag = false;
+        auto text = Shorthand(rows, shorthand, &flag);
+        if (text.empty()) continue;
+        name = shorthand; value = std::move(text); important = flag;
+        done.insert(names.begin(), names.end());
+        break;
+      }
     }
     done.insert(row.name);
     if (!out.empty()) out += ' ';
     out += name + ": " + value + (important ? " !important" : "") + ";";
   }
   return out;
+}
+
+const std::string& CssSerializeBlockCached(const CssParsedBlock& block) {
+  if (!block.serialized_ready) {
+    block.serialized = CssSerializeBlock(block.rows);
+    block.serialized_ready = true;
+  }
+  return block.serialized;
 }
 }  // namespace ruyijs::domain::styling

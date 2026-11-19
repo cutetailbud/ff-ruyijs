@@ -104,7 +104,7 @@ bool ComputedStyleReader::Read(JS::HandleObject element, ComputedStyle* out) {
         ? css::CssResolvedLineHeight(computed) : entry.second.value);
   for (const auto& entry : css::StyleResolutionService::initial_values())
     if (!computed.all().count(entry.first)) result.values.emplace_back(entry.first, entry.second);
-  result.customsText = SerializeCustoms(computed);
+  result.customs = computed.customs_ptr();
   result.childInputs = css::StyleResolutionService::child_inputs(computed);
   result.inheritsReset = computed.inherits_reset;
   ComputeColors(&result);
@@ -146,7 +146,7 @@ bool ComputedStyleReader::ReadDefault(JS::HandleObject element, ComputedStyle* o
         ? css::CssResolvedLineHeight(computed) : entry.second.value);
   for (const auto& entry : css::StyleResolutionService::initial_values())
     if (!computed.all().count(entry.first)) result.values.emplace_back(entry.first, entry.second);
-  result.customsText = SerializeCustoms(computed);
+  result.customs = computed.customs_ptr();
   ComputeColors(&result);
   *out = std::move(result);
   return true;

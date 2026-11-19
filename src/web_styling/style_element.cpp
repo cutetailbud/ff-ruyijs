@@ -47,7 +47,7 @@ bool StyleElementAction(State& state, uint64_t document, uint64_t key,
   if (!SheetObject(state, cache, &sheet)) return false;
   if (action == Action::Sheet) out.setObject(*sheet);
   else if (action == Action::ReadDisabled) out.setBoolean(cache->disabled);
-  else { cache->disabled = disabled; out.setUndefined(); }
+  else { cache->disabled = disabled; ++state.cssomGeneration; out.setUndefined(); }
   return true;
 }
 
