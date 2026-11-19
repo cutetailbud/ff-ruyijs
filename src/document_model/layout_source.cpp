@@ -25,7 +25,7 @@ bool Realm::ReadLayoutNode(JS::HandleValue value, LayoutNodeSource* out,
         node.composed_root.node == owner.main.node;
     parentKey = node.parent;
     result.key = source.key;
-    result.revision = owner.model.Revision();
+    result.revision = owner.model.ConnectedRevision();
     result.structure = owner.model.StructureRevision();
     result.tree = owner.model.TreeRevision();
     if (!owner.Check(owner.model.FocusedElement(owner.main, &result.focused))) return false;
@@ -70,7 +70,7 @@ bool Realm::ReadLayoutHead(JS::HandleValue value, LayoutHeadSource* out, JS::Mut
     result.key = source.key;
     result.renderedDocument = connected && composed.document == owner.main.document &&
         composed.node == owner.main.node;
-    result.revision = owner.model.Revision();
+    result.revision = owner.model.ConnectedRevision();
     result.structure = owner.model.StructureRevision();
     result.tree = owner.model.TreeRevision();
     if (!owner.Check(owner.model.FocusedElement(owner.main, &result.focused))) return false;

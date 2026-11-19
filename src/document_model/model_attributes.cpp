@@ -29,7 +29,9 @@ Status Model::SetAttribute(NodeKey key, DomStringView name, DomStringView value)
     State().NoteAttributes(key, name, DomStringView(), old ? &*old : nullptr);
     // An unchanged value (classList.add of a present token) is still a mutation
     // record, but no collection, token view or selector match can change.
-    if (name == u"style" || (old && DomStringView(*old) == value)) State().TouchStyle(); else State().TouchAttribute();
+    const bool connected = State().IsComposedConnected(key);
+    if (name == u"style" || (old && DomStringView(*old) == value)) State().TouchStyle(connected);
+    else State().TouchAttribute(connected);
   });
 }
 Status Model::RemoveAttribute(NodeKey key, DomStringView name) noexcept {
@@ -44,7 +46,9 @@ Status Model::RemoveAttribute(NodeKey key, DomStringView name) noexcept {
                                          next_id ? DomStringView(*next_id) : DomStringView());
     // Removing an attribute that was not there is not a mutation.
     if (old) State().NoteAttributes(key, name, DomStringView(), &*old);
-    if (name == u"style" || !old) State().TouchStyle(); else State().TouchAttribute();
+    const bool connected = State().IsComposedConnected(key);
+    if (name == u"style" || !old) State().TouchStyle(connected);
+    else State().TouchAttribute(connected);
   });
 }
 Status Model::Attributes(NodeKey key, std::vector<AttributeSnapshot>* result) const noexcept {
@@ -130,7 +134,7 @@ Status Model::SetAttributeNS(NodeKey key, DomStringView namespace_uri, DomString
     State().budget(0,value.size() + (old ? 0 : qualified.size()),old ? old->size() : 0);
     element.set_attribute_ns16(namespace_uri,qualified,value);
     State().NoteAttributes(key, folded, namespace_uri, old ? &*old : nullptr);
-    State().Touch();
+    State().TouchAttribute(State().IsComposedConnected(key));
   });
 }
 Status Model::RemoveAttributeNS(NodeKey key, DomStringView namespace_uri, DomStringView local) noexcept {
@@ -139,7 +143,7 @@ Status Model::RemoveAttributeNS(NodeKey key, DomStringView namespace_uri, DomStr
     auto old = element.get_attribute_ns16(namespace_uri,local);
     element.remove_attribute_ns16(namespace_uri,local);
     if (old) State().NoteAttributes(key, local, namespace_uri, &*old);
-    State().Touch();
+    State().TouchAttribute(State().IsComposedConnected(key));
   });
 }
 Status Model::ToggleAttribute(NodeKey key, DomStringView name, bool force, bool has_force,
@@ -155,7 +159,7 @@ Status Model::ToggleAttribute(NodeKey key, DomStringView name, bool force, bool 
     if (target) { State().budget(0,name.size()); element.set_attribute16(name,{}); }
     else { State().budget(0,0,old->size()); element.remove_attribute16(name); }
     State().NoteAttributes(key, name, DomStringView(), old ? &*old : nullptr);
-    State().Touch();
+    State().TouchAttribute(State().IsComposedConnected(key));
   });
 }
 }

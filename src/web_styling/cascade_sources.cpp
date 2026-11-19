@@ -32,7 +32,7 @@ bool CurrentRules(State& state,const SheetCache& cache,
   out->back().append_rule_values(cache.rules,*environment);
   return true;
 }
-// Visits the sheets of `element`'s cascade scope in cascade order: the
+//Visits the sheets of `element`'s cascade scope in cascade order: the
 // document's sheet sources, then its adopted sheets. One walk serves both the
 // cascade input and its fingerprint, so the two cannot disagree.
 template <class Visit>
@@ -84,6 +84,17 @@ void MixRules(uint64_t* hash, const std::vector<std::shared_ptr<ruyijs::domain::
     MixRules(hash, row->children);
   }
 }
+void EnsureSheetDigest(const State& state, SheetCache& cache) {
+  if (cache.digestGeneration == state.cssomGeneration) return;
+  uint64_t digest = 1469598103934665603ull;
+  MixRules(&digest, cache.rules);
+  cache.rulesDigest = digest;
+  cache.rulesHaveMedia = HasMedia(cache.rules);
+  auto deps = std::make_shared<SelectorDependencies>();
+  Dependencies(cache.rules, deps.get());
+  cache.rulesDependencies = std::move(deps);
+  cache.digestGeneration = state.cssomGeneration;
+}
 }  // namespace
 
 // Building the aggregates parses every selector and declaration of the scope's
@@ -101,17 +112,18 @@ bool ReadCascadeSources(State& caller, JS::HandleObject element,
   auto selectors = std::make_shared<SelectorDependencies>();
   State* owner = nullptr;
   uint64_t hash = 1469598103934665603ull;
-  if (!VisitCascadeSheets(caller, element, [&](State& state, const SheetCache& cache) {
+  if (!VisitCascadeSheets(caller, element, [&](State& state, SheetCache& cache) {
         if (!owner) owner = &state;
+        EnsureSheetDigest(state, cache);
         const unsigned char flags = (cache.disabled ? 1 : 0) | (cache.rules.empty() ? 2 : 0);
         Mix(&hash, &flags, 1);
         Mix(&hash, &cache.key, sizeof cache.key);
         Mix(&hash, cache.href);
         Mix(&hash, cache.media.text());
-        MixRules(&hash, cache.rules);
+        Mix(&hash, &cache.rulesDigest, sizeof cache.rulesDigest);
         if (!cache.disabled && !cache.rules.empty() && !media)
-          media = !cache.media.text().empty() || HasMedia(cache.rules);
-        if (!cache.disabled) Dependencies(cache.rules, selectors.get());
+          media = !cache.media.text().empty() || cache.rulesHaveMedia;
+        if (!cache.disabled && cache.rulesDependencies) selectors->Merge(*cache.rulesDependencies);
         return true;
       })) return false;
   if (media) {
@@ -130,7 +142,7 @@ bool ReadCascadeSources(State& caller, JS::HandleObject element,
       return true;
     }
   auto built = std::make_shared<std::vector<ruyijs::domain::styling::StyleSheetAggregate>>();
-  if (!VisitCascadeSheets(caller, element, [&](State& state, const SheetCache& cache) {
+  if (!VisitCascadeSheets(caller, element, [&](State& state, SheetCache& cache) {
         return CurrentRules(state, cache, &environment, &environment_initialized, built.get());
       })) return false;
   if (memo.size() >= 8) memo.erase(memo.begin());
@@ -146,11 +158,12 @@ bool ReadCascadeSources(State& caller, JS::HandleObject element,
 // depend on the environment, which the layout cache keys separately.
 bool CascadeStamp(State& caller, JS::HandleObject element, uint64_t* stamp) {
   uint64_t hash = 1469598103934665603ull;
-  const bool ok = VisitCascadeSheets(caller, element, [&](State&, const SheetCache& cache) {
+  const bool ok = VisitCascadeSheets(caller, element, [&](State& state, SheetCache& cache) {
+    EnsureSheetDigest(state, cache);
     const unsigned char flags = (cache.disabled ? 1 : 0) | (cache.rules.empty() ? 2 : 0);
     Mix(&hash, &flags, 1);
     Mix(&hash, cache.media.text());
-    MixRules(&hash, cache.rules);
+    Mix(&hash, &cache.rulesDigest, sizeof cache.rulesDigest);
     return true;
   });
   *stamp = hash;

@@ -3,10 +3,14 @@
 #include <vector>
 #include <utility>
 #include <string>
+#include <map>
 #include <memory>
 #include <set>
+#include <unordered_map>
+#include "domain/styling/css_declarations.h"
 #include "js/RootingAPI.h"
 
+namespace ruyijs::domain::styling { struct CssProperty; }
 namespace ruyijs::web_styling {
 struct State;
 struct ComputedStyle;
@@ -60,11 +64,9 @@ class ComputedStyleReader final {
 // Call-scoped projection of the unique cascade, never an additional style store.
 struct ComputedStyle {
   std::vector<std::pair<std::string, std::string>> values;
-  // The serialized custom-property suffix of the declaration block ("--x: v;…").
-  // Custom properties share a copy-on-write map across every element that
-  // inherits them, so ReadComputed serializes this once per map identity and
-  // reuses the text, instead of copying hundreds of entries per element.
-  std::string customsText;
+  // Shared copy-on-write custom-property map from StyleDeclaration, avoiding
+  // per-element string serialization unless cssText is explicitly requested.
+  std::shared_ptr<const std::map<std::string, ruyijs::domain::styling::CssProperty>> customs;
   double fontSize = 16;
   double rootFontSize = 16;
   unsigned specifiedMarginMask = 0, specifiedBorderMask = 0, specifiedPaddingMask = 0;
@@ -77,5 +79,13 @@ struct ComputedStyle {
     for (const auto& entry : values) if (entry.first == name) return entry.second;
     return {};
   }
+};
+struct ComputedRecord {
+  ComputedStyle style;
+  std::vector<ruyijs::domain::styling::CssDeclarationValue> standardRows;
+  std::unordered_map<std::string, size_t> standardIndex;
+  bool usedResolved = false;
+  std::string serializedBlock;
+  bool serializedReady = false;
 };
 }

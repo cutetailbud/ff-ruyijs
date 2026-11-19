@@ -27,6 +27,9 @@ namespace ruyijs {
 class PageHelpers;
 namespace browser_environment { class Environment; }
 namespace web_styling {
+class ComputedStyleReader;
+struct ComputedRecord;
+struct SelectorDependencies;
 
 // One rule of a CSSStyleSheet: the selector text and the serialized declaration
 // block the rule style view exposes. Stable shared records survive list index
@@ -40,6 +43,7 @@ struct SheetCache {
   uint64_t document = 0;
   uint64_t key = 0;
   uint64_t scopeDocument = 0, scopeNode = 0;
+  std::shared_ptr<const std::string> sourceText;
   std::string text;  // the source text these rules were materialized from
   std::string href, baseURL;
   std::string title, sourceTitle, sourceMedia, sourceType;
@@ -54,6 +58,10 @@ struct SheetCache {
   bool mainDocument = true;
   ruyijs::domain::styling::MediaListValue media;
   std::vector<std::shared_ptr<SheetRule>> rules;
+  uint64_t digestGeneration = 0;
+  uint64_t rulesDigest = 0;
+  bool rulesHaveMedia = false;
+  std::shared_ptr<const SelectorDependencies> rulesDependencies;
   JSObject* object = nullptr;  // Non-owning identity; trace/finalize maintain it.
   explicit SheetCache(JSContext*) {}
 };
@@ -126,17 +134,21 @@ struct State {
   // A style, class, attribute or tree edit bumps the document revision, and a
   // stylesheet edit changes the stamp, so the next read computes again.
   struct ComputedBlockCache {
+    uint64_t document = 0;
     uint64_t revision = 0;
     uint64_t stamp = 0;
+    uint64_t viewport = 0;
     bool ready = false;
-    std::unordered_map<uint64_t, std::string> blocks;
+    std::unique_ptr<ComputedStyleReader> reader;
+    std::unordered_map<uint64_t, std::shared_ptr<ComputedRecord>> records;
   };
+  uint64_t cssomGeneration = 1;
   ComputedBlockCache computedBlocks;
   std::shared_ptr<SheetCache> Materialize(const document_model::StyleSheetSource& source);
   bool RetireSheets(const std::vector<document_model::StyleSheetSource>& sources,
                      const document_model::StyleSheetScope* scope = nullptr);
   JSObject* NewStyleView(const std::string& text, JS::MutableHandleObject out,
-                         JS::HandleObject rule = nullptr);
+                         JS::HandleObject rule = nullptr, JS::HandleObject element = nullptr);
   bool Throw(const char* name, const char* message) const;
 };
 

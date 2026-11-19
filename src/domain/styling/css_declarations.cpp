@@ -7,6 +7,8 @@
 #include "domain/styling/css_specified_value.h"
 #include <algorithm>
 #include <charconv>
+#include <memory>
+#include <unordered_map>
 namespace ruyijs::domain::styling {
 std::string CssCanonicalDeclarationName(const std::string& input) {
   if(input.starts_with("--")) return input;
@@ -29,28 +31,38 @@ std::string DeclarationValue(const std::string& name,std::string value) {
 }
 namespace {
 std::vector<CssDeclarationValue> Parse(const std::string&,CssDeclarationContext);
-// Computed-style views re-read their whole serialized block on every property
-// access; with inherited custom properties that block is large. A few recent
-// parses are kept per thread (exact text match), so repeated reads of the same
-// block do not re-parse it.
-struct ParseMemo { std::string text; std::vector<CssDeclarationValue> rows; };
-constexpr size_t kMemoEntries=8, kMemoMinimum=512;
+struct ParseMemo { std::string text; CssParsedBlock parsed; };
+constexpr size_t kMemoEntries=16;
+void BuildBlockIndex(CssParsedBlock* block) {
+  if(block->rows.size()<=16) return;
+  block->index.reserve(block->rows.size());
+  for(size_t i=0;i<block->rows.size();++i) block->index.emplace(block->rows[i].name,i);
+}
+}
+const CssParsedBlock& CssDeclarationsCached(const std::string& text) {
+  static const CssParsedBlock kEmpty;
+  if(text.empty()) return kEmpty;
+  thread_local std::vector<std::unique_ptr<ParseMemo>> memo;
+  for(size_t i=0;i<memo.size();++i) if(memo[i]->text==text) {
+    if(i) std::rotate(memo.begin(),memo.begin()+i,memo.begin()+i+1);
+    return memo.front()->parsed;
+  }
+  auto entry=std::make_unique<ParseMemo>();
+  entry->text=text;
+  entry->parsed.rows=Parse(text,CssDeclarationContext::Standard);
+  BuildBlockIndex(&entry->parsed);
+  if(memo.size()==kMemoEntries) memo.pop_back();
+  memo.insert(memo.begin(),std::move(entry));
+  return memo.front()->parsed;
 }
 std::vector<CssDeclarationValue> CssDeclarations(const std::string& text,CssDeclarationContext context) {
-  if(context!=CssDeclarationContext::Standard||text.size()<kMemoMinimum) return Parse(text,context);
-  thread_local std::vector<ParseMemo> memo;
-  for(size_t i=0;i<memo.size();++i) if(memo[i].text==text) {
-    if(i) std::rotate(memo.begin(),memo.begin()+i,memo.begin()+i+1);
-    return memo.front().rows;
-  }
-  auto rows=Parse(text,context);
-  if(memo.size()==kMemoEntries) memo.pop_back();
-  memo.insert(memo.begin(),{text,rows});
-  return rows;
+  if(context!=CssDeclarationContext::Standard) return Parse(text,context);
+  return CssDeclarationsCached(text).rows;
 }
 namespace {
 std::vector<CssDeclarationValue> Parse(const std::string& text,CssDeclarationContext context) {
-  std::vector<CssDeclarationValue> result;
+  std::vector<CssDeclarationValue> slots;
+  std::unordered_map<std::string,size_t> seen;
   for(const auto& part:CssSplit(text,';')) {
     const auto colon=CssDelimiter(part,0,":");
     if(colon==part.size()) continue;
@@ -82,16 +94,25 @@ std::vector<CssDeclarationValue> Parse(const std::string& text,CssDeclarationCon
       // PropertyDeclarationBlock::push (parsing): a repeated property replaces
       // the earlier declaration by removing it and appending the new one,
       // unless the earlier one is important and this one is not.
-      auto old=std::find_if(result.begin(),result.end(),[&](const auto& r){return r.name==row.name;});
-      if(old==result.end()) result.push_back(std::move(row));
-      else if(!old->important||important) {result.erase(old);result.push_back(std::move(row));}
+      auto old=seen.find(row.name);
+      if(old==seen.end()) {
+        seen.emplace(row.name,slots.size());
+        slots.push_back(std::move(row));
+      } else if(!slots[old->second].important||important) {
+        slots[old->second].name.clear();
+        old->second=slots.size();
+        slots.push_back(std::move(row));
+      }
     }
   }
+  std::vector<CssDeclarationValue> result;
+  result.reserve(seen.size());
+  for(auto& slot:slots) if(!slot.name.empty()) result.push_back(std::move(slot));
   return result;
 }
 }
 std::string CssDeclarationText(const std::string& text) {
-  return CssSerializeBlock(CssDeclarations(text));
+  return CssSerializeBlockCached(CssDeclarationsCached(text));
 }
 std::string CssSetDeclaration(std::string& block,const std::string& inputName,
                                const std::string& value,bool important,bool remove) {

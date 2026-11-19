@@ -41,6 +41,7 @@ bool Set(JSContext* cx, unsigned argc, JS::Value* vp) {
     if (!args.get(0).isNull() && !CssString(cx, args.get(0), &text)) return false;
     SheetDataOf(self).media.set(text);
   }
+  ++SheetOwnerOf(self).cssomGeneration;
   args.rval().setUndefined(); return true;
 }
 }

@@ -40,7 +40,7 @@ bool CollectSources(State& state, NodeKey scope, std::vector<StyleSheetSource>* 
     source.document = key.document;source.key = key.node;
     source.scopeDocument = scope.document;source.scopeNode = scope.node;
     source.mainDocument = Same(scope, state.main);
-    source.text = StyleSourceText(text ? DomStringView(*text) : DomStringView());
+    source.sharedText = std::make_shared<const std::string>(StyleSourceText(text ? DomStringView(*text) : DomStringView()));
     source.titleAttribute = StyleSourceText(title ? DomStringView(*title) : DomStringView());
     source.typeAttribute = StyleSourceText(type ? DomStringView(*type) : DomStringView());
     source.title = shadow ? std::string() : StyleSourceTitle(source.titleAttribute);

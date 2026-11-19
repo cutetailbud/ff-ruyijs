@@ -88,9 +88,15 @@ struct Model::Impl {
   // Bumped by tree changes only (nodes inserted, removed or moved, text and
   // other character data); attribute writes leave it (TreeRevision).
   uint64_t tree = 0;
-  void Touch() noexcept { ++revision; ++structure; ++tree; }
-  void TouchAttribute() noexcept { ++revision; ++structure; }
-  void TouchStyle() noexcept { ++revision; }
+  uint64_t connected = 0;
+  void Touch() noexcept { ++revision; ++structure; ++tree; ++connected; }
+  void TouchAttribute(bool in_document = true) noexcept { ++revision; ++structure; if (in_document) ++connected; }
+  void TouchStyle(bool in_document = true) noexcept { ++revision; if (in_document) ++connected; }
+  bool IsComposedConnected(NodeKey key) const {
+    const auto found = documents.find(key.document);
+    if (found == documents.end() || !found->second->get_node(key.node)) return false;
+    return found->second->composed_root_id(key.node) == found->second->id();
+  }
   // Real-change log; see Model::SetMutationRecording. Bounded, oldest first.
   static constexpr size_t kMutationLogLimit = 4096;
   std::deque<MutationNotice> mutations;

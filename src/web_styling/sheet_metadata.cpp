@@ -5,10 +5,13 @@
 
 namespace ruyijs::web_styling {
 bool SameSheetSource(const SheetCache& cache, const document_model::StyleSheetSource& source) {
+  const bool sameText = cache.external ||
+      (cache.sourceText && source.sharedText && cache.sourceText.get() == source.sharedText.get()) ||
+      cache.text == source.Text();
   return cache.document == source.document && cache.key == source.key &&
       cache.scopeDocument == source.scopeDocument && cache.scopeNode == source.scopeNode &&
       cache.mainDocument == source.mainDocument &&
-      cache.external == source.external && (cache.external || cache.text == source.text) &&
+      cache.external == source.external && sameText &&
       cache.href == source.href && cache.sourceRel == source.rel &&
       cache.sourceCors == source.crossOrigin && cache.hasCors == source.hasCrossOrigin &&
       cache.sourceTitle == source.titleAttribute &&

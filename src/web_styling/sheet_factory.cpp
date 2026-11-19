@@ -49,7 +49,9 @@ std::shared_ptr<SheetCache> State::Materialize(const document_model::StyleSheetS
   cache->scopeDocument = source.scopeDocument;
   cache->scopeNode = source.scopeNode;
   cache->mainDocument = source.mainDocument;
-  cache->text = source.text;
+  if (source.sharedText) cache->sourceText = source.sharedText;
+  else cache->sourceText = std::make_shared<const std::string>(source.text);
+  cache->text = *cache->sourceText;
   cache->href = source.href;
   cache->title = source.title;
   cache->sourceTitle = source.titleAttribute;

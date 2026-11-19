@@ -64,17 +64,18 @@ bool Lookup(const std::string& block, const std::string& name, std::string* valu
             bool* important) {
   namespace css = ruyijs::domain::styling;
   const auto wanted = Lower(name);
-  const auto rows = css::CssDeclarations(block);
-  *value = css::CssLookupDeclaration(rows, wanted, important);
+  const auto& parsed = css::CssDeclarationsCached(block);
+  *value = css::CssLookupDeclaration(parsed, wanted, important);
   if (!value->empty() || css::CssShorthandName(wanted)) return !value->empty();
+  if (!parsed.index.empty()) return parsed.index.count(wanted) != 0;
   // A custom property may hold the empty value.
-  return std::any_of(rows.begin(), rows.end(), [&](const auto& row) { return row.name == wanted; });
+  return std::any_of(parsed.rows.begin(), parsed.rows.end(), [&](const auto& row) { return row.name == wanted; });
 }
 size_t CountProperties(const std::string& block) {
-  return ruyijs::domain::styling::CssDeclarations(block).size();
+  return ruyijs::domain::styling::CssDeclarationsCached(block).rows.size();
 }
 bool PropertyNameAt(const std::string& block, size_t index, std::string* name) {
-  const auto rows = ruyijs::domain::styling::CssDeclarations(block);
+  const auto& rows = ruyijs::domain::styling::CssDeclarationsCached(block).rows;
   if (index < rows.size()) { *name = rows[index].name; return true; }
   name->clear();
   return false;

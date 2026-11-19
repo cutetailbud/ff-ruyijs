@@ -97,6 +97,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/selection_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/socks_proxy_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/layout_fingerprint_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/computed_style_check.py"
     # One real page load through the bundled Necko helper, direct and through
     # a local CONNECT proxy.
     "${clean[@]}" "$venv/bin/python" "$root/ci/network_smoke.py"

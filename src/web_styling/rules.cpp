@@ -30,9 +30,11 @@ bool TextSet(JSContext* cx,unsigned argc,JS::Value* vp) {
   auto args=JS::CallArgsFromVp(argc,vp);int member=WebKit::Slot(args);
   JS::RootedObject self(cx);std::string text;
   if(!RuleReceiver(cx,args.thisv(),&self,member==1)||!CssString(cx,args.get(0),&text)) return false;
-  if(member&&ruyijs::domain::styling::CssSelectorSyntax(text,RuleDataOf(self).nested))
+  if(member&&ruyijs::domain::styling::CssSelectorSyntax(text,RuleDataOf(self).nested)) {
     RuleDataOf(self).selector=RuleDataOf(self).nested?ruyijs::domain::styling::CssNestedSelectorText(text):
       ruyijs::domain::styling::CssSelectorText(text);
+    ++RuleOwnerOf(self).cssomGeneration;
+  }
   args.rval().setUndefined();return true;
 }
 bool ParentGet(JSContext* cx,unsigned argc,JS::Value* vp) {
@@ -75,6 +77,7 @@ bool RuleStyleSet(JSContext* cx,unsigned argc,JS::Value* vp) {
     ruyijs::domain::styling::CssDeclarationContext::Page);
   else row.declarations=row.kind==8?ruyijs::domain::styling::CssKeyframeDeclarations(text):
     ruyijs::domain::styling::CssDeclarationText(text);
+  ++state.cssomGeneration;
   args.rval().setUndefined();return true;
 }
 namespace {

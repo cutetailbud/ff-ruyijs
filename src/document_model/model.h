@@ -239,6 +239,10 @@ class Model final {
   // The revision of the tree shape and character data: unchanged by attribute
   // writes, so a layout can tell an attribute-only change from a tree change.
   uint64_t TreeRevision() const noexcept;
+  // Unchanged by attribute writes on disconnected elements (such as a scratch
+  // element created for inline CSS parsing), so connected style/layout caches stay warm.
+  uint64_t ConnectedRevision() const noexcept;
+  bool IsConnected(NodeKey) const noexcept;
   // Real-change log for the observer owner (src/web_observers). Recording is
   // off until an observer registers, so script that never observes pays one
   // flag test per mutation. MutationsSince copies every notice after a

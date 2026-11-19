@@ -201,6 +201,7 @@ public:
     // Identity of the shared custom-property map (null when none): elements that
     // inherit the same map share it, so a serialization can be memoized by it.
     const void* customs_identity() const noexcept { return customs_.get(); }
+    const std::shared_ptr<Properties>& customs_ptr() const noexcept { return customs_; }
 
     /// cssText: "color: red; font-size: 14px;"
     std::string css_text() const {
