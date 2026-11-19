@@ -1,4 +1,10 @@
 #include "document_model/state.h"
+#include "js/Array.h"
+#include "js/Conversions.h"
+#include "js/PropertyAndElement.h"
+#include "js/Realm.h"
+#include <cmath>
+#include <vector>
 
 namespace ruyijs::document_model {
 namespace {
@@ -51,6 +57,74 @@ bool Call(JSContext* cx, unsigned argc, JS::Value* vp) {
   State& state = *entry->owner;
   const int slot = FunctionSlot(args);
   state.Observe("ShadowRoot", members[slot], int(ApiAccess::Call));
+  if (slot == 17 || slot == 18) {
+    if (argc < 2) return TypeError(cx, "ShadowRoot point query requires two arguments");
+    double x = 0, y = 0;
+    if (!JS::ToNumber(cx, args[0], &x) || !JS::ToNumber(cx, args[1], &y)) return false;
+    std::vector<NodeKey> filtered;
+    if (std::isfinite(x) && std::isfinite(y) && state.pointQuery && state.main.node) {
+      JSAutoRealm realm(cx, state.page);
+      NodeSnapshot snap;
+      if (!state.Check(state.model.Inspect(entry->key, &snap))) return false;
+      if (snap.is_connected && Same(snap.composed_root, state.main)) {
+        DocumentSnapshot doc;
+        if (!state.Check(state.model.InspectDocument(state.main, &doc))) return false;
+        std::vector<NodeKey> rawHits;
+        if (doc.document_element.node) {
+          JS::RootedValue rootVal(cx);
+          if (!state.Wrap(doc.document_element, &rootVal)) return false;
+          if (rootVal.isObject()) {
+            JS::RootedObject rootObj(cx, &rootVal.toObject());
+            if (!state.pointQuery(state.pointQueryContext, rootObj, x, y, true, &rawHits)) return false;
+          }
+        }
+        for (const NodeKey& k : rawHits) {
+          NodeKey target;
+          bool inShadow = false;
+          if (!state.Check(state.model.Retarget(k, &state.model, entry->key, &target, &inShadow)))
+            return false;
+          bool inside = false;
+          if (!target.node || Same(target, entry->key) ||
+              !state.Check(state.model.AncestorOrSelf(entry->key, target, &inside)))
+            return false;
+          if (!inside) continue;
+          NodeKind kind = NodeKind::Document;
+          if (!state.Check(state.model.Kind(target, &kind)) || kind != NodeKind::Element) continue;
+          bool dup = false;
+          for (const NodeKey& existing : filtered) {
+            if (Same(existing, target)) { dup = true; break; }
+          }
+          if (!dup) {
+            filtered.push_back(target);
+            if (slot == 17) break;
+          }
+        }
+      }
+    }
+    if (slot == 17) {
+      JS::RootedValue elemVal(cx, JS::NullValue());
+      if (!filtered.empty()) {
+        JSAutoRealm realm(cx, state.page);
+        if (!state.Wrap(filtered.front(), &elemVal)) return false;
+      }
+      if (!JS_WrapValue(cx, &elemVal)) return false;
+      args.rval().set(elemVal);
+      return true;
+    }
+    JS::RootedObject array(cx, JS::NewArrayObject(cx, filtered.size()));
+    if (!array) return false;
+    for (size_t i = 0; i < filtered.size(); ++i) {
+      JS::RootedValue elemVal(cx);
+      {
+        JSAutoRealm realm(cx, state.page);
+        if (!state.Wrap(filtered[i], &elemVal)) return false;
+      }
+      if (!JS_WrapValue(cx, &elemVal) || !JS_DefineElement(cx, array, uint32_t(i), elemVal, JSPROP_ENUMERATE))
+        return false;
+    }
+    args.rval().setObject(*array);
+    return true;
+  }
   if (slot == 20) {
     if (!argc) return TypeError(cx, "getElementById requires an ID");
     DomString id;

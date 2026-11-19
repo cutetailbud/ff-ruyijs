@@ -74,6 +74,7 @@ State::~State() {
   RetireFactoryWrappers();
   RetireNodeLifecycle();
   model.SetMutationSink(nullptr, nullptr);
+  model.SetRangeSink({});
   while (tokenViews) UnlinkTokenView(*tokenViews);
   // Cached live records belong to State, while JS objects are scope-owned.
   // Clear live objects' slots before freeing records; finalized objects have
@@ -236,6 +237,7 @@ bool Realm::Install() {
   // Model already reports to its consumers, with both sides of the edit.
   state.model.SetTreeSink(&NotifyTree, &state);
   state.model.SetReclaimSink(&ReclaimNow, &state);
+  state.model.SetRangeSink(MakeRangeSink(state));
   for (auto* entry = state.interfaces.get(); entry; entry = entry->next.get())
     if (!state.TraceInterface(entry->name)) return false;
   Draft draft;
@@ -275,6 +277,10 @@ void Realm::SetStyleDeclarationPort(StyleDeclarationPort port) { state_->styleDe
 void Realm::SetOffsetGeometryPort(OffsetGeometryPort port, void* context) {
   state_->offsetGeometry = port;
   state_->offsetGeometryContext = context;
+}
+void Realm::SetPointQueryPort(PointQueryPort port, void* context) {
+  state_->pointQuery = port;
+  state_->pointQueryContext = context;
 }
 void Realm::SetElementScrollPort(const ElementScrollPort& port) {
   state_->elementScroll = port;

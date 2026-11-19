@@ -114,6 +114,30 @@ struct Model::Impl {
   void (*treeSink)(void*, DocumentId, const std::vector<NodeKey>&,
                    const std::vector<NodeKey>&) = nullptr;
   void* treeSinkContext = nullptr;
+  Model::RangeSink rangeSink{};
+  void NoteRangeRemove(NodeKey parent, domain::NodeId child, uint32_t old_index) noexcept {
+    if (rangeSink.before_remove && parent.node && child)
+      rangeSink.before_remove(rangeSink.context, parent, Key(parent.document, child), old_index);
+  }
+  void NoteRangeInsert(NodeKey parent, uint32_t index, uint32_t count) noexcept {
+    if (rangeSink.after_insert && parent.node && count > 0)
+      rangeSink.after_insert(rangeSink.context, parent, index, count);
+  }
+  void NoteRangeData(NodeKey node, uint32_t offset, uint32_t count, uint32_t inserted) noexcept {
+    if (rangeSink.replace_data && node.node)
+      rangeSink.replace_data(rangeSink.context, node, offset, count, inserted);
+  }
+  void NoteRangeSplit(NodeKey node, NodeKey new_node, NodeKey parent,
+                      uint32_t parent_index_after, uint32_t offset) noexcept {
+    if (rangeSink.split_text && node.node && new_node.node)
+      rangeSink.split_text(rangeSink.context, node, new_node, parent, parent_index_after, offset);
+  }
+  void NoteRangeMerge(NodeKey kept_text, uint32_t kept_old_length, NodeKey merged_sibling,
+                      NodeKey parent, uint32_t sibling_index) noexcept {
+    if (rangeSink.merge_text && kept_text.node && merged_sibling.node)
+      rangeSink.merge_text(rangeSink.context, kept_text, kept_old_length, merged_sibling, parent,
+                           sibling_index);
+  }
   // Engine-collection request from the node cap; the owning realm runs one
   // collection and its wrapper reclaim, then the cap is re-checked (T41).
   void (*reclaim)(void*) = nullptr;

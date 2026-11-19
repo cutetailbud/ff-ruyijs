@@ -766,7 +766,7 @@ public:
             "list-style-image", "quotes", "border-collapse", "border-spacing",
             "caption-side", "empty-cells", "orphans", "widows", "text-rendering",
             "accent-color", "color-scheme", "forced-color-adjust", "hyphens",
-            "image-rendering", "paint-order", "text-wrap", "overflow-wrap",
+            "image-rendering", "paint-order", "pointer-events", "text-wrap", "overflow-wrap",
             "font-variant-numeric"};
         return names;
     }
@@ -889,7 +889,7 @@ private:
             {"align-items", "normal"}, {"align-self", "auto"}, {"align-content", "normal"},
             {"justify-content", "normal"}, {"row-gap", "normal"}, {"column-gap", "normal"},
             {"place-items", "normal"}, {"text-wrap", "wrap"}, {"overflow-wrap", "normal"},
-            {"user-select", "auto"}, {"touch-action", "auto"}, {"isolation", "auto"},
+            {"user-select", "auto"}, {"touch-action", "auto"}, {"pointer-events", "auto"}, {"isolation", "auto"},
             {"mix-blend-mode", "normal"}, {"filter", "none"}, {"backdrop-filter", "none"},
             {"mask-image", "none"}, {"clip-path", "none"}, {"paint-order", "normal"},
             {"will-change", "auto"}, {"contain", "none"}, {"aspect-ratio", "auto"},

@@ -155,6 +155,7 @@ class Realm final {
   void SetCanvasDimensionPort(CanvasDimensionPort port, void* context);
   // HTMLElement offset* read the layout owner through this port (bound after install).
   void SetOffsetGeometryPort(OffsetGeometryPort port, void* context);
+  void SetPointQueryPort(PointQueryPort port, void* context);
   void SetElementScrollPort(const ElementScrollPort& port);
   // The queued scroll notification of |element| is being delivered.
   void ElementScrollDelivered(JS::HandleObject element);

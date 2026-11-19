@@ -92,5 +92,14 @@ bool RangeExtractContents(State&, Range&, JS::MutableHandleValue result);
 bool RangeCloneContents(State&, Range&, JS::MutableHandleValue result);
 bool RangeInsertNode(State&, Range&, JS::HandleValue node);
 bool RangeText(State&, Range&, JS::MutableHandleValue result);
+void RangeReplaceData(State&, NodeKey node, uint32_t offset, uint32_t count,
+                      uint32_t inserted) noexcept;
+void RangeSplitText(State&, NodeKey node, NodeKey new_node, NodeKey parent,
+                    uint32_t parent_index_after, uint32_t offset) noexcept;
+void RangeBeforeRemove(State&, NodeKey parent, NodeKey child, uint32_t old_index) noexcept;
+void RangeAfterInsert(State&, NodeKey parent, uint32_t index, uint32_t count) noexcept;
+void RangeMergeText(State&, NodeKey kept_text, uint32_t kept_old_length,
+                    NodeKey merged_sibling, NodeKey parent, uint32_t sibling_index) noexcept;
+Model::RangeSink MakeRangeSink(State&) noexcept;
 }  // namespace ruyijs::document_model
 #endif

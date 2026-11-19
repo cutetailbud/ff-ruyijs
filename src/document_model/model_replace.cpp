@@ -38,7 +38,30 @@ Status Model::PrepareChildListChange(NodeKey parent, NodeKey node, bool replace,
 Status Model::CommitChildListChange(ChildListChange& value) noexcept {
   return Protect([&] {
     auto& owner = State().owner(value.parent);
+    const int src_old_idx = (!value.fragment && value.source_parent.node)
+        ? owner.require(value.source_parent.node).index_of_child(value.node.node) : -1;
+    const uint32_t old_parent_count = uint32_t(owner.require(value.parent.node).child_count());
     owner.commit_child_list(value.parent.node, value.node.node, value.children);
+    if (value.replace) {
+      if (value.fragment) {
+        for (auto id : value.added) State().NoteRangeRemove(value.node, id, 0);
+      } else if (value.source_parent.node && value.source_parent.node != value.parent.node && src_old_idx >= 0) {
+        State().NoteRangeRemove(value.source_parent, value.node.node, uint32_t(src_old_idx));
+      }
+      for (auto id : value.removed) State().NoteRangeRemove(value.parent, id, 0);
+      if (!value.added.empty()) State().NoteRangeInsert(value.parent, 0, uint32_t(value.added.size()));
+    } else {
+      if (value.fragment) {
+        for (auto id : value.added) State().NoteRangeRemove(value.node, id, 0);
+        if (!value.added.empty())
+          State().NoteRangeInsert(value.parent, old_parent_count, uint32_t(value.added.size()));
+      } else {
+        if (value.source_parent.node && src_old_idx >= 0)
+          State().NoteRangeRemove(value.source_parent, value.node.node, uint32_t(src_old_idx));
+        const int ins_idx = owner.require(value.parent.node).index_of_child(value.node.node);
+        if (ins_idx >= 0) State().NoteRangeInsert(value.parent, uint32_t(ins_idx), 1);
+      }
+    }
     State().Touch();
     if (value.fragment && !value.added.empty())
       State().NoteRemoved(value.node, value.added, {}, {});
@@ -69,7 +92,11 @@ Status Model::DetachTransferred(NodeKey source,
     }
     NodeKey previous, next;
     if (!fragment) State().Neighbours(parent, source.node, &previous, &next);
-    for (auto id : removed) owner.remove_child(parent.node, id);
+    for (auto id : removed) {
+      const int old_idx = owner.require(parent.node).index_of_child(id);
+      owner.remove_child(parent.node, id);
+      if (old_idx >= 0) State().NoteRangeRemove(parent, id, uint32_t(old_idx));
+    }
     State().Touch();
     State().NoteRemovedKeys(parent, moved, previous, next);
   });

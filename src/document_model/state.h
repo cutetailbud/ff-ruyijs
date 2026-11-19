@@ -253,6 +253,8 @@ struct State {
   void* canvasDimensionsContext = nullptr;
   OffsetGeometryPort offsetGeometry = nullptr;
   void* offsetGeometryContext = nullptr;
+  PointQueryPort pointQuery = nullptr;
+  void* pointQueryContext = nullptr;
   ElementScrollPort elementScroll;
   // Element scroll containers with a queued scroll notification: one per
   // container until it is delivered (scroll events coalesce per task).

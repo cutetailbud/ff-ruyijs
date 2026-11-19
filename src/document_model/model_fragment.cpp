@@ -84,7 +84,10 @@ Status Model::ReplaceOuter(NodeKey node, DomStringView markup) noexcept {
     const std::vector<domain::NodeId> parsed = owner.require(fragment).child_ids();
     try {
       owner.remove_child(parent,node.node);
+      State().NoteRangeRemove(Key(node.document, parent), node.node, uint32_t(index));
       for (auto child : parsed) owner.insert_before(parent,child,following);
+      if (!parsed.empty())
+        State().NoteRangeInsert(Key(node.document, parent), uint32_t(index), uint32_t(parsed.size()));
       State().NoteReplace(Key(node.document, parent), parsed, {node.node});
     } catch (...) { owner.remove_node(fragment); throw; }
     owner.remove_node(fragment);
@@ -116,7 +119,12 @@ Status Model::InsertAdjacent(NodeKey node, int32_t position, DomStringView marku
     // A copy, because each insert detaches the node from the fragment root.
     const std::vector<domain::NodeId> parsed = owner.require(fragment).child_ids();
     try {
+      const uint32_t ins_idx = anchor
+          ? uint32_t(owner.require(parent).index_of_child(anchor))
+          : uint32_t(owner.require(parent).child_count());
       for (auto item : parsed) owner.insert_before(parent,item,anchor);
+      if (!parsed.empty())
+        State().NoteRangeInsert(Key(node.document, parent), ins_idx, uint32_t(parsed.size()));
       State().NoteInserted(Key(node.document, parent), parsed);
     } catch (...) { owner.remove_node(fragment); throw; }
     owner.remove_node(fragment);

@@ -31,11 +31,17 @@ Status Model::Insert(NodeKey parent, NodeKey child, NodeKey before,
         std::vector<domain::NodeId> added;
         added.reserve(moved.size());
         for (NodeKey key : moved) added.push_back(key.node);
+        if (!added.empty()) {
+          const int first_idx = State().owner(parent).require(parent.node).index_of_child(added.front());
+          if (first_idx >= 0) State().NoteRangeInsert(parent, uint32_t(first_idx), uint32_t(added.size()));
+        }
         State().NoteInserted(parent, added);
         State().Touch();
         return;
       }
       const NodeKey moved = MoveIn(State().document_key(parent.document), child, parent, before, {}, rekey);
+      const int ins_idx = State().owner(parent).require(parent.node).index_of_child(moved.node);
+      if (ins_idx >= 0) State().NoteRangeInsert(parent, uint32_t(ins_idx), 1);
       State().NoteInserted(parent, {moved.node});
       State().Touch();
       return;
@@ -45,9 +51,23 @@ Status Model::Insert(NodeKey parent, NodeKey child, NodeKey before,
     const auto added = fragment ? owner.require(child.node).child_ids()
                                 : std::vector<domain::NodeId>{child.node};
     const NodeKey old_parent = fragment ? child : Key(child.document, owner.require(child.node).parent_id());
+    const int old_idx = (!fragment && !Null(old_parent))
+        ? owner.require(old_parent.node).index_of_child(child.node) : -1;
     NodeKey previous, next;
     if (!fragment && !Null(old_parent)) State().Neighbours(old_parent, child.node, &previous, &next);
     owner.insert_before(parent.node,child.node,before.node);
+    if (fragment) {
+      for (domain::NodeId id : added) State().NoteRangeRemove(child, id, 0);
+      if (!added.empty()) {
+        const int first_idx = owner.require(parent.node).index_of_child(added.front());
+        if (first_idx >= 0) State().NoteRangeInsert(parent, uint32_t(first_idx), uint32_t(added.size()));
+      }
+    } else {
+      if (!Null(old_parent) && old_idx >= 0)
+        State().NoteRangeRemove(old_parent, child.node, uint32_t(old_idx));
+      const int ins_idx = owner.require(parent.node).index_of_child(child.node);
+      if (ins_idx >= 0) State().NoteRangeInsert(parent, uint32_t(ins_idx), 1);
+    }
     if (fragment && !added.empty()) State().NoteRemoved(child, added, {}, {});
     else if (!Null(old_parent)) State().NoteRemoved(old_parent, {child.node}, previous, next);
     State().NoteInserted(parent, added);
@@ -59,20 +79,43 @@ Status Model::Replace(NodeKey parent, NodeKey child, NodeKey old_child,
   return Protect([&] {
     State().owner(parent); State().owner(child); State().owner(old_child);
     if (parent.document != old_child.document) throw domain::DomError(domain::DomErrorCode::NotFound,"Replaced node belongs to another document");
-    if (SameKey(child, old_child)) return;
+    if (SameKey(child, old_child)) {
+      auto& owner = State().owner(parent);
+      const int self_idx = owner.require(parent.node).index_of_child(old_child.node);
+      owner.replace_child(parent.node, child.node, old_child.node);
+      if (self_idx >= 0) {
+        State().NoteRangeRemove(parent, child.node, uint32_t(self_idx));
+        State().NoteRangeInsert(parent, uint32_t(self_idx), 1);
+      }
+      NodeKey previous, next;
+      State().Neighbours(parent, child.node, &previous, &next);
+      State().NoteRemoved(parent, {child.node}, previous, next);
+      State().NoteInserted(parent, {child.node});
+      State().Touch();
+      return;
+    }
     if (parent.document != child.document) {
       IdentityTransferScope publication(State().identityTransfer);
+      const int rep_idx = State().owner(parent).require(parent.node).index_of_child(old_child.node);
       if (State().owner(child).require(child.node).node_type() == domain::NodeType::DocumentFragment) {
         const auto moved = MoveFragmentIn(State().document_key(parent.document), child, parent,
                                           {}, old_child, rekey);
         std::vector<domain::NodeId> added;
         added.reserve(moved.size());
         for (NodeKey key : moved) added.push_back(key.node);
+        if (rep_idx >= 0) {
+          State().NoteRangeRemove(parent, old_child.node, uint32_t(rep_idx));
+          if (!added.empty()) State().NoteRangeInsert(parent, uint32_t(rep_idx), uint32_t(added.size()));
+        }
         State().NoteReplace(parent, added, {old_child.node});
         State().Touch();
         return;
       }
       const NodeKey moved = MoveIn(State().document_key(parent.document), child, parent, {}, old_child, rekey);
+      if (rep_idx >= 0) {
+        State().NoteRangeRemove(parent, old_child.node, uint32_t(rep_idx));
+        State().NoteRangeInsert(parent, uint32_t(rep_idx), 1);
+      }
       State().NoteReplace(parent, {moved.node}, {old_child.node});
       State().Touch();
       return;
@@ -82,9 +125,24 @@ Status Model::Replace(NodeKey parent, NodeKey child, NodeKey old_child,
     const auto added = fragment ? owner.require(child.node).child_ids()
                                 : std::vector<domain::NodeId>{child.node};
     const NodeKey old_parent = fragment ? child : Key(child.document, owner.require(child.node).parent_id());
+    const int child_old_idx = (!fragment && !Null(old_parent))
+        ? owner.require(old_parent.node).index_of_child(child.node) : -1;
+    const int raw_rep_idx = owner.require(parent.node).index_of_child(old_child.node);
     NodeKey previous, next;
     if (!fragment && !Null(old_parent)) State().Neighbours(old_parent, child.node, &previous, &next);
     owner.replace_child(parent.node,child.node,old_child.node);
+    uint32_t effective_rep_idx = raw_rep_idx >= 0 ? uint32_t(raw_rep_idx) : 0u;
+    if (fragment) {
+      for (domain::NodeId id : added) State().NoteRangeRemove(child, id, 0);
+    } else if (!Null(old_parent) && child_old_idx >= 0) {
+      State().NoteRangeRemove(old_parent, child.node, uint32_t(child_old_idx));
+      if (SameKey(old_parent, parent) && child_old_idx < raw_rep_idx)
+        --effective_rep_idx;
+    }
+    if (raw_rep_idx >= 0) {
+      State().NoteRangeRemove(parent, old_child.node, effective_rep_idx);
+      if (!added.empty()) State().NoteRangeInsert(parent, effective_rep_idx, uint32_t(added.size()));
+    }
     if (fragment && !added.empty()) State().NoteRemoved(child, added, {}, {});
     else if (!Null(old_parent)) State().NoteRemoved(old_parent, {child.node}, previous, next);
     State().NoteReplace(parent, added, {old_child.node});
@@ -158,7 +216,10 @@ std::vector<NodeKey> Model::MoveFragmentIn(NodeKey document, NodeKey source, Nod
   for (domain::NodeId id : copies) moved.push_back(Key(document.document, id));
   // The source fragment keeps its identity and is left empty, like a
   // same-document fragment insertion; its log names the moved identities.
-  for (domain::NodeId id : children) from.remove_node(id);
+  for (domain::NodeId id : children) {
+    state.NoteRangeRemove(source, id, 0);
+    from.remove_node(id);
+  }
   if (!moved.empty()) state.NoteRemovedKeys(source, moved, {}, {});
   state.Touch();
   return moved;
@@ -167,8 +228,11 @@ void Model::CommitTransfer(NodeKey source, NodeKey moved) {
   auto& state = State();
   auto& from = state.owner(source);
   const domain::NodeId old_parent = from.require(source.node).parent_id();
+  const int old_idx = old_parent ? from.require(old_parent).index_of_child(source.node) : -1;
   NodeKey previous, next;
   if (old_parent) state.Neighbours(Key(source.document, old_parent), source.node, &previous, &next);
+  if (old_parent && old_idx >= 0)
+    state.NoteRangeRemove(Key(source.document, old_parent), source.node, uint32_t(old_idx));
   from.remove_node(source.node);
   // One entry in the source document's own change log, exactly like the
   // removeChild that the adoption performs there. The removed identity is
@@ -181,9 +245,11 @@ Status Model::Remove(NodeKey parent, NodeKey child) noexcept {
   return Protect([&] {
     auto& owner = State().owner(parent); State().owner(child);
     if (parent.document != child.document) throw domain::DomError(domain::DomErrorCode::NotFound,"Node belongs to another document");
+    const int old_idx = owner.require(parent.node).index_of_child(child.node);
     NodeKey previous, next;
     State().Neighbours(parent, child.node, &previous, &next);
     owner.remove_child(parent.node,child.node);
+    if (old_idx >= 0) State().NoteRangeRemove(parent, child.node, uint32_t(old_idx));
     State().NoteRemoved(parent, {child.node}, previous, next);
     State().Touch();
   });

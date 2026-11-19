@@ -76,6 +76,7 @@ Status Model::InsertItems(NodeKey target, InsertMode mode, const std::vector<Ite
       const NodeKey removed_parent = Key(target.document, parent);
       State().Neighbours(removed_parent, target.node, &previous, &next);
       owner.remove_child(parent,target.node);
+      State().NoteRangeRemove(removed_parent, target.node, uint32_t(index));
       if (mode == InsertMode::Detach)
         State().NoteRemoved(removed_parent, {target.node}, previous, next);
     }
@@ -91,16 +92,47 @@ Status Model::InsertItems(NodeKey target, InsertMode mode, const std::vector<Ite
         const domain::NodeId text = owner.create_text_node16(item.text);
         created.push_back(text);
         owner.insert_before(parent,text,before);
+        const int ins_idx = owner.require(parent).index_of_child(text);
+        if (ins_idx >= 0) State().NoteRangeInsert(parent_key, uint32_t(ins_idx), 1);
         continue;
       }
       if (item.node.document != target.document) {
-        created.push_back(MoveIn(State().document_key(target.document), item.node,
-                                 parent_key, Key(target.document, before), {}, rekey).node);
+        const domain::NodeId moved_id = MoveIn(State().document_key(target.document), item.node,
+                                               parent_key, Key(target.document, before), {}, rekey).node;
+        created.push_back(moved_id);
+        const int ins_idx = owner.require(parent).index_of_child(moved_id);
+        if (ins_idx >= 0) State().NoteRangeInsert(parent_key, uint32_t(ins_idx), 1);
         continue;
+      }
+      const bool is_frag = owner.require(item.node.node).node_type() == domain::NodeType::DocumentFragment;
+      if (is_frag) {
+        const auto frag_children = owner.require(item.node.node).child_ids();
+        owner.insert_before(parent, item.node.node, before);
+        for (domain::NodeId fc : frag_children) {
+          State().NoteRangeRemove(item.node, fc, 0);
+          created.push_back(fc);
+        }
+        if (!frag_children.empty()) {
+          const int first_idx = owner.require(parent).index_of_child(frag_children.front());
+          if (first_idx >= 0)
+            State().NoteRangeInsert(parent_key, uint32_t(first_idx), uint32_t(frag_children.size()));
+          State().NoteRemoved(item.node, frag_children, {}, {});
+        }
+        continue;
+      }
+      if (item.node.node == before) {
+        const auto& sibs = owner.require(parent).child_ids();
+        const int b_idx = owner.require(parent).index_of_child(before);
+        before = (b_idx >= 0 && size_t(b_idx) + 1 < sibs.size()) ? sibs[size_t(b_idx) + 1] : 0;
       }
       created.push_back(item.node.node);
       const NodeKey old_parent = Key(item.node.document, owner.require(item.node.node).parent_id());
+      const int old_idx = !Null(old_parent) ? owner.require(old_parent.node).index_of_child(item.node.node) : -1;
       owner.insert_before(parent,item.node.node,before);
+      if (!Null(old_parent) && old_idx >= 0)
+        State().NoteRangeRemove(old_parent, item.node.node, uint32_t(old_idx));
+      const int ins_idx = owner.require(parent).index_of_child(item.node.node);
+      if (ins_idx >= 0) State().NoteRangeInsert(parent_key, uint32_t(ins_idx), 1);
       if (!Null(old_parent)) State().NoteStyle(old_parent, MutationKind::ChildList);
     }
     if (mode == InsertMode::ReplaceWith)

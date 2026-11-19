@@ -143,4 +143,6 @@ bool BoxReplacedNode(const BoxNode&);
 double BoxLengthOf(const BoxStyle&, const std::string&, double percent, double fallback);
 BoxRect ProjectBoxRect(const std::vector<BoxNode>&, const std::vector<BoxLayout>&,
                        const BoxViewport&, size_t target);
+bool HitBoxPoint(const std::vector<BoxNode>&, const std::vector<BoxLayout>&,
+                 const BoxViewport&, size_t target, double vx, double vy);
 }
