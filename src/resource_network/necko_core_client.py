@@ -15,6 +15,7 @@ import json
 import os
 import socket
 import ssl
+import time
 import warnings
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -30,6 +31,7 @@ from h2.events import ConnectionTerminated, DataReceived, ResponseReceived, Stre
 from h2.exceptions import H2Error
 
 from necko.client import NeckoError, NeckoResponse
+from necko.closed_route import read_timeout
 from necko_win._nss import Context, TLS, configure_library
 from necko_win._wire import (
     format_authority,
@@ -161,12 +163,28 @@ class _Socket:
         self._pending = pending
         self.timeout = sock.gettimeout()
         self.hello = None
+        self._deadline = None
+        self._read_s = None
+
+    def begin(self, budget_s: float) -> None:
+        """One request's whole budget, and the idle limit for each read (#45)."""
+        self._deadline = time.monotonic() + budget_s
+        self._read_s = read_timeout()
+
+    def _wait(self, step_s: float) -> None:
+        if self._deadline is None:
+            return
+        left = self._deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError("Request deadline elapsed")
+        self._sock.settimeout(min(step_s, left))
 
     def read(self, size: int) -> bytes:
         if self._pending:
             data = self._pending[:size]
             self._pending = self._pending[size:]
             return data
+        self._wait(self._read_s or 0.0)
         data = self._sock.recv(size)
         if not data:
             raise ConnectionError("socket closed")
@@ -175,6 +193,7 @@ class _Socket:
     def write(self, data: bytes) -> None:
         if self.hello is None and data[:1] == b"\x16":
             self.hello = bytes(data)
+        self._wait(float("inf"))
         self._sock.sendall(data)
 
     def idle(self) -> bool:
@@ -185,11 +204,12 @@ class _Socket:
 
 
 class _Lane:
-    def __init__(self, tls, connection, version: str) -> None:
+    def __init__(self, tls, connection, version: str, transport=None) -> None:
         self.tls = tls
         self.connection = connection
         self.version = version
         self.alpn = tls.alpn
+        self.transport = transport
 
 
 def _text(value) -> str:
@@ -392,11 +412,11 @@ class CoreClient:
                 except Exception:
                     pass
                 _reraise(error)
-            return _Lane(tls, connection, version)
+            return _Lane(tls, connection, version, transport)
         # Servers predating ALPN still speak HTTP/1.1 over the verified TLS
         # connection. An empty ALPN does not require the xpcshell fallback.
         if tls.alpn in ("http/1.1", ""):
-            return _Lane(tls, None, version)
+            return _Lane(tls, None, version, transport)
         try:
             tls.close()
         except Exception:
@@ -422,6 +442,8 @@ class CoreClient:
             lane = self._connect(host, port, version, budget_s)
             if lane.alpn == "h2":
                 self._lanes[key] = lane
+        if lane.transport is not None:
+            lane.transport.begin(budget_s)
         try:
             if lane.alpn == "h2":
                 return self._exchange_h2(lane, method, parts, headers, body or b"")

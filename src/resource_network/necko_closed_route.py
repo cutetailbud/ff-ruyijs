@@ -467,6 +467,15 @@ def _milliseconds(value):
     return max(1, math.ceil(value * 1000))
 
 
+def read_timeout():
+    """Seconds to wait for each next byte: Context(http_read_timeout=...), default 10 (#45)."""
+    try:
+        value = float(os.environ.get("RUYIJS_HTTP_READ_TIMEOUT") or 10)
+    except ValueError:
+        return 10.0
+    return value if 0 < value <= 3600 else 10.0
+
+
 def _core_library_path():
     override = os.environ.get("NECKO_CORE_LIBRARY", "")
     if override:
@@ -527,6 +536,10 @@ class _NativeCleartext:
     def __init__(self, library, host, port, timeout_s):
         self.library = library
         self.timeout_ms = _milliseconds(timeout_s)
+        # timeout_s is the whole request's budget; each read waits at most the
+        # idle limit within what is left of it (#45).
+        self.deadline = time.monotonic() + timeout_s
+        self.read_s = read_timeout()
         self.socket = _Pointer()
         self.exchange = _Pointer()
         self.error = None
@@ -540,11 +553,19 @@ class _NativeCleartext:
         if result:
             raise NeckoError(f"Native connection error {result}")
 
+    def _left_ms(self, step_s):
+        left = self.deadline - time.monotonic()
+        return _milliseconds(min(step_s, left)) if left > 0 else None
+
     def _read(self, _closure, buffer, capacity, length):
         try:
+            wait_ms = self._left_ms(self.read_s)
+            if wait_ms is None:
+                self.error = NeckoError("Request deadline elapsed")
+                return 6
             count = ctypes.c_uint32()
             result = self.library.necko_socket_read(
-                self.socket, buffer, capacity, self.timeout_ms, ctypes.byref(count)
+                self.socket, buffer, capacity, wait_ms, ctypes.byref(count)
             )
             if result:
                 self.error = NeckoError(
@@ -559,10 +580,14 @@ class _NativeCleartext:
 
     def _write(self, _closure, buffer, length):
         try:
+            wait_ms = self._left_ms(math.inf)
+            if wait_ms is None:
+                self.error = NeckoError("Request deadline elapsed")
+                return 6
             data = ctypes.string_at(buffer, length)
             view = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
             result = self.library.necko_socket_write(
-                self.socket, view, len(data), self.timeout_ms
+                self.socket, view, len(data), wait_ms
             )
             if result:
                 self.error = NeckoError(
