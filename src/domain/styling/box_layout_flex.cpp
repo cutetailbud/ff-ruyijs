@@ -151,6 +151,20 @@ bool BoxFlow::FlexChildren(size_t index, size_t positioned, unsigned depth, doub
   const double main_gap = gap(column ? "row-gap" : "column-gap", inner_main);
   const double cross_gap = gap(column ? "column-gap" : "row-gap", inner_cross);
   const auto align_items = style.Get("align-items");
+  // §9.4 step 11: the cross size of an item that stretches to its line, when
+  // align-self is stretch, its cross size is auto and no cross margin is auto.
+  const auto stretched = [&](const FlexItem& item, double line_cross, double* target) {
+    const auto& node = nodes[item.node];
+    const bool stretch = item.align.empty() || item.align == "normal" || item.align == "stretch";
+    if (node.text || !stretch || node.style.Get(column ? "margin-left" : "margin-top") == "auto" ||
+        node.style.Get(column ? "margin-right" : "margin-bottom") == "auto" ||
+        !AutoText(node.style.Get(column ? "width" : "height"))) return false;
+    const auto& box = boxes[item.node];
+    const double margins = column ? box.margin[1] + box.margin[3] : box.margin[0] + box.margin[2];
+    *target = BoxLimit(node.style, column, column ? content[2] : inner_cross,
+                       std::max(0.0, line_cross - margins - item.cross_extra), item.cross_extra);
+    return true;
+  };
   std::vector<FlexItem> items;
   for (const auto child : nodes[index].children) {
     const auto& node = nodes[child];
@@ -274,7 +288,15 @@ bool BoxFlow::FlexChildren(size_t index, size_t positioned, unsigned depth, doub
       cursor = offset + border_main + item->margin_end + (item->auto_end ? share : 0) + between + main_gap;
       if (!item->text) {
         if (column) forced_height[item->node] = item->target;
-        else { forced_width[item->node] = item->target; forced_height[item->node] = BoxAuto(); }
+        else {
+          forced_width[item->node] = item->target;
+          // §9.4 step 8: a single-line container with a definite cross size is
+          // its line's cross size, so a stretched item is placed once, at its
+          // final height, instead of at its content height and again (#50).
+          double cross = BoxAuto();
+          if (wrap || !std::isfinite(inner_cross) || !stretched(*item, inner_cross, &cross)) cross = BoxAuto();
+          forced_height[item->node] = cross;
+        }
       }
       const double bx = column ? content[0] : content[0] + position;
       const double by = column ? content[1] + position : content[1];
@@ -324,11 +346,8 @@ bool BoxFlow::FlexChildren(size_t index, size_t positioned, unsigned depth, doub
       const char* end_margin = column ? "margin-right" : "margin-bottom";
       const bool auto_before = !node.text && node.style.Get(start_margin) == "auto";
       const bool auto_after = !node.text && node.style.Get(end_margin) == "auto";
-      if (!node.text && align == "stretch" && !auto_before && !auto_after &&
-          AutoText(node.style.Get(column ? "width" : "height"))) {
-        const double margins = column ? box.margin[1] + box.margin[3] : box.margin[0] + box.margin[2];
-        const double target = BoxLimit(node.style, column, column ? content[2] : inner_cross,
-                                       std::max(0.0, line.cross - margins - item->cross_extra), item->cross_extra);
+      double target = 0;
+      if (stretched(*item, line.cross, &target)) {
         const double current = column ? box.content[2] : box.content[3];
         if (std::abs(target - current) > 1e-6) {
           if (!Relayout(item->node, !column)) {
