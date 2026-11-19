@@ -115,15 +115,29 @@ def open_response(adapter, prepared, control, timeout=(15, 10), verify=True, pro
     attempts = max(1, int(control.max_attempts))
     for attempt in range(attempts):
         control.request_ms = elapsed_ms(control)
+        # One budget covers every attempt, as RequestControl's deadline does in
+        # the Windows and Linux helper: a retry gets what is left, not a fresh
+        # budget (#45).
+        left = float(budget) - control.request_ms / 1000.0
+        if left <= 0:
+            break
         try:
-            response = adapter.client.fetch(prepared.method, prepared.url, headers, body, float(budget))
+            response = adapter.client.fetch(prepared.method, prepared.url, headers, body, left)
             control.response_ms = max(elapsed_ms(control), control.request_ms)
             control.headers_ms = max(elapsed_ms(control), control.response_ms)
             return ResponseBody(response)
         except NeckoError as error:
             last = error
-            if attempt + 1 >= attempts:
+            # A request that ran out of time (the budget or the read idle limit)
+            # is not sent again.
+            if _timed_out(error) or attempt + 1 >= attempts:
                 break
     if last is None:
-        raise RuntimeError("Necko request was not sent")
+        raise NeckoError("Request deadline elapsed")
     raise last
+
+
+def _timed_out(error):
+    cause = error.__cause__
+    text = str(error).lower()
+    return isinstance(cause, TimeoutError) or "timed out" in text or "deadline" in text
