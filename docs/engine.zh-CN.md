@@ -61,7 +61,7 @@ with Engine() as engine, use_engine(engine):
 | 选项 | 作用 |
 | --- | --- |
 | `Engine(prewarm=1)` | 每个新会话在后台预启动的 Necko 辅助进程数（0-2；Windows 上的普通 Context 预启动 2 个，Linux 和 macOS 则在第一次请求时启动）。之后都会按需启动更多；`engine.context(prewarm=2)` 可按会话设置。引擎会话使用这个数量，不用普通 Context 的默认值。 |
-| `engine.context(network="名字")` | 使用相同名字的会话共享辅助进程、连接和 TLS 会话复用，类似同一个浏览器配置下的标签页：进程更少，但服务器可以关联这些会话。它们必须使用相同的 `proxy` 和 `tls`。 |
+| `engine.context(network="名字")` | 使用相同名字的会话共享辅助进程、连接和 TLS 会话复用，类似同一个浏览器配置下的标签页：进程更少，但服务器可以关联这些会话。它们必须使用相同的 `proxy`、`tls`、`http_timeout` 和 `http_read_timeout`。 |
 | `Engine(max_helpers=N)` | 所有会话的辅助进程总预算。用尽时，其他会话中最久未用的空闲辅助进程让出位置。 |
 
 Windows 上简单页面、四个 Context 的实测：
@@ -105,7 +105,7 @@ python -m ruyijs.examples --shared creepjs datadome -- --proxy http://127.0.0.1:
 
 | 请求 | 回复 |
 | --- | --- |
-| `{"op": "open", "pipe", "mode", "proxy", "tls", "network", "prewarm"}` | `{"session": id}`；会话连接到 `pipe`，在其上提供 Context 的 RPC |
+| `{"op": "open", "pipe", "mode", "proxy", "tls", "network", "prewarm", "httpTimeout", "httpReadTimeout"}` | `{"session": id}`；会话连接到 `pipe`，在其上提供 Context 的 RPC |
 | `{"op": "status"}` | `[{"session", "running", "network"}]` |
 | `{"op": "interrupt", "session": id}` | 中断该会话正在运行的脚本 |
 | `{"op": "close"}` | 等待所有会话线程结束后进程退出 |

@@ -72,7 +72,7 @@ when it ends.
 | Option | Effect |
 | --- | --- |
 | `Engine(prewarm=1)` | Necko helpers each new session starts in the background (0-2; a plain Context on Windows starts 2, and on Linux and macOS starts them on the first request). More start on demand either way; `engine.context(prewarm=2)` sets it per session. Engine sessions keep this count; it is not the plain-Context default. |
-| `engine.context(network="name")` | Sessions that pass the same name share helper processes, connections and TLS session resumption, like tabs of one browser profile: fewer processes, but a server can link those sessions. They must use the same `proxy` and `tls`. |
+| `engine.context(network="name")` | Sessions that pass the same name share helper processes, connections and TLS session resumption, like tabs of one browser profile: fewer processes, but a server can link those sessions. They must use the same `proxy`, `tls`, `http_timeout` and `http_read_timeout`. |
 | `Engine(max_helpers=N)` | A budget for the helper processes of all sessions together. When it is spent, the least recently used idle helper of another session makes way. |
 
 Measured on Windows with a simple page, four contexts:
@@ -120,7 +120,7 @@ and serves JSON frames with the same framing as `--ruyijs-rpc`:
 
 | Request | Reply |
 | --- | --- |
-| `{"op": "open", "pipe", "mode", "proxy", "tls", "network", "prewarm"}` | `{"session": id}`; the session connects to `pipe` and serves the Context RPC there |
+| `{"op": "open", "pipe", "mode", "proxy", "tls", "network", "prewarm", "httpTimeout", "httpReadTimeout"}` | `{"session": id}`; the session connects to `pipe` and serves the Context RPC there |
 | `{"op": "status"}` | `[{"session", "running", "network"}]` |
 | `{"op": "interrupt", "session": id}` | stops that session's running script |
 | `{"op": "close"}` | waits for every session thread, then the process exits |

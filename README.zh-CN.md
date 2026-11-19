@@ -16,7 +16,7 @@
 
 <sub>贡献者</sub>
 
-<a href="https://github.com/Facetomyself" title="Facetomyself · #4 macOS arm64 外壳、#6 QUIC 配置、#7 macOS 代理、#9 macOS Necko 适配器、#14-21 DOM 与布局提速、#22-29 DOM、布局与样式提速"><img src="assets/contributors/Facetomyself.png" width="48" height="48" alt="Facetomyself"></a>&nbsp;&nbsp;<a href="https://github.com/Starktomy" title="Starktomy · #5 Linux 运行时"><img src="assets/contributors/Starktomy.png" width="48" height="48" alt="Starktomy"></a>&nbsp;&nbsp;<a href="https://github.com/isesword" title="isesword · #8 macOS Core Text 排版与 Firefox 对齐"><img src="assets/contributors/isesword.png" width="48" height="48" alt="isesword"></a>&nbsp;&nbsp;<a href="https://github.com/sbbbsbbb" title="sbbbsbbb · #10 macOS TLS 与 HTTP/2"><img src="assets/contributors/sbbbsbbb.png" width="48" height="48" alt="sbbbsbbb"></a>
+<a href="https://github.com/Facetomyself" title="Facetomyself · #4 macOS arm64 外壳、#6 QUIC 配置、#7 macOS 代理、#9 macOS Necko 适配器、#14-21 DOM 与布局提速、#22-29 DOM、布局与样式提速"><img src="assets/contributors/Facetomyself.png" width="48" height="48" alt="Facetomyself"></a>&nbsp;&nbsp;<a href="https://github.com/Starktomy" title="Starktomy · #5 Linux 运行时"><img src="assets/contributors/Starktomy.png" width="48" height="48" alt="Starktomy"></a>&nbsp;&nbsp;<a href="https://github.com/isesword" title="isesword · #8 macOS Core Text 排版与 Firefox 对齐"><img src="assets/contributors/isesword.png" width="48" height="48" alt="isesword"></a>&nbsp;&nbsp;<a href="https://github.com/sbbbsbbb" title="sbbbsbbb · #10 macOS TLS 与 HTTP/2"><img src="assets/contributors/sbbbsbbb.png" width="48" height="48" alt="sbbbsbbb"></a>&nbsp;&nbsp;<a href="https://github.com/ladydd" title="ladydd · #33 增量布局复用、#47 命中测试与实时 Range、#49 实时计算样式"><img src="assets/contributors/ladydd.png" width="48" height="48" alt="ladydd"></a>
 
 **[安装](#-安装)** &nbsp;·&nbsp; **[功能](#-功能)** &nbsp;·&nbsp; **[攻克的验证系统](#-攻克的验证系统)** &nbsp;·&nbsp; **[示例](#-运行示例)** &nbsp;·&nbsp; **[FAQ](#-常见问题)** &nbsp;·&nbsp; **[联系](#-联系方式)** &nbsp;·&nbsp; **[LinuxDO](https://linux.do/t/topic/3078486)** &nbsp;·&nbsp; [English](README.md) · **简体中文**
 
@@ -299,7 +299,7 @@ JS 引擎是 Mozilla 官方的 **SpiderMonkey**，网络库是 Mozilla 官方的
 
 - 确保使用 `with` 语句（`with Context() as ctx:`），以正确清理进程。
 - 如果使用代理，请检查代理是否可达：`Context(proxy="http://127.0.0.1:7890")`。
-- 增大超时：`Context(timeout=60)`。
+- 增大超时：`Context(timeout=60)`。页面请求约 15 秒后失败（下载慢或事件流持续较久）时，应改用 `Context(http_timeout=60)`；`http_read_timeout`（默认 10 秒）限制等待下一个字节的时间。
 - 在 Wine 上运行请升级至 ≥ 0.1.5，该版本修复了已知的 navigate 死锁。
 </details>
 
