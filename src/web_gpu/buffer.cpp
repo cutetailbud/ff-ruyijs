@@ -76,10 +76,15 @@ bool BufferProperty(JSContext* cx, unsigned argc, JS::Value* vp) {
       if (!SlotString(cx, self, kBufferLabel, &text)) return false;
       return StringValue(cx, text, args.rval());
     }
-    default:
-      args.rval().setString(JS_NewStringCopyZ(
-          cx, MapStateName(JS::GetReservedSlot(self, kBufferMapState).toInt32())));
-      return args.rval().isString();
+    default: {
+      // A null string must not be boxed: setString(nullptr) is still
+      // string-tagged (#46).
+      JSString* name = JS_NewStringCopyZ(
+          cx, MapStateName(JS::GetReservedSlot(self, kBufferMapState).toInt32()));
+      if (!name) return false;
+      args.rval().setString(name);
+      return true;
+    }
   }
 }
 

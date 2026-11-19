@@ -83,16 +83,29 @@ class ResourceControl:
         """Read the shared resource count and charged storage bytes."""
         return self._resource("status")
 
-    def net_log(self):
+    def net_log(self, clear=False):
         """Return the ordered page requests recorded by the resource owner.
 
         Each entry has id, method, url, requestBody, status and matched. A request
         carrying cookies also includes cookieNames (names only, never values). The
         log is appended by the same aggregate call that matches a request, so
         an unmatched request is listed with matched False and status 0.
+
+        The log keeps at most 4096 entries (16 MiB) and then stops recording.
+        With clear=True the same command also drops them, the atomic
+        read-and-drain a long-running host uses; ids keep counting.
         """
-        return self._resource("log")["entries"]
+        if not isinstance(clear, bool):
+            raise TypeError("clear must be a boolean")
+        return self._resource("log", clear=clear)["entries"]
+
+    def clear_net_log(self):
+        """Drop the recorded requests. Stored resources and cookies stay."""
+        self._resource("log", clear=True)
 
     def clear_resources(self):
-        """Clear the runtime resource directory and return its empty status."""
+        """Clear the runtime resource directory and return its empty status.
+
+        The net log is separate: clear it with clear_net_log().
+        """
         return self._resource("clear")

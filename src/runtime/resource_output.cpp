@@ -51,16 +51,21 @@ bool LogEntries(JSContext* cx, const resource_network::NetLogRecords& source,
   JS::RootedObject entries(cx, JS::NewArrayObject(cx, source.size()));
   if (!entries) return false;
   for (size_t i = 0; i < source.size(); ++i) {
+    // Every allocation is checked before it is used: under memory pressure a
+    // null string boxed by JS::StringValue is a string-tagged null that
+    // JS_DefineProperty dereferences, ending the whole engine process (#46).
     JS::RootedObject entry(cx, JS_NewPlainObject(cx));
+    if (!entry) return false;
     // Request fields come from the page ByteString conversion, so they are
     // copied back as Latin-1 rather than decoded as UTF-8.
     JS::RootedString method(cx, String(cx, source[i].method));
     JS::RootedString url(cx, String(cx, source[i].url));
     JS::RootedString body(cx, String(cx, source[i].requestBody));
+    JS::RootedString error(cx, String(cx, source[i].error));
+    if (!method || !url || !body || !error) return false;
     // Explicit BooleanValue: the bool overload of JS_DefineProperty resolves to
     // the numeric one and would publish matched as 1 or 0.
     JS::RootedValue matched(cx, JS::BooleanValue(source[i].matched));
-    JS::RootedValue error(cx, JS::StringValue(String(cx, source[i].error)));
     if(!source[i].cookieNames.empty()) {
       JS::RootedObject names(cx,JS::NewArrayObject(cx,source[i].cookieNames.size()));
       if(!names)return false;
@@ -70,8 +75,7 @@ bool LogEntries(JSContext* cx, const resource_network::NetLogRecords& source,
       }
       if(!JS_DefineProperty(cx,entry,"cookieNames",names,JSPROP_ENUMERATE))return false;
     }
-    if (!entry || !method || !url || !body ||
-        !JS_DefineProperty(cx, entry, "id", double(source[i].id), JSPROP_ENUMERATE) ||
+    if (!JS_DefineProperty(cx, entry, "id", double(source[i].id), JSPROP_ENUMERATE) ||
         !JS_DefineProperty(cx, entry, "method", method, JSPROP_ENUMERATE) ||
         !JS_DefineProperty(cx, entry, "url", url, JSPROP_ENUMERATE) ||
         !JS_DefineProperty(cx, entry, "requestBody", body, JSPROP_ENUMERATE) ||

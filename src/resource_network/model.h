@@ -95,6 +95,8 @@ class Model final {
     return remoteHttp_(remoteHttpContext_,request,result,ok);
   }
   Status Log(NetLogRecords* result) const noexcept;
+  // Drops the recorded requests; ids keep counting from the last one (#46).
+  Status ClearLog() noexcept;
   ResourceStats Inspect() const noexcept;
   void Clear() noexcept;
  private:

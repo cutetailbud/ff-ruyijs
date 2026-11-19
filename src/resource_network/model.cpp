@@ -136,6 +136,12 @@ Status Model::Log(NetLogRecords* result) const noexcept {
     return {};
   } catch (...) { return {ErrorCode::OutOfMemory, "Net log snapshot allocation failed"}; }
 }
+Status Model::ClearLog() noexcept {
+  if (!impl_) return {ErrorCode::InvalidState, "Resource model is not initialized"};
+  if (!impl_->resources().net_log().clear())
+    return {ErrorCode::InvalidState, "Net log has requests in flight"};
+  return {};
+}
 ResourceStats Model::Inspect() const noexcept {
   return impl_ ? ResourceStats{impl_->resources().resource_count(), impl_->resources().resource_bytes()} : ResourceStats{};
 }

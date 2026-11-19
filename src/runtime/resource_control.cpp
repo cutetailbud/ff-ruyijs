@@ -1,5 +1,6 @@
 #include "runtime/resource_control.h"
 #include "runtime/resource_schema.h"
+#include "js/PropertyAndElement.h"
 #include "js/Value.h"
 
 namespace ruyijs {
@@ -31,9 +32,13 @@ bool ResourceControl::Request(JS::HandleObject request, JS::MutableHandleValue r
   }
   if (action == "log") {
     resource_network::NetLogRecords entries;
-    if (!Fields(cx_, request, {"id", "op", "action"}) ||
-        !Report(cx_, owner_.Log(&entries))) return false;
-    return LogEntries(cx_, entries, result);
+    JS::RootedValue drain(cx_);
+    if (!Fields(cx_, request, {"id", "op", "action", "clear"}) ||
+        !JS_GetProperty(cx_, request, "clear", &drain)) return false;
+    if (!drain.isUndefined() && !drain.isBoolean()) return Error(cx_, "net log clear must be a boolean");
+    // Read and drain in one command, as console_log(clear=True) does (#46).
+    if (!Report(cx_, owner_.Log(&entries)) || !LogEntries(cx_, entries, result)) return false;
+    return !(drain.isBoolean() && drain.toBoolean()) || Report(cx_, owner_.ClearLog());
   }
   return Error(cx_, "Unknown resource action");
 }
