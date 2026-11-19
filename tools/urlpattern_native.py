@@ -117,6 +117,11 @@ def build(native):
     (directory / 'archive.log').write_text(archived.stdout + archived.stderr, 'utf8')
     if archived.returncode:
         raise RuntimeError('urlpattern archive: ' + (archived.stdout + archived.stderr)[-10000:])
+    if not library.is_file():
+        cargo_log = (directory / 'cargo.log').read_text('utf8', errors='replace')
+        raise RuntimeError(f'urlpattern archive wrote no {library.name} from {len(rlibs)} rlibs '
+                           f'in {target_dir / target_triple(native)}: '
+                           + (archived.stdout + archived.stderr)[-3000:] + '\ncargo: ' + cargo_log[-6000:])
     stamp.write_text(json.dumps({'signature': signature, 'identity': identity, 'command': command,
                                  'rlibs': [Path(p).name for p in rlibs], 'output': digest(library)},
                                 indent=2) + '\n', 'utf8')
