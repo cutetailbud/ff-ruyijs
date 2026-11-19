@@ -6,8 +6,8 @@
 #include "domain/execution_scheduling/clock_state.h"
 
 #include <algorithm>
+#include <map>
 #include <memory>
-#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -35,50 +35,77 @@ public:
     const ClockState& clock() const noexcept { return clock_; }
     TaskId last_task_id() const noexcept { return next_task_id_; }
     std::shared_ptr<Task> find_task(TaskId id) const noexcept {
-        auto found = tasks_.find(id);
-        return found == tasks_.end() ? nullptr : found->second.task;
+        auto it = macrotasks_by_id_.find(id);
+        if (it != macrotasks_by_id_.end()) return it->second.task;
+        for (const auto& task : microtask_queue_) if (task->id() == id) return task;
+        return nullptr;
     }
     std::shared_ptr<Task> next_live_task() const noexcept {
-        std::shared_ptr<Task> ordinary, idle, expired, web;
-        for (const auto& key : ordered_) {
-            const auto& task = at(key);
-            if (!task->cancelled() && !task->running()) { ordinary = task; break; }
+        Task* ordinary = nullptr;
+        for (const auto& [key, task] : ordered_non_idle_) {
+            (void)key;
+            if (!task->cancelled() && !task->running()) {
+                ordinary = task;
+                break;
+            }
         }
-        for (const auto& key : idle_) {
-            const auto& task = at(key);
-            if (task->cancelled() || task->running()) continue;
-            if (!idle) idle = task;
-            if (task->idle_timeout() <= clock_.elapsed.ms() &&
-                (!expired || task->idle_timeout() < expired->idle_timeout())) expired = task;
-        }
-        if (ordinary && ordinary->type() == Task::Type::WebTask) {
-            for (const auto& key : web_) {
-                const auto& task = at(key);
-                if (!task->is_due(clock_.elapsed)) continue;
-                if(!web || task->web_priority()<web->web_priority() ||
-                   (task->web_priority()==web->web_priority() && task->continuation() && !web->continuation()) ||
-                   (task->web_priority()==web->web_priority() && task->continuation()==web->continuation() && task->id()<web->id()))web=task;
+        Task* idle = nullptr;
+        Task* expired = nullptr;
+        if (!idle_tasks_.empty()) {
+            const double now_ms = clock_.elapsed.ms();
+            for (const auto& [key, task] : idle_tasks_) {
+                (void)key;
+                if (task->cancelled() || task->running()) continue;
+                if (!idle) idle = task;
+                if (task->idle_timeout() <= now_ms &&
+                    (!expired || task->idle_timeout() < expired->idle_timeout())) {
+                    expired = task;
+                }
             }
         }
         if (expired && (!ordinary || !ordinary->is_due(clock_.elapsed) ||
-                        expired->idle_timeout() < ordinary->deadline().ms())) return expired;
-        if (ordinary && ordinary->is_due(clock_.elapsed)) return ordinary->type()==Task::Type::WebTask?web:ordinary;
-        if (idle && (!ordinary || idle->deadline() <= ordinary->deadline())) return idle;
-        return ordinary;
+                        expired->idle_timeout() < ordinary->deadline().ms())) {
+            return shared_macrotask(expired->id());
+        }
+        if (ordinary && ordinary->is_due(clock_.elapsed)) {
+            if (ordinary->type() == Task::Type::WebTask) {
+                Task* web = nullptr;
+                for (const auto& [key, task] : web_tasks_) {
+                    if (key.deadline > clock_.elapsed) break;
+                    if (task->cancelled() || task->running()) continue;
+                    if (!web || task->web_priority() < web->web_priority() ||
+                        (task->web_priority() == web->web_priority() && task->continuation() && !web->continuation()) ||
+                        (task->web_priority() == web->web_priority() && task->continuation() == web->continuation() &&
+                         task->id() < web->id())) {
+                        web = task;
+                    }
+                }
+                return web ? shared_macrotask(web->id()) : nullptr;
+            }
+            return shared_macrotask(ordinary->id());
+        }
+        if (idle && (!ordinary || idle->deadline() <= ordinary->deadline())) {
+            return shared_macrotask(idle->id());
+        }
+        return ordinary ? shared_macrotask(ordinary->id()) : nullptr;
     }
     double idle_deadline() const noexcept {
         double end = clock_.elapsed.ms() + 50.0;
-        for (const auto& key : ordered_) {
-            const auto& task = at(key);
-            if (!task->cancelled() && !task->running()) { end = std::min(end, task->deadline().ms()); break; }
+        for (const auto& [key, task] : ordered_non_idle_) {
+            (void)key;
+            if (!task->cancelled() && !task->running()) {
+                end = std::min(end, task->deadline().ms());
+                break;
+            }
         }
         return std::max(clock_.elapsed.ms(), end);
     }
     std::shared_ptr<Task> eligible_frame(TaskId cutoff, TimePoint timestamp) const noexcept {
-        for (const auto& key : frames_) {
-            if (TimePoint(key.deadline) > timestamp) break;
-            const auto& task = at(key);
-            if (!task->cancelled() && !task->running() && task->id() <= cutoff) return task;
+        for (const auto& [key, task] : frame_tasks_) {
+            if (key.deadline > timestamp) break;
+            if (!task->cancelled() && !task->running() && task->id() <= cutoff) {
+                return shared_macrotask(task->id());
+            }
         }
         return nullptr;
     }
@@ -96,9 +123,9 @@ public:
         TimePoint deadline(clock_.elapsed.ms() + delay_ms);
         auto task = std::make_shared<Task>(id, type, priority, deadline);
         if (type == Task::Type::Microtask) {
-            microtask_queue_.push_back(task);
+            microtask_queue_.push_back(std::move(task));
         } else {
-            insert(task);
+            insert_macrotask(std::move(task));
         }
         next_task_id_ = id;
         return id;
@@ -109,16 +136,22 @@ public:
         TimePoint deadline(clock_.elapsed.ms() + interval_ms);
         auto task = std::make_shared<Task>(id, Task::Type::Interval, TaskPriority::Timer, deadline);
         task->set_interval(interval_ms);
-        insert(task);
+        insert_macrotask(std::move(task));
         next_task_id_ = id;
         return id;
     }
 
-    void cancel_task(TaskId id) {
-        auto found = tasks_.find(id);
-        if (found != tasks_.end()) {
-            if (!found->second.task->cancelled()) cancelled_.push_back(id);
-            found->second.task->cancel();
+    void cancel_task(TaskId id) noexcept {
+        auto it = macrotasks_by_id_.find(id);
+        if (it != macrotasks_by_id_.end()) {
+            if (!it->second.task->cancelled()) {
+                it->second.task->cancel();
+                try {
+                    cancelled_macrotasks_.push_back(id);
+                } catch (...) {
+                    cancelled_overflow_ = true;
+                }
+            }
             return;
         }
         for (auto& task : microtask_queue_) {
@@ -131,13 +164,14 @@ public:
     /// Get all due macro-tasks at current time (ordered by deadline + priority)
     std::vector<std::shared_ptr<Task>> get_due_macrotasks() const {
         std::vector<std::shared_ptr<Task>> due;
-        for (const auto* lane : {&ordered_, &idle_}) {
-            for (const auto& key : *lane) {
-                if (TimePoint(key.deadline) > clock_.elapsed) break;
-                if (at(key)->is_due(clock_.elapsed)) due.push_back(at(key));
+        for (const auto& [key, task] : ordered_macrotasks_) {
+            if (key.deadline > clock_.elapsed) break;
+            if (task->is_due(clock_.elapsed)) {
+                if (auto owned = shared_macrotask(task->id())) {
+                    due.push_back(std::move(owned));
+                }
             }
         }
-        std::sort(due.begin(), due.end(), [](const auto& a, const auto& b) { return *a < *b; });
         return due;
     }
 
@@ -153,59 +187,75 @@ public:
     }
 
     /// Remove a task from the queue after execution
-    void complete_task(TaskId id) {
-        // Check if it's a repeating interval
-        auto found = tasks_.find(id);
-        if (found != tasks_.end()) {
-            auto task = found->second.task;
-            if (task->is_repeating() && !task->cancelled()) {
-                // The caller may have moved the deadline; the lanes keep the
-                // key the task was inserted with until it is relinked here.
-                unlink(found->second);
-                task->reschedule();
-                found->second.key = key_of(*task);
-                link(found->second);
+    void complete_task(TaskId id) noexcept {
+        auto it = macrotasks_by_id_.find(id);
+        if (it != macrotasks_by_id_.end()) {
+            Task* raw = it->second.task.get();
+            const MacroKey old_key = it->second.key;
+            if (raw->is_repeating() && !raw->cancelled()) {
+                raw->reschedule();
+                const MacroKey new_key = make_key(*raw);
+                it->second.key = new_key;
+                rekey_map(ordered_macrotasks_, old_key, new_key);
+                rekey_map(ordered_non_idle_, old_key, new_key);
             } else {
-                erase(found);
+                erase_macrotask_indices(old_key, raw->type());
+                macrotasks_by_id_.erase(it);
             }
             return;
         }
-        // Remove from microtask queue
-        microtask_queue_.erase(
-            std::remove_if(microtask_queue_.begin(), microtask_queue_.end(),
-                [id](const auto& t) { return t->id() == id; }),
-            microtask_queue_.end());
+        if (!microtask_queue_.empty()) {
+            microtask_queue_.erase(
+                std::remove_if(microtask_queue_.begin(), microtask_queue_.end(),
+                    [id](const auto& t) { return t->id() == id; }),
+                microtask_queue_.end());
+        }
     }
 
     /// Remove all cancelled tasks
-    void purge_cancelled() {
-        // Every macro-task is cancelled through cancel_task, which records it.
-        for (TaskId id : cancelled_) {
-            auto found = tasks_.find(id);
-            if (found != tasks_.end() && found->second.task->cancelled()) erase(found);
+    void purge_cancelled() noexcept {
+        if (cancelled_overflow_) {
+            cancelled_macrotasks_.clear();
+            cancelled_overflow_ = false;
+            for (auto it = macrotasks_by_id_.begin(); it != macrotasks_by_id_.end(); ) {
+                if (it->second.task->cancelled()) {
+                    erase_macrotask_indices(it->second.key, it->second.task->type());
+                    it = macrotasks_by_id_.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        } else if (!cancelled_macrotasks_.empty()) {
+            for (TaskId id : cancelled_macrotasks_) {
+                auto it = macrotasks_by_id_.find(id);
+                if (it != macrotasks_by_id_.end() && it->second.task->cancelled()) {
+                    erase_macrotask_indices(it->second.key, it->second.task->type());
+                    macrotasks_by_id_.erase(it);
+                }
+            }
+            cancelled_macrotasks_.clear();
         }
-        cancelled_.clear();
-        microtask_queue_.erase(
-            std::remove_if(microtask_queue_.begin(), microtask_queue_.end(),
-                [](const auto& t) { return t->cancelled(); }),
-            microtask_queue_.end());
+        if (!microtask_queue_.empty()) {
+            microtask_queue_.erase(
+                std::remove_if(microtask_queue_.begin(), microtask_queue_.end(),
+                    [](const auto& t) { return t->cancelled(); }),
+                microtask_queue_.end());
+        }
     }
 
     // --- Statistics ---
 
-    bool has_pending_tasks() const {
-        return !tasks_.empty() || !microtask_queue_.empty();
+    bool has_pending_tasks() const noexcept {
+        return !macrotasks_by_id_.empty() || !microtask_queue_.empty();
     }
 
-    size_t macrotask_count() const noexcept { return tasks_.size(); }
+    size_t macrotask_count() const noexcept { return macrotasks_by_id_.size(); }
     size_t microtask_count() const noexcept { return microtask_queue_.size(); }
 
     /// Next deadline (earliest due time among macrotasks)
-    TimePoint next_deadline() const {
-        if (ordered_.empty() && idle_.empty()) return TimePoint(1e18);
-        if (idle_.empty() || (!ordered_.empty() && *ordered_.begin() < *idle_.begin()))
-            return TimePoint(ordered_.begin()->deadline);
-        return TimePoint(idle_.begin()->deadline);
+    TimePoint next_deadline() const noexcept {
+        if (ordered_macrotasks_.empty()) return TimePoint(1e18);
+        return ordered_macrotasks_.begin()->first.deadline;
     }
 
     // --- Auto-advance configuration ---
@@ -217,60 +267,93 @@ public:
     void set_date_advance_step(double ms) noexcept { date_advance_step_ = ms; }
 
 private:
-    // Macro-tasks are indexed by id and kept in (deadline, priority, id) order,
-    // the order of the former sorted vector, so registration, lookup,
-    // cancellation and completion stay logarithmic as the queue grows (#34).
-    // Idle callbacks have their own lane; Scheduler tasks and animation frames
-    // are also in sub-lanes read only by the selections that need them.
-    struct Key {
-        double deadline;
-        uint8_t priority;
-        TaskId id;
-        bool operator<(const Key& other) const noexcept {
+    struct MacroKey {
+        TimePoint deadline;
+        uint8_t priority = 0;
+        TaskId id = 0;
+        bool operator<(const MacroKey& other) const noexcept {
             if (deadline != other.deadline) return deadline < other.deadline;
             if (priority != other.priority) return priority < other.priority;
             return id < other.id;
         }
     };
-    struct Entry {
+
+    struct MacroEntry {
         std::shared_ptr<Task> task;
-        Key key;
+        MacroKey key;
     };
-    static Key key_of(const Task& task) noexcept {
-        return {task.deadline().ms(), static_cast<uint8_t>(task.priority()), task.id()};
+
+    static MacroKey make_key(const Task& task) noexcept {
+        return {task.deadline(), static_cast<uint8_t>(task.priority()), task.id()};
     }
-    const std::shared_ptr<Task>& at(const Key& key) const { return tasks_.at(key.id).task; }
-    void insert(const std::shared_ptr<Task>& task) {
-        auto found = tasks_.emplace(task->id(), Entry{task, key_of(*task)}).first;
-        try {
-            link(found->second);
-        } catch (...) {
-            erase(found);
-            throw;
+
+    static void rekey_map(std::map<MacroKey, Task*>& index,
+                          const MacroKey& old_key,
+                          const MacroKey& new_key) noexcept {
+        auto node = index.extract(old_key);
+        if (!node.empty()) {
+            node.key() = new_key;
+            index.insert(std::move(node));
         }
     }
-    void link(const Entry& entry) {
-        const auto type = entry.task->type();
-        (type == Task::Type::IdleCallback ? idle_ : ordered_).insert(entry.key);
-        if (type == Task::Type::WebTask) web_.insert(entry.key);
-        if (type == Task::Type::AnimationFrame) frames_.insert(entry.key);
+
+    std::shared_ptr<Task> shared_macrotask(TaskId id) const noexcept {
+        auto it = macrotasks_by_id_.find(id);
+        return it != macrotasks_by_id_.end() ? it->second.task : nullptr;
     }
-    void unlink(const Entry& entry) noexcept {
-        ordered_.erase(entry.key);
-        idle_.erase(entry.key);
-        web_.erase(entry.key);
-        frames_.erase(entry.key);
+
+    void insert_macrotask_indices(const MacroKey& key, Task* task) {
+        ordered_macrotasks_.emplace(key, task);
+        if (task->type() != Task::Type::IdleCallback) {
+            ordered_non_idle_.emplace(key, task);
+            if (task->type() == Task::Type::AnimationFrame) {
+                frame_tasks_.emplace(key, task);
+            } else if (task->type() == Task::Type::WebTask) {
+                web_tasks_.emplace(key, task);
+            }
+        } else {
+            idle_tasks_.emplace(key, task);
+        }
     }
-    void erase(std::unordered_map<TaskId, Entry>::iterator found) noexcept {
-        unlink(found->second);
-        tasks_.erase(found);
+
+    void erase_macrotask_indices(const MacroKey& key, Task::Type type) noexcept {
+        ordered_macrotasks_.erase(key);
+        if (type != Task::Type::IdleCallback) {
+            ordered_non_idle_.erase(key);
+            if (type == Task::Type::AnimationFrame) {
+                frame_tasks_.erase(key);
+            } else if (type == Task::Type::WebTask) {
+                web_tasks_.erase(key);
+            }
+        } else {
+            idle_tasks_.erase(key);
+        }
+    }
+
+    void insert_macrotask(std::shared_ptr<Task> task) {
+        const MacroKey key = make_key(*task);
+        Task* raw = task.get();
+        auto [it, inserted] = macrotasks_by_id_.emplace(raw->id(), MacroEntry{std::move(task), key});
+        (void)inserted;
+        try {
+            insert_macrotask_indices(key, raw);
+        } catch (...) {
+            erase_macrotask_indices(key, raw->type());
+            macrotasks_by_id_.erase(it);
+            throw;
+        }
     }
 
     ClockState clock_;
     uint64_t next_task_id_ = 0;
-    std::unordered_map<TaskId, Entry> tasks_;
-    std::set<Key> ordered_, idle_, web_, frames_;
-    std::vector<TaskId> cancelled_;
+    std::unordered_map<TaskId, MacroEntry> macrotasks_by_id_;
+    std::map<MacroKey, Task*> ordered_macrotasks_;
+    std::map<MacroKey, Task*> ordered_non_idle_;
+    std::map<MacroKey, Task*> frame_tasks_;
+    std::map<MacroKey, Task*> idle_tasks_;
+    std::map<MacroKey, Task*> web_tasks_;
+    std::vector<TaskId> cancelled_macrotasks_;
+    bool cancelled_overflow_ = false;
     std::vector<std::shared_ptr<Task>> microtask_queue_;
     double auto_advance_step_ = 0.001;  // performance.now() increment per eval
     double date_advance_step_ = 1.0;    // Date.now() increment per eval

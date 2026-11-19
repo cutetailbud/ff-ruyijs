@@ -14,6 +14,7 @@ class SelectorInput final:public ruyijs::domain::styling::ElementRelations {
   const ruyijs::domain::styling::ElementNode* Related(const ruyijs::domain::styling::ElementNode&,char) const override;
   bool ok() const {return ok_;}
   void Target(JS::HandleObject element) {element_=element;}
+  void ClearTarget() {element_=nullptr;}
  private:
   struct Entry {ruyijs::domain::styling::ElementNode node;document_model::StyleRelationFrame frame;};
   State& state_;

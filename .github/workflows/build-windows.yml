@@ -221,6 +221,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\selection_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\cascade_collection_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\node_getter_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\timer_scaling_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\worker_blob_message_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\dom_id_index_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\dom_tag_ns_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\dom_id_fastpath_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\socks_proxy_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\layout_fingerprint_check.py"

@@ -20,11 +20,18 @@ bool CollectionLength(JSContext* cx, unsigned argc, JS::Value* vp) {
   return true;
 }
 
-// HTMLCollection named access: first id match, then first name match.
+// HTMLCollection named access, in collection order: the first element whose id
+// is `name`, or whose name attribute is `name`. An earlier name beats a later
+// id. A unique id is used only when FastNamedItemId can prove that element is
+// first in the collection, so the scan cannot find an earlier name.
 static bool Named(State& state, CollectionRecord& record, DomStringView name, NodeKey* found) {
+  if (name.empty()) { *found = {}; return true; }
+  bool taken = false;
+  if (!FastNamedItemId(state, record, name, found, &taken)) return false;
+  if (taken) return true;
   const char16_t* attributes[] = {u"id", u"name"};
-  for (const char16_t* attribute : attributes) {
-    for (NodeKey key : record.items) {
+  for (NodeKey key : record.items) {
+    for (const char16_t* attribute : attributes) {
       std::optional<DomString> value;
       if (!state.Check(state.model.GetAttribute(key, attribute, &value))) return false;
       if (value && DomStringView(*value) == name) {

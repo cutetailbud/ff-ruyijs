@@ -155,6 +155,7 @@ BrowsingContext::~BrowsingContext() {
   if (workers) {
     workers->Stop();
     workers->SetTaskPort(nullptr, nullptr);
+    workers->SetLogicalClockPort(nullptr, nullptr);
     workers->SetObjectUrlPort(nullptr, nullptr);
     workers->SetEnvironmentPort(nullptr, nullptr);
     workers->SetScriptUrlPort(nullptr, nullptr);

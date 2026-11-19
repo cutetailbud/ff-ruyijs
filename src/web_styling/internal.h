@@ -15,6 +15,7 @@ namespace ruyijs::web_styling {
 struct ComputedStyle;
 bool ReadComputed(State&, JS::HandleObject, ComputedStyle*);
 bool CascadeStamp(State&, JS::HandleObject, uint64_t*);
+bool CascadeStamp(State&, JS::HandleObject, uint64_t*, bool includeEnvironment);
 bool InstallComputed(State& state);
 bool InstallSheets(State& state);
 bool InstallSheetClass(State& state);

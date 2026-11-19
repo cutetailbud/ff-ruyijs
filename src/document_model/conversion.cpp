@@ -71,8 +71,9 @@ bool State::Check(Status status) {
   // Every owner mutation funnels through here, so this is the single place
   // live collections are refreshed from the owner revision.
   if (status.code == ErrorCode::None) {
+    if (syncing || model.StructureRevision() == syncedRevision) return true;
     JSAutoRealm realm(cx, page);
-    return syncing || SyncCollections();
+    return SyncCollections();
   }
   if (status.code == ErrorCode::OutOfMemory) { JS_ReportOutOfMemory(cx); return false; }
   if (status.code == ErrorCode::LimitExceeded) return RangeError(cx, status.message);

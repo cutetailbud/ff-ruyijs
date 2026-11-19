@@ -18,8 +18,11 @@ State::State(JSContext* context, JS::HandleObject global, Checkpoint drain)
 }
 State::~State() {
   UnbindClock();
+  callbackById.clear();
+  activeIdles.clear();
   while (callbacks) {
     auto next = std::move(callbacks->next);
+    if (next) next->prev = nullptr;
     callbacks = std::move(next);
   }
   State** link = &activeState;

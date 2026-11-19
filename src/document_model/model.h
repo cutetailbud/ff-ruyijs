@@ -116,6 +116,12 @@ struct DocumentSnapshot {
 };
 enum class QueryKind { Id, TagName, ClassNames };
 enum class TableList { Rows, Bodies, Cells };
+enum class NodeRelation : uint8_t {
+  OwnerDocument, BaseDocument, Parent, ParentElement, FirstChild, LastChild,
+  PreviousSibling, NextSibling, Root, ComposedRoot,
+  FirstElementChild, LastElementChild, PreviousElementSibling, NextElementSibling
+};
+enum class ElementTagField : uint8_t { TagName, LocalName, Prefix, NamespaceURI };
 struct TableInsertion { NodeKey parent, before; bool body = false; };
 // Variadic insertion behind append/prepend/before/after/replaceWith and the
 // child-node remove(). A null item node creates a Text node from the item
@@ -243,6 +249,10 @@ class Model final {
   // element created for inline CSS parsing), so connected style/layout caches stay warm.
   uint64_t ConnectedRevision() const noexcept;
   bool IsConnected(NodeKey) const noexcept;
+  // The revision of the tree shape and class attributes: unchanged by non-class
+  // attribute writes, so class-based collections and classList views stay live
+  // without re-collecting on unrelated attribute writes.
+  uint64_t ClassRevision() const noexcept;
   // Real-change log for the observer owner (src/web_observers). Recording is
   // off until an observer registers, so script that never observes pays one
   // flag test per mutation. MutationsSince copies every notice after a
@@ -311,6 +321,17 @@ class Model final {
   // The node type only. Interface receivers use this instead of Inspect,
   // which also names siblings and copies strings they do not read.
   Status Kind(NodeKey node, NodeKind* result) const noexcept;
+  // Narrow property reads so Node, Element, CharacterData and traversal getters
+  // do not copy unused strings, walk ancestors, or scan siblings via Inspect.
+  Status NodeName(NodeKey node, DomString* result) const noexcept;
+  Status NodeValue(NodeKey node, std::optional<DomString>* result) const noexcept;
+  Status NodeLink(NodeKey node, NodeRelation relation, NodeKey* result) const noexcept;
+  Status IsConnected(NodeKey node, bool* result) const noexcept;
+  Status HasChildren(NodeKey node, bool* result) const noexcept;
+  Status ChildElementCount(NodeKey node, size_t* result) const noexcept;
+  Status ElementTag(NodeKey node, ElementTagField field, std::optional<DomString>* result) const noexcept;
+  Status HasAttributes(NodeKey node, bool* result) const noexcept;
+  Status DataLength(NodeKey node, size_t* result) const noexcept;
   // The fields ReadLayoutNode keeps. Skips the sibling scan and the name,
   // namespace, and doctype strings Inspect copies and layout does not read.
   Status InspectLayout(NodeKey node, NodeSnapshot* result) const noexcept;
@@ -456,6 +477,9 @@ class Model final {
 
   Status QuerySelector(NodeKey root, DomStringView selector,
                        std::vector<NodeKey>* result) const noexcept;
+  // True when `name` is a unique id of one connected element in this document.
+  // Duplicates, misses, and detached holders leave `unique` false.
+  Status LookupUniqueId(NodeKey scope, DomStringView name, NodeKey* hit, bool* unique) const noexcept;
   Status AllNamed(NodeKey root, const DomStringView* name,
                   std::vector<NodeKey>* nodes, std::vector<DomString>* names) const noexcept;
   Status WindowNamed(NodeKey root, DomStringView name,

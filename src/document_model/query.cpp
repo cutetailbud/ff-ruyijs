@@ -22,37 +22,6 @@ static bool FragmentId(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (!state.Check(state.model.Query(entry->key, QueryKind::Id, value, &found))) return false;
   return state.Wrap(found.empty() ? NodeKey{} : found.front(), args.rval());
 }
-static bool DocumentNamespace(JSContext* cx, unsigned argc, JS::Value* vp) {
-  auto args = JS::CallArgsFromVp(argc, vp);
-  State& state = *FunctionState(args);
-  NodeKind kind = NodeKind::Document;
-  if (!Receiver(state, args, &kind)) return false;
-  if (argc < 2) return TypeError(cx, "getElementsByTagNameNS requires two arguments");
-  JS::RootedObject list(cx);
-  if (!state.NodeListOwned({}, &list, CollectionKind::HTMLCollection)) return false;
-  args.rval().setObject(*list); return true;
-}
-
-static bool Empty(NodeKey key) { return key.document == 0 && key.node == 0; }
-
-// Nearest following/preceding sibling that is an Element, walked over owner
-// snapshots; the model keeps sibling order, this adapter only classifies.
-static bool Sibling(State& state, NodeKey node, bool forward, NodeKey* result) {
-  NodeSnapshot snapshot;
-  if (!state.Check(state.model.Inspect(node, &snapshot))) return false;
-  NodeKey next = forward ? snapshot.next_sibling : snapshot.previous_sibling;
-  while (!Empty(next)) {
-    NodeSnapshot value;
-    if (!state.Check(state.model.Inspect(next, &value))) return false;
-    if (value.kind == NodeKind::Element) {
-      *result = next;
-      return true;
-    }
-    next = forward ? value.next_sibling : value.previous_sibling;
-  }
-  *result = {};
-  return true;
-}
 
 // Cached live collection of one scope+filter, refreshed from the owner.
 static bool CollectionObject(State& state, CollectionKind kind, NodeKey scope,
@@ -103,16 +72,21 @@ static bool ElementGet(JSContext* cx, unsigned argc, JS::Value* vp) {
                             CollectionFilter::None, u"", args.rval());
   if (field == NextElement || field == PreviousElement) {
     NodeKey found;
-    if (!Sibling(state, entry->key, field == NextElement, &found)) return false;
+    if (!state.Check(state.model.NodeLink(entry->key,
+            field == NextElement ? NodeRelation::NextElementSibling : NodeRelation::PreviousElementSibling,
+            &found))) return false;
     return state.Wrap(found, args.rval());
   }
-  std::vector<NodeKey> values;
-  if (!state.Check(state.model.ChildrenElements(entry->key, &values))) return false;
   if (field == ChildCount) {
-    args.rval().setNumber(double(values.size()));
+    size_t count = 0;
+    if (!state.Check(state.model.ChildElementCount(entry->key, &count))) return false;
+    args.rval().setNumber(double(count));
     return true;
   }
-  NodeKey found = values.empty() ? NodeKey{} : (field == FirstElement ? values.front() : values.back());
+  NodeKey found;
+  if (!state.Check(state.model.NodeLink(entry->key,
+          field == FirstElement ? NodeRelation::FirstElementChild : NodeRelation::LastElementChild,
+          &found))) return false;
   return state.Wrap(found, args.rval());
 }
 
@@ -161,13 +135,16 @@ static bool FragmentGet(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (field == Children)
     return CollectionObject(state, CollectionKind::HTMLCollection, entry->key,
                             CollectionFilter::Children, u"", args.rval());
-  std::vector<NodeKey> values;
-  if (!state.Check(state.model.ChildrenElements(entry->key, &values))) return false;
   if (field == ChildCount) {
-    args.rval().setNumber(double(values.size()));
+    size_t count = 0;
+    if (!state.Check(state.model.ChildElementCount(entry->key, &count))) return false;
+    args.rval().setNumber(double(count));
     return true;
   }
-  NodeKey found = values.empty() ? NodeKey{} : (field == FirstElement ? values.front() : values.back());
+  NodeKey found;
+  if (!state.Check(state.model.NodeLink(entry->key,
+          field == FirstElement ? NodeRelation::FirstElementChild : NodeRelation::LastElementChild,
+          &found))) return false;
   return state.Wrap(found, args.rval());
 }
 
@@ -243,7 +220,7 @@ bool InstallQuery(State& state) {
       state.Method("Document", "getElementsByTagName", QueryCall, 1, ByTag) &&
       state.Method("Document", "getElementsByClassName", QueryCall, 1, ByClass) &&
       state.Method("Document", "getElementsByName", QueryCall, 1, ByName) &&
-      state.Method("Document", "getElementsByTagNameNS", DocumentNamespace, 2, 0) &&
+      state.Method("Document", "getElementsByTagNameNS", QueryCall, 2, ByTagNS) &&
       state.Method("DocumentFragment", "getElementById", FragmentId, 1, 0) &&
       state.Accessor("DocumentFragment", "children", FragmentGet, Children) &&
       state.Accessor("DocumentFragment", "childElementCount", FragmentGet, ChildCount) &&

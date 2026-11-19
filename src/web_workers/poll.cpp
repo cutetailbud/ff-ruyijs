@@ -5,6 +5,8 @@
 #include "jsapi.h"
 #include "js/Object.h"
 #include "js/Realm.h"
+#include <chrono>
+#include <thread>
 
 namespace ruyijs::web_workers {
 namespace {
@@ -39,6 +41,7 @@ bool Poll(JSContext* cx, unsigned argc, JS::Value* vp) {
   JS::RootedObject target(cx);
   std::string frame;
   // One message per task preserves a microtask checkpoint between deliveries.
+  std::vector<WorkerRecord*> awaiting;
   const size_t count = state.active.length();
   for (size_t attempt = 0; attempt < count; ++attempt) {
     const size_t index = state.cursor++ % count;
@@ -46,8 +49,32 @@ bool Poll(JSContext* cx, unsigned argc, JS::Value* vp) {
     if (record->terminated) continue;
     bool received = false;
     const auto status = record->process.Poll(&frame, &received);
-    if (received) { target = state.active[index]; break; }
+    if (received) {
+      record->awaiting = false;
+      record->patience = WorkerRecord::kPatienceMs;
+      target = state.active[index];
+      break;
+    }
     if (status == PipeResult::Closed || status == PipeResult::Failed) record->Stop();
+    else if (record->awaiting && record->process.Running()) {
+      if (record->waited < record->patience) awaiting.push_back(record);
+      else { record->awaiting = false; record->patience = WorkerRecord::kSilentPatienceMs; }
+    }
+  }
+  // The pipe poll does not wait. On a logical clock, advance() would otherwise
+  // burn every 4 ms reschedule before the child process can start and reply,
+  // so a Blob worker's postMessage never reaches the page. A short wall-clock
+  // pause lets that reply land on a later poll — only on the logical clock (the
+  // system clock already polls in wall time) and only for a worker that may
+  // still answer: started or posted to, nothing back yet, within its budget.
+  // An idle worker does not slow advance() or the page down (WorkerRecord::patience).
+  if (!target && !awaiting.empty() && state.logicalClock &&
+      state.logicalClock(state.logicalClockContext)) {
+    const auto start = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(4));
+    const double spent =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    for (auto* record : awaiting) record->waited += spent;
   }
   bool ok = true;
   if (target) {

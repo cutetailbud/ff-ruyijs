@@ -115,6 +115,7 @@ uint64_t Model::ConnectedRevision() const noexcept { return impl_ ? impl_->conne
 bool Model::IsConnected(NodeKey key) const noexcept {
   return impl_ ? impl_->IsComposedConnected(key) : false;
 }
+uint64_t Model::ClassRevision() const noexcept { return impl_ ? impl_->classes : 0; }
 void Model::Rollback(DraftId draft) noexcept {
   if (!impl_) return;
   auto found = State().drafts.find(draft); if (found == State().drafts.end()) return;

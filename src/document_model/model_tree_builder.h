@@ -67,6 +67,9 @@ struct Builder {
       else element->set_attribute_ns16(space_uri, name, attribute.value);
       Attribute(id, name, nullptr);
     }
+    // Insert() notes ids; foreign attributes are written directly.
+    if (const auto ident = element->get_attribute16(u"id"))
+      doc.note_element_id(id, {}, *ident);
     Place(id);
     if (!token.self_closing) tree.open.push_back(id);
   }
@@ -219,7 +222,14 @@ struct Builder {
     for (const auto& attribute : token.attributes)
       if (element && domain::valid_attribute_local_name(attribute.name) && !element->get_attribute16(attribute.name)) {
         budget(0, attribute.name.size() + attribute.value.size());
+        const auto previous_id = element->get_attribute16(u"id");
         element->set_attribute16(attribute.name, attribute.value);
+        const auto next_id = element->get_attribute16(u"id");
+        // A repeated <html>/<body> can add an id ahead of an element that
+        // already holds it. That element is already in the tree.
+        if (previous_id != next_id)
+          doc.note_element_id(target, previous_id ? DomStringView(*previous_id) : DomStringView(),
+                              next_id ? DomStringView(*next_id) : DomStringView());
         Attribute(target, attribute.name, nullptr);
       }
   }

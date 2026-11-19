@@ -48,6 +48,6 @@ bool ScheduleWebTask(JSContext* cx,JS::HandleObject f,const JS::CallArgs& args,b
   cb->arguments[3].setObject(*listener);
   if(!resource_network::AddAbortAlgorithm(cx,signal,cb->arguments[3])){s.model.CancelWebTask(cb->id);return false;}
  }
- s.argumentSlots+=cb->arguments.length();s.Link(std::move(cb));return true;
+ s.argumentSlots+=cb->arguments.length();s.Track(std::move(cb));return true;
 }
 }

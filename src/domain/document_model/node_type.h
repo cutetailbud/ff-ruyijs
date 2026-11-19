@@ -57,8 +57,10 @@ class TagName {
         html_document_(html_document) {}
   std::string value() const { return to_utf8(value16()); }
   DomString value16() const {
-    auto name = qualified16();
-    return html_ && html_document_ ? ascii_upper(name) : name;
+    if (!qualified_ || qualified_->prefix.empty())
+      return html_ && html_document_ ? ascii_upper(DomStringView(name_)) : name_;
+    auto name = qualified_->prefix + u":" + name_;
+    return html_ && html_document_ ? ascii_upper(DomStringView(name)) : name;
   }
   DomString qualified16() const {
     return qualified_ && !qualified_->prefix.empty() ? qualified_->prefix + u":" + name_ : name_;

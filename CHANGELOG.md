@@ -18,6 +18,18 @@ All notable changes to this project are documented here. The format follows
   as `console_log(clear=True)` does. `clear_resources()` never touched the log, which stops recording at
   4096 entries (#46). `ci/net_log_check.py`.
 
+### Changed
+
+- Style resolution indexes stylesheet rules by their rightmost selector and shares sibling styles,
+  `getComputedStyle` reads share one cascade reader per tree revision, and live collections only
+  rescan when their own kind of change happens, so an unrelated `setAttribute` no longer invalidates
+  every `getElementsByTagName`/`children` list (#36, by ladydd). 500 cold `getComputedStyle` reads on a
+  1500-row page: 219 → 106 ms.
+- Node getters (`nodeName`, `parentNode`, sibling and child links, `isConnected`, `tagName`,
+  `childElementCount`, `CharacterData.length`, TreeWalker steps) read only the field they need, and a
+  parent with 64 or more children keeps a position index (#37, by ladydd). Timers use an indexed queue
+  with handle maps (#38, by ladydd); task order on the logical clock is unchanged.
+
 ### Fixed
 
 - `net_log()` under memory pressure crashed the whole process, and with it every session of a shared
@@ -50,6 +62,18 @@ All notable changes to this project are documented here. The format follows
   stretched height, which doubled the work per nesting level until the layout's placement budget ran out.
   A single-line container with a definite cross size now places a stretched item once, at its line's
   cross size (CSS Flexbox §9.4). `ci/flex_nesting_check.py` compares 14 layouts with Firefox 160.
+- `getElementById` could return the wrong element or nothing after `cloneNode`, `setAttributeNS`,
+  `toggleAttribute`, the XML parser, or once an id had been duplicated; `document.getElementsByTagNameNS`
+  always returned an empty list. `querySelector('#id')` on a document and `namedItem` use the id index
+  where it gives the same answer, and `namedItem` now prefers the first element in collection order whose
+  id or name matches, as Firefox does (#41, by Facetomyself).
+- A live `HTMLCollection` handed out a stale wrapper after a prepend or removal; `Element.attributes`
+  missed a `style` attribute that `el.style.x = ...` created; `getComputedStyle` did not follow `:focus`
+  changes (#36).
+- On the logical clock a Worker's reply never reached the page: `advance()` ran past the worker's poll
+  before the child process had started (#40, by Facetomyself). The poll now waits a little wall time
+  while a reply may be on its way (worker just started or posted to), up to 5 s per wait; an idle or
+  silent worker does not slow `advance()` down.
 - `Context.type()` on a `contenteditable` element changed nothing and fired no `input` (#44). Typed text,
   Backspace and Enter now edit an editing host at the window's selection, as measured in Firefox 160:
   text joins the Text node at the caret and replaces a selected range, runs of spaces alternate with

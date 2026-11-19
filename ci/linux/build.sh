@@ -13,10 +13,15 @@
 #                              ci/atob_check.py, ci/fetch_abort_check.py,
 #                              ci/fetch_abort_transfer_check.py, ci/load_timer_check.py,
 #                              ci/timer_scale_check.py, ci/selection_check.py,
+#                              ci/cascade_collection_check.py, ci/node_getter_check.py,
+#                              ci/timer_scaling_check.py,
 #                              ci/socks_proxy_check.py,
 #                              ci/layout_fingerprint_check.py,
 #                              ci/network_smoke.py, ci/proxy_smoke.py,
-#                              ci/hello_check.py and ci/engine_check.py
+#                              ci/hello_check.py, ci/engine_check.py,
+#                              ci/worker_blob_message_check.py,
+#                              ci/dom_id_index_check.py, ci/dom_tag_ns_check.py,
+#                              and ci/dom_id_fastpath_check.py
 set -euo pipefail
 step="${1:?usage: build.sh deps|donor|shell|necko|wheel|test}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -89,12 +94,24 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/helper_check.py"
     # Geometry after a mutation equals a fresh layout of the mutated page.
     "${clean[@]}" "$venv/bin/python" "$root/ci/layout_check.py"
+    # Blob Worker postMessage. advance() waits while the child is alive.
+    "${clean[@]}" "$venv/bin/python" "$root/ci/worker_blob_message_check.py"
+    # getElementById's id index, and document.getElementsByTagNameNS.
+    "${clean[@]}" "$venv/bin/python" "$root/ci/dom_id_index_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/dom_tag_ns_check.py"
+    # Document querySelector('#id') and HTMLCollection.namedItem id fast paths.
+    "${clean[@]}" "$venv/bin/python" "$root/ci/dom_id_fastpath_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/atob_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/fetch_abort_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/fetch_abort_transfer_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/load_timer_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/timer_scale_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/selection_check.py"
+    # Cascade rule index, computed style cache, live collections (#36); narrow
+    # node getters (#37); timer queue ordering and scaling (#38).
+    "${clean[@]}" "$venv/bin/python" "$root/ci/cascade_collection_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/node_getter_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/timer_scaling_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/socks_proxy_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/layout_fingerprint_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/computed_style_check.py"
