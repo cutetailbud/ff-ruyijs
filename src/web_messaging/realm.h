@@ -31,6 +31,12 @@ class Realm final {
   // Same construction as MessageChannel; the ports are this realm's.
   bool NewChannel(JS::MutableHandleObject first, JS::MutableHandleObject second);
   bool DeliverRemote(uint32_t id, JS::HandleValue value);
+  // A MessagePort in the transfer list of a message to another process: the
+  // port object is detached, its endpoint stays entangled with its peer in this
+  // realm and becomes the relay end of `id` (Firefox keeps the peer entangled
+  // across the process boundary). False: not a transferable port.
+  static bool IsPort(JSObject*);
+  static bool BridgePort(JSObject*, uint32_t id);
   void CloseRemote(uint32_t id);
   // Existing Window clone/message adapters consume this transfer-aware path.
   bool Clone(JS::HandleValue, JS::HandleValue, JS::HandleObject destination,

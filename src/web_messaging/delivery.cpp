@@ -26,6 +26,13 @@ bool Deliver(JSContext* cx, unsigned argc, JS::Value* vp) {
   JS::RootedValue value(cx);
   if (!message->Read(s, &value)) return false;
   JS::RootedObject target(cx, record->port), source(cx), ports(cx, message->ports);
+  if (record->bridge) {
+    // The peer's message leaves for the other process with its own ports.
+    if (!Queue(endpoint)) return false;
+    if (!s.relay) return true;
+    JS::RootedValue transfer(cx, JS::ObjectValue(*ports));
+    return s.relay(s.relayContext, record->remoteId, value, transfer);
+  }
   // Queue before dispatch: reentrant postMessage retains FIFO task order.
   if (!Queue(endpoint)) return false;
   return s.events.FireMessage(target, value, "", source, ports);
@@ -135,6 +142,17 @@ bool Realm::DeliverRemote(uint32_t id, JS::HandleValue value) {
     JSAutoRealm realm(s.cx, s.kit.page);
     JS::RootedValue wrapped(s.cx, value);
     if (!JS_WrapValue(s.cx, &wrapped)) return false;
+    if (record->bridge) {
+      // From the other process to the transferred port's local peer.
+      auto peer = record->endpoint->peer.lock();
+      if (!peer) return true;
+      auto message = std::make_unique<Message>(s.cx);
+      message->excluded = record->endpoint.get();
+      message->recipient = peer.get();
+      if (!message->Write(s, wrapped, JS::UndefinedHandleValue)) return false;
+      peer->pending.push_back(std::move(message));
+      return Queue(peer);
+    }
     auto message = std::make_unique<Message>(s.cx);
     message->excluded = record->endpoint.get();
     message->recipient = record->endpoint.get();
@@ -150,7 +168,30 @@ void Realm::CloseRemote(uint32_t id) {
     if (!record->remote || record->remoteId != id || !record->endpoint) continue;
     record->closed = true;
     record->endpoint->pending.clear();
+    if (record->bridge) Disconnect(*record->endpoint);
     return;
   }
+}
+bool Realm::IsPort(JSObject* object) {
+  Record* record = object ? Unwrap(object) : nullptr;
+  return record && !record->closed && record->endpoint && !record->remote;
+}
+bool Realm::BridgePort(JSObject* object, uint32_t id) {
+  Record* record = object ? Unwrap(object) : nullptr;
+  if (!record || record->closed || !record->endpoint || record->remote) return false;
+  State& s = record->owner;
+  // The transferred object is detached; a hidden record of the same realm
+  // receives what the peer posts and relays it.
+  std::shared_ptr<Endpoint> endpoint = std::move(record->endpoint);
+  endpoint->receiver = nullptr;
+  endpoint->scheduled = false;
+  JSAutoRealm realm(s.cx, s.kit.page);
+  JS::RootedObject hidden(s.cx, NewPort(s, endpoint));
+  if (!hidden) return false;
+  Record& bridge = *s.records.back();
+  bridge.remote = bridge.bridge = true;
+  bridge.remoteId = id;
+  endpoint->enabled = true;
+  return Queue(endpoint);
 }
 }

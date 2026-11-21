@@ -139,9 +139,13 @@ bool RunWorker(JSContext* cx, js::cli::OptionParser* options, Checkpoint checkpo
   }, &messaging);
   web_workers::Child child(cx, page, helpers, events, pipe, exceptionPrototype, workerKind);
   if (!child.Install()) return false;
-  if (shared) {
-    // SharedWorker ports: web_messaging owns the ports; this Child encodes and
-    // routes their frames over the worker pipe (docs/owners/WORKER.md).
+  // MessagePorts transferred across the worker pipe; worker-made ids carry the
+  // top bit, the parent's bit 30 (clone.h).
+  web_workers::SetPortTransfer(&web_messaging::Realm::IsPort, &web_messaging::Realm::BridgePort, 0x80000000u);
+  if (!service) {
+    // SharedWorker ports, and ports a dedicated worker transferred or received:
+    // web_messaging owns the ports; this Child encodes and routes their frames
+    // over the worker pipe (docs/owners/WORKER.md).
     messaging.SetRemoteRelay([](void* context, uint32_t id, JS::HandleValue value, JS::HandleValue transfer) {
       return static_cast<web_workers::Child*>(context)->RelaySharedPort(id, value, transfer);
     }, &child);

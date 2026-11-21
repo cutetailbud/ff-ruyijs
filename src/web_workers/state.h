@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 #include "runtime/web_kit.h"
 #include "js/Value.h"
@@ -21,13 +22,24 @@ struct Budget {
   // SharedWorker port ids are unique across the Context (not per process), so
   // a frame's id routes to exactly one Window-side port (shared.cpp).
   uint32_t nextSharedPort = 0;
+  // MessagePorts transferred to or from a dedicated Worker: port id -> the
+  // worker whose pipe carries that port's frames (clone.h, SetPortTransfer).
+  std::unordered_map<uint32_t, struct WorkerRecord*> ports;
 };
 struct WorkerRecord {
   WorkerRecord(State* value, std::shared_ptr<Budget> capacity)
       : owner(value), budget(std::move(capacity)) { ++budget->active; }
-  ~WorkerRecord() { Stop(); }
+  ~WorkerRecord() {
+    Stop();
+    for (const auto id : ports) budget->ports.erase(id);
+  }
+  // Records this worker as the route of transferred port ids.
+  void AddPorts(const std::vector<uint32_t>& ids) {
+    for (const auto id : ids) { budget->ports[id] = this; ports.push_back(id); }
+  }
   State* owner;
   std::shared_ptr<Budget> budget;
+  std::vector<uint32_t> ports;
   Process process;
   Service service;
   bool terminated = false;
@@ -163,6 +175,7 @@ bool RelaySharedWindow(void* context, uint32_t id, JS::HandleValue value, JS::Ha
 void CloseSharedWindow(void* context, uint32_t id);
 bool PollShared(State&, bool* delivered);
 bool RouteShared(State&, std::string_view frame);
+bool RouteDedicatedPort(State&, WorkerRecord&, std::string_view frame);
 void StopShared(State&);
 }
 #endif

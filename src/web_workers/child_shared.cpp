@@ -31,11 +31,13 @@ bool Child::HandleSharedFrame(std::string_view frame) {
     return WebKit::Fail(cx_, "Unknown SharedWorker frame");
   if (!portDeliver_) return WebKit::Fail(cx_, "SharedWorker port deliver is not bound");
   JS::RootedValue value(cx_);
-  return DecodeSharedMessage(cx_, frame, &id, &value) && portDeliver_(portDeliverContext_, id, value);
+  PortSink sink{portFactory_, portFactoryContext_, nullptr, nullptr};
+  return DecodeSharedMessage(cx_, frame, &id, &value, &sink) && portDeliver_(portDeliverContext_, id, value);
 }
 bool Child::RelaySharedPort(uint32_t id, JS::HandleValue value, JS::HandleValue transfer) {
   std::string frame;
-  if (!EncodeSharedMessage(cx_, exception_, id, value, transfer, &frame)) return false;
+  std::vector<uint32_t> bridged;
+  if (!EncodeSharedMessage(cx_, exception_, id, value, transfer, &frame, &bridged)) return false;
   return Queue(std::move(frame));
 }
 void Child::CloseSharedPort(uint32_t id) {

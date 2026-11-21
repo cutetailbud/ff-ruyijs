@@ -35,7 +35,11 @@ bool WorkerPostMessage(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (WorkerTokenEnabled()) {
     WorkerMessageToken token{record->workerId, ++record->parentSequence, 0};
     if (!EncodeMessageWithToken(cx, exception, args[0], args.get(1), token, &frame)) return false;
-  } else if (!EncodeMessage(cx, exception, args[0], args.get(1), &frame)) return false;
+  } else {
+    std::vector<uint32_t> bridged;
+    if (!EncodeMessage(cx, exception, args[0], args.get(1), &frame, &bridged)) return false;
+    record->AddPorts(bridged);
+  }
   if (!record->terminated && !record->process.Queue(std::move(frame))) {
     if (record->process.Running()) return WebKit::Fail(cx, "Worker message queue is full");
     record->Stop(); record->owner->Prune();

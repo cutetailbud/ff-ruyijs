@@ -29,6 +29,11 @@ struct Record {
   // the connection in both realms.
   bool remote = false;
   uint32_t remoteId = 0;
+  // A port transferred to another process (a dedicated Worker or its parent):
+  // this hidden record keeps the transferred endpoint, so what its local peer
+  // posts is relayed as remoteId and what arrives for remoteId is posted to
+  // that peer (Realm::BridgePort).
+  bool bridge = false;
 };
 struct State {
   State(JSContext* cx, JS::HandleObject page, PageHelpers& helpers, interaction::Realm& events)

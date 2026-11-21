@@ -18,10 +18,57 @@ bool WorkerTokenEnabled() {
 }
 namespace {
 constexpr char kMessage = '\x01';
+constexpr uint32_t kPortTag = JS_SCTAG_USER_MIN + 1;
+PortCheck portCheck = nullptr;
+PortBridge portBridge = nullptr;
+uint32_t portBase = 0, portCount = 0;
+// One clone's closure: the clone error flag and its port transfer state.
+struct Closure {
+  bool error = false;
+  std::vector<uint32_t>* bridged = nullptr;
+  const PortSink* sink = nullptr;
+};
 void CloneError(JSContext*, uint32_t, void* raw, const char*) {
-  *static_cast<bool*>(raw) = true;
+  static_cast<Closure*>(raw)->error = true;
 }
-const JSStructuredCloneCallbacks kCallbacks = {nullptr, nullptr, CloneError};
+bool CanTransfer(JSContext*, JS::HandleObject object, bool* sameProcess, void* raw) {
+  auto& closure = *static_cast<Closure*>(raw);
+  *sameProcess = false;
+  return closure.bridged && portCheck && portCheck(object);
+}
+bool WriteTransfer(JSContext*, JS::HandleObject object, void* raw, uint32_t* tag,
+                   JS::TransferableOwnership* ownership, void** content, uint64_t* extra) {
+  auto& closure = *static_cast<Closure*>(raw);
+  if (!closure.bridged || !portBridge) return false;
+  const uint32_t id = portBase | (++portCount & 0x3fffffffu);
+  if (!portBridge(object, id)) return false;
+  closure.bridged->push_back(id);
+  *tag = kPortTag; *ownership = JS::SCTAG_TMO_CUSTOM;
+  *content = nullptr; *extra = id;
+  return true;
+}
+bool ReadTransfer(JSContext* cx, JSStructuredCloneReader*, const JS::CloneDataPolicy&, uint32_t tag,
+                  void*, uint64_t extra, void* raw, JS::MutableHandleObject output) {
+  auto& closure = *static_cast<Closure*>(raw);
+  const PortSink* sink = closure.sink;
+  if (tag != kPortTag || !sink || !sink->factory) return false;
+  const uint32_t id = uint32_t(extra);
+  output.set(sink->factory(sink->context, id));
+  if (!output) return false;
+  if (sink->ids) sink->ids->push_back(id);
+  if (sink->ports) {
+    JS::RootedObject ports(cx, sink->ports), port(cx, output);
+    if (!JS_WrapObject(cx, &port)) return false;
+    uint32_t length = 0;
+    if (!JS::GetArrayLength(cx, ports, &length) ||
+        !JS_DefineElement(cx, ports, length, port, JSPROP_ENUMERATE)) return false;
+  }
+  if (!JS_WrapObject(cx, output)) return false;
+  return true;
+}
+void FreeTransfer(uint32_t, JS::TransferableOwnership, void*, uint64_t, void*) {}
+const JSStructuredCloneCallbacks kCallbacks = {nullptr, nullptr, CloneError, ReadTransfer,
+                                               WriteTransfer, FreeTransfer, CanTransfer};
 bool TransferList(JSContext* cx, JS::HandleValue options, JS::MutableHandleValue output) {
   output.setUndefined();
   if (options.isNullOrUndefined()) return true;
@@ -50,14 +97,18 @@ bool TransferList(JSContext* cx, JS::HandleValue options, JS::MutableHandleValue
   return true;
 }
 }
+void SetPortTransfer(PortCheck check, PortBridge bridge, uint32_t idBase) {
+  portCheck = check; portBridge = bridge; portBase = idBase;
+}
 bool EncodeMessage(JSContext* cx, JS::HandleObject exception, JS::HandleValue value,
-                   JS::HandleValue options, std::string* frame) {
+                   JS::HandleValue options, std::string* frame, std::vector<uint32_t>* bridged) {
   JS::RootedValue transfer(cx);
   if (!TransferList(cx, options, &transfer)) return false;
-  bool cloneError = false;
-  JSAutoStructuredCloneBuffer buffer(JS::StructuredCloneScope::DifferentProcess, &kCallbacks, &cloneError);
-  if (!buffer.write(cx, value, transfer, JS::CloneDataPolicy(), &kCallbacks, &cloneError)) {
-    if (!cloneError) return false;
+  Closure closure;
+  closure.bridged = bridged;
+  JSAutoStructuredCloneBuffer buffer(JS::StructuredCloneScope::DifferentProcess, &kCallbacks, &closure);
+  if (!buffer.write(cx, value, transfer, JS::CloneDataPolicy(), &kCallbacks, &closure)) {
+    if (!closure.error && JS_IsExceptionPending(cx)) return false;
     JS_ClearPendingException(cx);
     return document_model::ThrowException(cx, exception, "DataCloneError", "The object could not be cloned");
   }
@@ -70,7 +121,8 @@ bool EncodeMessage(JSContext* cx, JS::HandleObject exception, JS::HandleValue va
   auto cursor = buffer.data().Start();
   return buffer.data().ReadBytes(cursor, frame->data() + 5, buffer.data().Size());
 }
-bool DecodeMessage(JSContext* cx, std::string_view frame, JS::MutableHandleValue value, char kind) {
+bool DecodeMessage(JSContext* cx, std::string_view frame, JS::MutableHandleValue value, char kind,
+                   const PortSink* sink) {
   if (frame.size() < 5 || frame.size() > Pipe::kMaxFrame || frame[0] != kind)
     return WebKit::Fail(cx, "Invalid Worker message frame");
   uint32_t version = 0;
@@ -82,8 +134,10 @@ bool DecodeMessage(JSContext* cx, std::string_view frame, JS::MutableHandleValue
   if (!data.AppendBytes(frame.data() + 5, frame.size() - 5)) {
     JS_ReportOutOfMemory(cx); return false;
   }
+  Closure closure;
+  closure.sink = sink;
   return JS_ReadStructuredClone(cx, data, version, JS::StructuredCloneScope::DifferentProcess,
-                                value, JS::CloneDataPolicy(), nullptr, nullptr);
+                                value, JS::CloneDataPolicy(), &kCallbacks, &closure);
 }
 bool EncodeMessageWithToken(JSContext* cx, JS::HandleObject exception, JS::HandleValue value,
                             JS::HandleValue options, const WorkerMessageToken& token, std::string* frame) {
@@ -102,19 +156,20 @@ bool DecodeMessageWithToken(JSContext* cx, std::string_view frame, WorkerMessage
   if(!*token || !DecodeMessage(cx,clone,value))return WebKit::Fail(cx,"Invalid Worker token frame");return true;
 }
 bool EncodeSharedMessage(JSContext* cx, JS::HandleObject exception, uint32_t id,
-                         JS::HandleValue value, JS::HandleValue transfer, std::string* frame) {
+                         JS::HandleValue value, JS::HandleValue transfer, std::string* frame,
+                         std::vector<uint32_t>* bridged) {
   std::string clone;
-  if (!EncodeMessage(cx, exception, value, transfer, &clone)) return false;
+  if (!EncodeMessage(cx, exception, value, transfer, &clone, bridged)) return false;
   frame->assign(1, kSharedMessage);
   for (unsigned index = 0; index < 4; ++index) frame->push_back(char(id >> (8 * index)));
   frame->append(clone.data() + 1, clone.size() - 1);  // drop '\x01', keep version + data
   return true;
 }
 bool DecodeSharedMessage(JSContext* cx, std::string_view frame, uint32_t* id,
-                         JS::MutableHandleValue value) {
+                         JS::MutableHandleValue value, const PortSink* sink) {
   if (!DecodeSharedPortFrame(frame, kSharedMessage, id)) return false;
   std::string clone(1, '\x01');
   clone.append(frame.data() + 5, frame.size() - 5);
-  return DecodeMessage(cx, clone, value);
+  return DecodeMessage(cx, clone, value, '\x01', sink);
 }
 }

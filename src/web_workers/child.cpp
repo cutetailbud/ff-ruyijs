@@ -7,6 +7,7 @@
 #include "runtime/page_helpers.h"
 #include "runtime/pipe.h"
 #include "jsapi.h"
+#include "js/Array.h"
 #include "js/CharacterEncoding.h"
 #include "js/PropertyAndElement.h"
 #include "js/Realm.h"
@@ -57,7 +58,10 @@ bool Child::Send(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (WorkerTokenEnabled()) {
     WorkerMessageToken token{HostProcessId(), ++child.childSequence_, 1};
     if (!EncodeMessageWithToken(cx, child.exception_, args[0], args.get(1), token, &frame)) return false;
-  } else if (!EncodeMessage(cx, child.exception_, args[0], args.get(1), &frame)) return false;
+  } else {
+    std::vector<uint32_t> bridged;
+    if (!EncodeMessage(cx, child.exception_, args[0], args.get(1), &frame, &bridged)) return false;
+  }
   if (!child.pipe_.Queue(std::move(frame))) return WebKit::Fail(cx, "Worker outgoing queue is full or closed");
   // Submit OS writes now, including when the script next enters a busy loop.
   const auto status = child.pipe_.Flush();
@@ -95,7 +99,10 @@ bool Child::Serve(Checkpoint checkpoint, ExceptionCapture& errors, const ChildTa
         if (!EvaluateStartup(frame, startup)) return false;
       } else if (!frame.empty() && frame[0] == '\x07') {
         if (broadcastPort_ && !broadcastPort_(broadcastContext_, frame)) return false;
-      } else if (shared()) {
+      } else if (shared() || (dedicated() && !frame.empty() &&
+                              (frame[0] == kSharedMessage || frame[0] == kSharedClose))) {
+        // A dedicated worker gets port frames for MessagePorts transferred
+        // to or from its parent (clone.h, SetPortTransfer).
         if (!HandleSharedFrame(frame)) return false;
       } else if (service()) {
         if (framePort_ && !framePort_(frameContext_, frame)) return false;
@@ -103,8 +110,11 @@ bool Child::Serve(Checkpoint checkpoint, ExceptionCapture& errors, const ChildTa
         if (!DecodeMessageWithToken(cx_, frame, &lastIncoming_, &value) ||
             lastIncoming_.direction != 0 || lastIncoming_.workerId != HostProcessId() ||
             !events_.FireMessage(kit_.page, value, "", nullptr)) return false;
-      } else if (!DecodeMessage(cx_, frame, &value) || !events_.FireMessage(kit_.page, value, "", nullptr)) {
-        return false;
+      } else {
+        JS::RootedObject ports(cx_, JS::NewArrayObject(cx_, 0));
+        PortSink sink{portFactory_, portFactoryContext_, ports, nullptr};
+        if (!ports || !DecodeMessage(cx_, frame, &value, '\x01', &sink) ||
+            !events_.FireMessage(kit_.page, value, "", nullptr, ports)) return false;
       }
       checkpoint(cx_);
     } else if (status == PipeResult::Closed) {

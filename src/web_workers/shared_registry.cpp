@@ -21,7 +21,19 @@ bool RelaySharedWindow(void* context, uint32_t id, JS::HandleValue value, JS::Ha
   for (auto& entry : owner.sharedWorkers)
     for (auto& connection : entry->connections)
       if (connection.id == id) { process = entry.get(); break; }
-  if (!process || process->record.terminated) return true;  // refused/dropped
+  if (!process) {
+    // A port transferred to or from a dedicated Worker: its worker's pipe.
+    const auto found = owner.budget->ports.find(id);
+    if (found == owner.budget->ports.end() || found->second->terminated) return true;
+    WorkerRecord& record = *found->second;
+    std::string frame;
+    std::vector<uint32_t> bridged;
+    if (!EncodeSharedMessage(state->cx, state->exceptionPrototype, id, value, transfer, &frame, &bridged))
+      return false;
+    record.AddPorts(bridged);
+    return record.process.Queue(std::move(frame));
+  }
+  if (process->record.terminated) return true;  // refused/dropped
   std::string frame;
   if (!EncodeSharedMessage(state->cx, state->exceptionPrototype, id, value, transfer, &frame)) return false;
   return process->record.process.Queue(std::move(frame));
@@ -40,6 +52,29 @@ void CloseSharedWindow(void* context, uint32_t id) {
         entry->record.process.Queue(std::move(frame));
         return;
       }
+  const auto found = owner.budget->ports.find(id);
+  if (found != owner.budget->ports.end() && !found->second->terminated) {
+    std::string frame;
+    EncodeSharedPortFrame(id, kSharedClose, &frame);
+    found->second->process.Queue(std::move(frame));
+  }
+}
+
+// A port frame from a dedicated Worker: a message for a port this realm holds
+// (a remote port it received, or the bridge of one it transferred), or a close.
+bool RouteDedicatedPort(State& state, WorkerRecord& record, std::string_view frame) {
+  uint32_t id = 0;
+  if (DecodeSharedPortFrame(frame, kSharedClose, &id)) {
+    if (state.portClose) state.portClose(state.portCloseContext, id);
+    return true;
+  }
+  JSContext* cx = state.cx;
+  JS::RootedValue value(cx);
+  std::vector<uint32_t> ids;
+  PortSink sink{state.portFactory, state.portFactoryContext, nullptr, &ids};
+  if (!DecodeSharedMessage(cx, frame, &id, &value, &sink)) return false;
+  record.AddPorts(ids);
+  return !state.portDeliver || state.portDeliver(state.portDeliverContext, id, value);
 }
 
 bool RouteShared(State& state, std::string_view frame) {

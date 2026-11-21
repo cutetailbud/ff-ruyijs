@@ -551,6 +551,8 @@ bool BrowsingContext::Finish(Frames& owner) {
   }, messaging.get());
   messaging->SetRemoteRelay(&web_workers::RelaySharedWindow, workers->state());
   messaging->SetRemoteClose(&web_workers::CloseSharedWindow, workers->state());
+  // MessagePorts transferred to dedicated Workers (clone.h): parent ids bit 30.
+  web_workers::SetPortTransfer(&web_messaging::Realm::IsPort, &web_messaging::Realm::BridgePort, 0x40000000u);
   // ClipboardItem settles with this realm's Blob (Web Platform) and
   // DOMException (Document Model), so it installs after both.
   clipboard = std::make_unique<web_clipboard::Realm>(cx, page, *helpers);

@@ -36,6 +36,12 @@ All notable changes to this project are documented here. The format follows
   `[SameObject]`, `sandbox.supports()` checks Firefox's keyword list, `classList`/`part.supports()`
   throw Firefox's TypeError, and `DOMTokenList.value = null` gives `"null"`. `ci/token_list_check.py`
   (16 rows measured in Firefox 160).
+- A dedicated Worker could not transfer a `MessagePort` to its page or receive one from it
+  (`postMessage(data, [port])` threw a DataCloneError inside the worker process). reCAPTCHA's
+  `webworker.js` posts a port to the anchor frame and the anchor waits five seconds for it, so every
+  challenge failed with `Error: Timed out.` before building its bframe (#52). Ports now cross the
+  worker pipe both ways and stay entangled with their peer; a port already transferred throws
+  DataCloneError as in Firefox. `ci/worker_port_check.py` (Firefox 160 rows).
 
 ## [0.4.2] - 2026-11-20
 

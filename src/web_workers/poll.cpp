@@ -3,6 +3,7 @@
 #include "web_workers/error_event.h"
 #include "interaction/realm.h"
 #include "jsapi.h"
+#include "js/Array.h"
 #include "js/Object.h"
 #include "js/Realm.h"
 #include <chrono>
@@ -106,7 +107,17 @@ bool Poll(JSContext* cx, unsigned argc, JS::Value* vp) {
       ok = DecodeMessageWithToken(cx, frame, &token, &data) && token.direction == 1 &&
            token.workerId == record->workerId && (record->lastIncoming = token, true) &&
            state.events->FireMessage(target, data, "", nullptr);
-    } else ok = DecodeMessage(cx, frame, &data) && state.events->FireMessage(target, data, "", nullptr);
+    } else if (!frame.empty() && (frame[0] == kSharedMessage || frame[0] == kSharedClose)) {
+      ok = RouteDedicatedPort(state, *Record(target), frame);
+    } else {
+      // Ports the worker transferred arrive as this realm's remote MessagePorts.
+      std::vector<uint32_t> ids;
+      JS::RootedObject ports(cx, JS::NewArrayObject(cx, 0));
+      PortSink sink{state.portFactory, state.portFactoryContext, ports, &ids};
+      ok = ports && DecodeMessage(cx, frame, &data, '\x01', &sink);
+      if (ok) Record(target)->AddPorts(ids);
+      ok = ok && state.events->FireMessage(target, data, "", nullptr, ports);
+    }
   }
   // Service worker processes share this poll task, one frame per task as well.
   bool delivered = false;
