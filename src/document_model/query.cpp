@@ -208,7 +208,7 @@ bool InstallQuery(State& state) {
       state.Accessor("Document", "childElementCount", FragmentGet, 100 + ChildCount) &&
       state.Accessor("Document", "firstElementChild", FragmentGet, 100 + FirstElement) &&
       state.Accessor("Document", "lastElementChild", FragmentGet, 100 + LastElement) &&
-      state.Accessor("Element", "classList", ElementGet, ClassList) &&
+      state.Accessor("Element", "classList", ElementGet, ClassList, PutForwardsValue<ElementGet>) &&
       state.Accessor("Element", "attributes", ElementGet, Attributes) &&
       state.Method("Element", "querySelector", QueryCall, 1, QueryOne) &&
       state.Method("Element", "querySelectorAll", QueryCall, 1, QueryAll) &&

@@ -2,6 +2,7 @@
 #include "document_model/state.h"
 #include "runtime/weak_object.h"
 #include "js/Object.h"
+#include "js/PropertyAndElement.h"
 #include "js/Realm.h"
 #include "js/Wrapper.h"
 #include <new>
@@ -60,6 +61,17 @@ bool State::SyncTokenViews(uint64_t) {
   }
   return true;
 }
+bool ForwardTokenValue(JSContext* cx, unsigned argc, JS::Value* vp, JSNative getter) {
+  auto args = JS::CallArgsFromVp(argc, vp);
+  JS::RootedValue value(cx, args.get(0));
+  // The getter checks the receiver and writes the list to rval (the callee
+  // slot); the callee is not read after it returns.
+  if (!getter(cx, argc, vp)) return false;
+  if (!args.rval().isObject()) return TypeError(cx, "DOMTokenList attribute is not an object");
+  JS::RootedObject list(cx, &args.rval().toObject());
+  if (!JS_SetProperty(cx, list, "value", value)) return false;
+  args.rval().setUndefined(); return true;
+}
 namespace {
 bool Part(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
@@ -86,5 +98,5 @@ bool Part(JSContext* cx, unsigned argc, JS::Value* vp) {
   args.rval().set(result); return true;
 }
 }
-bool InstallPart(State& state) { return state.Accessor("Element", "part", Part, 0); }
+bool InstallPart(State& state) { return state.Accessor("Element", "part", Part, 0, PutForwardsValue<Part>); }
 }

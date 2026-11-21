@@ -60,7 +60,7 @@ const JSClassOps kNodeOps = {nullptr, nullptr, nullptr, FormEnumerate, FormResol
 // Slot 0 names this wrapper's native record and slot 1 the borrowed Interaction
 // record it must release; both are cleared before the records are freed.
 const JSClass kNodeClass = {"Node",
-    JSCLASS_HAS_RESERVED_SLOTS(13) | JSCLASS_FOREGROUND_FINALIZE, &kNodeOps};
+    JSCLASS_HAS_RESERVED_SLOTS(14) | JSCLASS_FOREGROUND_FINALIZE, &kNodeOps};
 State::State(JSContext* context, JS::HandleObject global, interaction::Realm& events,
              browser_environment::Environment& env, PageHelpers& trace)
     : cx(context), page(context, global), documentLocationGetter(context),

@@ -249,6 +249,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\cross_origin_window_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\token_list_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\net_log_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\http_timeout_check.py"

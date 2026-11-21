@@ -179,6 +179,9 @@ bool InstallPart(State&);
 enum class TokenOperation { Contains, Add, Remove, Toggle, Replace, Supports, TokenItem };
 bool PartTokenCall(State&, CollectionRecord&, const JS::CallArgs&, TokenOperation);
 bool PartTokenSet(State&, CollectionRecord&, const JS::CallArgs&);
+// DOMTokenList.supports on a list without supported tokens (class, part):
+// Firefox's TypeError, naming the element and the attribute (token_list.cpp).
+bool NoSupportedTokens(JSContext*, CollectionRecord&, DomStringView attribute);
 void UnlinkTokenView(CollectionRecord&);
 void TraceTokenView(JSObject*);
 bool RefreshCollection(State&, JS::HandleObject, CollectionRecord&);

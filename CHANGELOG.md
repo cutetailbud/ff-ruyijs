@@ -27,6 +27,15 @@ All notable changes to this project are documented here. The format follows
   child was cross-origin; it now returns the child's `WindowProxy`. An iframe's `window.name` is its
   `name` attribute (and follows changes of it), as in Firefox, and named access matches that name.
   `ci/cross_origin_window_check.py` compares 196 rows with Firefox 160.
+- `iframe.sandbox = "..."`, `element.classList = "..."` and `element.part = "..."` were dropped: the
+  three DOMTokenList attributes had getters only, not WebIDL `[PutForwards=value]` setters. reCAPTCHA
+  (v2 and Enterprise) creates its anchor and bframe iframes with `iframe.sandbox = "allow-forms
+  allow-popups allow-same-origin allow-scripts allow-top-navigation"`, so both frames ran without
+  `allow-scripts`, no script ran in them, and the page's reCAPTCHA code failed with
+  `TypeError: can't access property "postMessage", m is undefined` (#52). `sandbox` is also
+  `[SameObject]`, `sandbox.supports()` checks Firefox's keyword list, `classList`/`part.supports()`
+  throw Firefox's TypeError, and `DOMTokenList.value = null` gives `"null"`. `ci/token_list_check.py`
+  (16 rows measured in Firefox 160).
 
 ## [0.4.2] - 2026-11-20
 

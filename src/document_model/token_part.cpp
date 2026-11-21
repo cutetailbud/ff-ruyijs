@@ -47,7 +47,7 @@ bool PartTokenCall(State& function, CollectionRecord& record, const JS::CallArgs
     DomString ignored;
     bool failed = false;
     if (!Convert(cx, args[0], &ignored, &failed) || failed) return false;
-    args.rval().setBoolean(true); return true;
+    return NoSupportedTokens(cx, record, u"part");
   }
   const unsigned count = op == TokenOperation::Add || op == TokenOperation::Remove ? argc : op == TokenOperation::Replace ? 2u : 1u;
   std::vector<DomString> tokens(count);
