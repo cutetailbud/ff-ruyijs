@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A profile set with `configure_fingerprint()` reached only the main document's WebGL, WebGPU and media
+  owners: every iframe (about:blank, same-origin, cross-origin, nested) reported the default GPU
+  (GTX 980), `requestAdapter()` returned null and `enumerateDevices()` the default list; a Worker started
+  by an iframe also lost the permissions, canvas, fonts, audio, RTC and media-feature groups, and the
+  document after a top-level navigation lost the media group (#51). Each new document now clones every
+  configured group of its creator (or of the document it replaces) into its own realm before its owners
+  bind; constructors, prototypes and objects stay per realm. `ci/frame_profile_check.py` reads the
+  profile from page script in 13 realms.
+
 ## [0.4.2] - 2026-11-20
 
 ### Added

@@ -3,6 +3,7 @@
 #include "js/PropertyAndElement.h"
 #include "js/Realm.h"
 #include "js/String.h"
+#include "js/StructuredClone.h"
 
 namespace ruyijs::browser_environment {
 Environment::Environment(JSContext* cx, JS::HandleObject page, Environment& parent,
@@ -16,20 +17,19 @@ Environment::Environment(JSContext* cx, JS::HandleObject page, Environment& pare
   state_->agentClusters = owner->agentClusters;
   // The initial about:blank document has its creator's origin and agent.
   state_->originKeyed = owner->originKeyed;
+  // The frame's own WebGL, WebGPU, Media... owners read the creator's
+  // configured groups when they bind (HTML: one Context, one hardware profile).
+  state_->groupSource = owner;
 }
 // A later top-level document of the same traversable: a new Window over the
 // first document's Model. The buffered profile groups are plain data the
-// WebGL/WebGPU/Permissions/Geolocation/Speech owners of the new realm read when they bind.
+// owners of the new realm read when they bind (State::InheritGroups).
 Environment::Environment(JSContext* cx, JS::HandleObject page, Environment& previous,
                          Succession)
     : state_(new State(cx, page, &previous.state_->model)) {
   State& old = *previous.state_;
   state_->adopted = true;
-  state_->webglGroup = old.webglGroup.get();
-  state_->gpuGroup = old.gpuGroup.get();
-  state_->permissionsGroup = old.permissionsGroup.get();
-  state_->geolocationGroup = old.geolocationGroup.get();
-  state_->speechGroup = old.speechGroup.get();
+  state_->groupSource = &old;
   state_->agentClusters = old.agentClusters;
 }
 // HTML "obtain a similar-origin window agent": an origin already in the
@@ -81,7 +81,33 @@ bool State::Inherit() {
   // engine's own default, which is the host OS locale.
   if (!language.text.empty()) JS::SetRealmLocaleOverride(target, language.text.c_str());
   if (!timezone.text.empty()) JS::SetRealmTimezoneOverride(target, timezone.text.c_str());
+  const State* groups = groupSource;
+  groupSource = nullptr;
+  if (groups && !InheritGroups(*groups)) return false;
   ready = true;
+  return true;
+}
+// Every buffered owner group of |source|, structured-cloned into this realm.
+// Inherit() runs before any owner of this realm binds its port, so each owner
+// receives the creator's (or predecessor's) configuration on binding, and a
+// Worker this document starts exports the same groups (worker_groups.cpp).
+// The clones live in this realm's compartment: no group points into another
+// window's realm or keeps it alive after that document goes away.
+bool State::InheritGroups(const State& source) {
+  JSAutoRealm realm(cx, page);
+  auto copy = [&](const JS::PersistentRootedObject& from, JS::PersistentRootedObject& to) {
+    if (!from.get()) return true;
+    JS::RootedValue value(cx, JS::ObjectValue(*from.get())), clone(cx);
+    if (!JS_StructuredClone(cx, value, &clone, nullptr, nullptr)) return false;
+    to = &clone.toObject();
+    return true;
+  };
+  for (JS::PersistentRootedObject State::*group :
+       {&State::webglGroup, &State::gpuGroup, &State::permissionsGroup, &State::geolocationGroup,
+        &State::speechGroup, &State::mediaGroup})
+    if (!copy(source.*group, this->*group)) return false;
+  for (size_t index = 0; index < kOwnerGroupCount; ++index)
+    if (!copy(source.owners[index].group, owners[index].group)) return false;
   return true;
 }
 }
