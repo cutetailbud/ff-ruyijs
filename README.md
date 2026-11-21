@@ -130,6 +130,7 @@ Execute scripts in a persistent context, load real HTML with iframes and classic
 | Load a page | `context.load_page(url, html)` — relative URLs resolve against `url` |
 | Top-level navigation | `context.navigate(url)` — no Referer, `Sec-Fetch-Site: none` |
 | Query the DOM | `context.eval("document.querySelector('#x').textContent")` |
+| Inspect any frame | `context.eval` runs with host privilege: it reads a cross-origin iframe's `contentDocument` and globals. Page scripts get Firefox's cross-origin rules; to see what the page sees, run the probe from a page `<script>` |
 
 ```python
 with Context() as context:

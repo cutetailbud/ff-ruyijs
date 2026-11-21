@@ -1,0 +1,17 @@
+<!doctype html><html><head><title>kid</title><script src="/common.js"></script></head><body>
+<iframe name=g1 src="/leaf.html"></iframe>
+<iframe name=g2 src="http://127.0.0.1:28491/leaf.html"></iframe>
+<script>
+window.secret = 'kid-secret';
+addEventListener('message', e => {
+  if (e.data === 'rename') { frames[0].name = 'g1x'; e.source.postMessage('renamed', '*'); return; }
+  if (e.data !== 'go') return;
+  const rows = [];
+  __run(rows, 'kid parent[0]===window', () => parent[0] === window);
+  __run(rows, 'kid window.name', () => window.name);
+  __run(rows, 'kid frames[0].name', () => frames[0].name);
+  __xo(rows, 'kid>parent ', parent, ['kid', 'same']);
+  e.source.postMessage({kidRows: rows}, '*');
+  frames[1].postMessage('go', '*');
+});
+</script></body></html>

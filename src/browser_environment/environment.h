@@ -54,6 +54,9 @@ class Environment final {
   // Runtime frame port: the connected iframe count of this browsing context,
   // read from the unique DOM owner. Bound after Document installation.
   void SetFrameCount(size_t (*port)(void*), void* context);
+  // The index-th child WindowProxy (document_model FrameWindowAt), bound with
+  // the count; read by the cross-origin WindowProxy for window[i]/window[name].
+  void SetFrameWindowPort(bool (*port)(void*, size_t, JS::MutableHandleValue), void* context);
   // Dynamic Window named access, resolved by the sole Document owner.
   void SetWindowNamePort(WindowNamePort port, void* context);
   void SetViewportPort(bool (*port)(void*, double*, double*), void* context);
@@ -108,6 +111,13 @@ class Environment final {
   // same origin, else its cross-origin WindowProxy - and the plain check.
   static bool WindowView(JSContext*, JS::HandleObject target, JS::MutableHandleValue out);
   static bool SameOriginWithCurrent(JSContext*, JS::HandleObject target, bool* same);
+  // The browsing context name of a window of this Context (its window.name),
+  // and the container's write of it: an iframe's name content attribute names
+  // its child browsing context when the context is created and whenever the
+  // attribute changes (Firefox nsGenericHTMLFrameElement). Named child access
+  // (window[name], same or cross origin) matches these names.
+  static bool BrowsingContextName(JSContext*, JS::HandleObject window, JS::MutableHandleString name);
+  static bool SetBrowsingContextName(JSContext*, JS::HandleObject window, JS::HandleString name);
   static bool ReadNavigatorMediaCapabilities(JSContext*, JS::HandleValue,
                                             JS::MutableHandleValue);
   // Realm-local DOMStringList factory; the caller supplies an internal array.

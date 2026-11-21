@@ -1,5 +1,7 @@
+#include "browser_environment/cross_origin_internal.h"
 #include "browser_environment/state.h"
 #include "browser_environment/string_list.h"
+#include "jsapi.h"
 #include "js/Object.h"
 #include "js/Wrapper.h"
 #include "domain/browser_environment/url_value.h"
@@ -90,6 +92,33 @@ bool Environment::ReadNavigatorMediaCapabilities(JSContext* cx, JS::HandleValue 
 void Environment::SetFrameCount(size_t (*port)(void*), void* context) {
   state_->frameCount = port;
   state_->frameCountContext = context;
+}
+void Environment::SetFrameWindowPort(bool (*port)(void*, size_t, JS::MutableHandleValue),
+                                     void* context) {
+  state_->frameWindow = port;
+  state_->frameWindowContext = context;
+}
+bool Environment::BrowsingContextName(JSContext* cx, JS::HandleObject window,
+                                      JS::MutableHandleString name) {
+  name.set(nullptr);
+  JSObject* real = RealWindow(window);
+  State* state = real ? WindowState(real) : nullptr;
+  if (!state || !state->name.get().isString()) return true;
+  JS::RootedValue value(cx, state->name);
+  if (!JS_WrapValue(cx, &value)) return false;
+  name.set(value.toString());
+  return true;
+}
+bool Environment::SetBrowsingContextName(JSContext* cx, JS::HandleObject window,
+                                         JS::HandleString name) {
+  JSObject* real = RealWindow(window);
+  State* state = real ? WindowState(real) : nullptr;
+  if (!state) return true;
+  JSAutoRealm realm(cx, state->page);
+  JS::RootedValue value(cx, JS::StringValue(name));
+  if (!JS_WrapValue(cx, &value)) return false;
+  state->name = value;
+  return true;
 }
 void Environment::SetWindowNamePort(WindowNamePort port, void* context) {
   state_->windowNamePort = port;

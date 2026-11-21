@@ -14,6 +14,10 @@ class EvaluationControl:
         Without to_py the original typed snapshot protocol is preserved.
         to_py=False keeps DOM/class/function references; True labels top-level
         references. Ordinary containers become Python values in both modes.
+
+        The code runs with host privilege: cross-origin frames are readable
+        from it (contentDocument, their globals). Functions of the page it
+        calls, and page scripts, keep the browser's cross-origin rules.
         """
         if name is not _TYPED:
             if filename != "<eval>":

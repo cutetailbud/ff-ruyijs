@@ -14,5 +14,8 @@ bool LocationView(JSContext* cx, State* owner, JS::HandleObject real, JS::Mutabl
 // A function calling `name` on `target` (close/focus/blur/postMessage/replace),
 // so the real method sees its own receiver and the caller's script as sender.
 JSObject* NewForwarder(JSContext* cx, JS::HandleObject target, const char* name);
+// The real window behind a value: through compartment wrappers and the
+// cross-origin WindowProxy view; null when it is no window of this Context.
+JSObject* RealWindow(JSObject* object);
 }  // namespace ruyijs::browser_environment
 #endif

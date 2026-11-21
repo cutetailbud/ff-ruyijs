@@ -100,6 +100,7 @@ BrowsingContext::~BrowsingContext() {
     environment->SetMessagePort(nullptr, nullptr);
     environment->SetClonePort(nullptr, nullptr);
     environment->SetFrameCount(nullptr, nullptr);
+    environment->SetFrameWindowPort(nullptr, nullptr);
     SetPageFrames(page, nullptr);
     environment->SetWindowNamePort(nullptr, nullptr);
     environment->SetViewportPort(nullptr, nullptr);
@@ -278,6 +279,9 @@ bool BrowsingContext::Finish(Frames& owner) {
   }, this);
   frames = &owner;
   environment->SetFrameCount(&FrameCount, document.get());
+  environment->SetFrameWindowPort([](void* context, size_t index, JS::MutableHandleValue window) {
+    return static_cast<document_model::Realm*>(context)->FrameWindowAt(index, window);
+  }, document.get());
   pageFrames.count = &FrameCount;
   pageFrames.at = [](void* context, size_t index, JS::MutableHandleValue window) {
     return static_cast<document_model::Realm*>(context)->FrameWindowAt(index, window);

@@ -133,6 +133,10 @@ struct State final {
   // so this adapter never keeps an iframe list of its own.
   size_t (*frameCount)(void*) = nullptr;
   void* frameCountContext = nullptr;
+  // The index-th child WindowProxy as the current caller sees it (window[i]);
+  // the cross-origin view answers indexed and named child access through it.
+  bool (*frameWindow)(void*, size_t, JS::MutableHandleValue) = nullptr;
+  void* frameWindowContext = nullptr;
   WindowNamePort windowNamePort = nullptr;
   void* windowNameContext = nullptr;
   // Content viewport source. Top-level reads the profile; child realms use the

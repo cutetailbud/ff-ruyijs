@@ -1,6 +1,7 @@
 // Read-only document port for the existing WindowProperties factory.
 #include "document_model/state.h"
 #include "document_model/collections.h"
+#include "browser_environment/environment.h"
 #include "js/Realm.h"
 #include "js/Wrapper.h"
 
@@ -10,17 +11,24 @@ bool Resolve(State& state, DomStringView name, JS::MutableHandleValue result) {
   result.setUndefined();
   if (name.empty()) return true;
   std::vector<NodeKey> nodes;
-  // Child contexts take precedence over elements. Walk the original tree for
-  // ordering and exclude shadow trees; FrameLink supplies the existing identity.
+  // Child contexts take precedence over elements: the first child navigable in
+  // tree order whose browsing context name (its window.name) is |name|. Walk
+  // the original tree for ordering and exclude shadow trees; FrameLink
+  // supplies the existing identity, and the WindowProxy is the one
+  // contentWindow returns (a cross-origin child is its cross-origin view).
   if (!state.Check(state.model.Query(state.main, QueryKind::TagName, u"iframe", &nodes))) return false;
   for (const auto key : nodes) {
-    std::optional<DomString> value;
-    if (!state.Check(state.model.GetAttribute(key, u"name", &value))) return false;
-    if (!value || DomStringView(*value) != name) continue;
     for (auto* link = state.frames.get(); link; link = link->next.get()) {
       if (!Same(link->frame, key)) continue;
-      result.setObject(*link->window);
-      return JS_WrapValue(state.cx, result);
+      JS::RootedObject window(state.cx, link->window);
+      JS::RootedString own(state.cx);
+      if (!browser_environment::Environment::BrowsingContextName(state.cx, window, &own)) return false;
+      if (!own) break;
+      JS::RootedValue text(state.cx, JS::StringValue(own));
+      DomString value;
+      if (!String(state.cx, text, &value)) return false;
+      if (DomStringView(value) != name) break;
+      return browser_environment::Environment::WindowView(state.cx, window, result);
     }
   }
   DocumentSnapshot document;

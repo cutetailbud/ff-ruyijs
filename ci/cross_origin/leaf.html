@@ -1,0 +1,15 @@
+<!doctype html><html><head><title>leaf</title><script src="/common.js"></script></head><body><script>
+window.leafVar = 'leaf-' + location.hostname;
+addEventListener('message', e => {
+  if (e.data !== 'go') return;
+  const rows = [];
+  __run(rows, 'leaf top.document.title', () => top.document.title);
+  __run(rows, 'leaf top.secret', () => top.secret);
+  __run(rows, 'leaf parent.document', () => parent.document);
+  __run(rows, 'leaf top[1].document.title', () => top[1].document.title);
+  __run(rows, 'leaf top[0][0].leafVar', () => top[0][0].leafVar);
+  __run(rows, 'leaf top[0][1]===window', () => top[0][1] === window);
+  __run(rows, 'leaf top.kid.g2===window', () => top.kid.g2 === window);
+  top.postMessage({leafRows: rows}, '*');
+});
+</script></body></html>

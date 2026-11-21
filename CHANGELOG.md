@@ -15,6 +15,18 @@ All notable changes to this project are documented here. The format follows
   configured group of its creator (or of the document it replaces) into its own realm before its owners
   bind; constructors, prototypes and objects stay per realm. `ci/frame_profile_check.py` reads the
   profile from page script in 13 realms.
+- A cross-origin `WindowProxy` refused its child frames: `w[0]`, `w.frames[i]`, `w.length` loops and
+  `parent.frames[name]` threw `SecurityError: Permission denied to access property "symbol"`, which
+  broke handshakes that walk a cross-origin parent's frames (reCAPTCHA v2 anchor/bframe) (#52). It now
+  answers as Firefox 160 does: indexed and named child access, `[[OwnPropertyKeys]]` (child indices,
+  then the members, `then` and the three symbols), accessor descriptors for the cross-origin attributes
+  (`get length`, `set location`, set-only `Location.href`), the SecurityError texts (`property 2`,
+  `property Symbol.iterator`), and `top`/`parent`/`length`/`closed`/`opener` read from the window
+  itself, so a page-replaced `window.length` or `window.opener` no longer reaches a cross-origin
+  caller. Same-origin named access (`window.frameName`) returned the raw child window even when the
+  child was cross-origin; it now returns the child's `WindowProxy`. An iframe's `window.name` is its
+  `name` attribute (and follows changes of it), as in Firefox, and named access matches that name.
+  `ci/cross_origin_window_check.py` compares 196 rows with Firefox 160.
 
 ## [0.4.2] - 2026-11-20
 

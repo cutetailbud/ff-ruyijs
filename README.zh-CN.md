@@ -130,6 +130,7 @@ Python  ──►  ruyiJS Context（独立进程）  ──►  目标站点
 | 加载页面 | `context.load_page(url, html)` —— 相对地址按 `url` 解析 |
 | 顶层导航 | `context.navigate(url)` —— 无 Referer，`Sec-Fetch-Site: none` |
 | 查询 DOM | `context.eval("document.querySelector('#x').textContent")` |
+| 检查任意 frame | `context.eval` 以宿主权限运行：可以读取跨域 iframe 的 `contentDocument` 与全局变量。页面自己的脚本遵循 Firefox 的跨域规则；要观察页面看到的结果，请在页面 `<script>` 中运行探针 |
 
 ```python
 with Context() as context:

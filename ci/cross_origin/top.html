@@ -1,0 +1,41 @@
+<!doctype html><html><head><title>top</title><script src="/common.js"></script></head><body>
+<iframe id=A name=kid src="http://localhost:28491/kid.html"></iframe>
+<iframe id=B name=same src="/same.html"></iframe>
+<script>
+window.secret = 'top-secret';
+const rows = [];
+let kidRows = null, leafRows = null;
+addEventListener('message', e => {
+  if (e.data && e.data.kidRows) kidRows = e.data.kidRows;
+  if (e.data && e.data.leafRows) leafRows = e.data.leafRows;
+});
+addEventListener('load', async () => {
+  const A = document.getElementById('A'), B = document.getElementById('B');
+  const w = A.contentWindow;
+  __run(rows, 'A.contentDocument', () => A.contentDocument);
+  __run(rows, 'B.contentDocument', () => B.contentDocument);
+  __run(rows, 'B.title', () => B.contentWindow.document.title);
+  __run(rows, 'window.length', () => window.length);
+  __run(rows, 'window[0]===A.cw', () => window[0] === w);
+  __run(rows, 'window.kid===A.cw', () => window.kid === w);
+  __run(rows, 'B.cw.name', () => B.contentWindow.name);
+  __xo(rows, 'top>kid ', w, ['g1', 'g2', 'nope']);
+  __shape(rows, 'top>kid ', w);
+  w.postMessage('go', '*');
+  for (let i = 0; i < 100 && !(kidRows && leafRows); i++) await new Promise(r => setTimeout(r, 50));
+  rows.push(...(kidRows || [['kid', 'no rows']]), ...(leafRows || [['leaf', 'no rows']]));
+  let renamed = false;
+  addEventListener('message', e => { if (e.data === 'renamed') renamed = true; });
+  w.postMessage('rename', '*');
+  for (let i = 0; i < 100 && !renamed; i++) await new Promise(r => setTimeout(r, 50));
+  __run(rows, 'after rename typeof w.g1x', () => typeof w.g1x);
+  __run(rows, 'after rename w.g1x===w[0]', () => w.g1x === w[0]);
+  __run(rows, 'after rename typeof w.g1', () => typeof w.g1);
+  B.name = 'same2';
+  __run(rows, 'attr rename B.cw.name', () => B.contentWindow.name);
+  __run(rows, 'attr rename window.same2', () => window.same2 === B.contentWindow);
+  __run(rows, 'attr rename window.same', () => typeof window.same);
+  window.__result = JSON.stringify(rows);
+  if (location.search.includes('engine=ff')) fetch('/report?engine=ff', {method: 'POST', body: window.__result});
+});
+</script></body></html>

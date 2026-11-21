@@ -27,6 +27,16 @@ bool RegisterFrame(State& state, NodeKey key, JS::HandleObject window,
   state.frames = std::move(created);
   return true;
 }
+// The child browsing context's name follows the element's `name` content
+// attribute (absent: the empty string), at creation and on every change, as
+// Firefox's frame loader names it; window.name of the child reads it.
+bool SyncFrameName(State& state, NodeKey key, JS::HandleObject window) {
+  std::optional<DomString> value;
+  if (!state.Check(state.model.GetAttribute(key, u"name", &value))) return false;
+  const DomString text = value ? *value : DomString();
+  JS::RootedString name(state.cx, JS_NewUCStringCopyN(state.cx, text.data(), text.size()));
+  return name && browser_environment::Environment::SetBrowsingContextName(state.cx, window, name);
+}
 void DropFrame(State& state, NodeKey key) {
   std::unique_ptr<FrameLink>* slot = &state.frames;
   while (*slot && !Same((*slot)->frame, key)) slot = &(*slot)->next;
@@ -103,7 +113,7 @@ void Lifecycle(void* context, DocumentId document, const std::vector<NodeKey>& i
       if (!state.frameCreate(state.frameContext, element, key, &window, &content)) {
         return;  // A pending exception carries the reason (for example the bound).
       }
-      if (!RegisterFrame(state, key, window, content)) return;
+      if (!RegisterFrame(state, key, window, content) || !SyncFrameName(state, key, window)) return;
       if (state.frameNavigate && !state.frameNavigate(state.frameContext, element, key, true))
         return;
     }
@@ -123,6 +133,13 @@ void SourceChanged(void* context, DocumentId document, NodeKey key, DomStringVie
   if (namespace_uri.empty()) CanvasDimensionChanged(state, key, name);
   if (namespace_uri.empty()) CustomElementAttributeChanged(state, key, name, old);
   if (document != state.main.document) return;
+  if (name == DomStringView(u"name") && namespace_uri.empty()) {
+    if (FrameLink* link = FindFrame(state, key)) {
+      JS::RootedObject window(state.cx, link->window);
+      SyncFrameName(state, key, window);
+    }
+    return;
+  }
   if (name != DomStringView(u"src") && name != DomStringView(u"srcdoc")) return;
   if (!state.frameNavigate || !FindFrame(state, key)) return;
   JS::RootedValue value(state.cx);
