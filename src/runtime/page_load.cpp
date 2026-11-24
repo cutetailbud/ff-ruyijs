@@ -23,6 +23,11 @@
 #include <windows.h>
 #endif
 #include "domain/resource_network/cookie_scope.h"
+#include "web_console/realm.h"
+#include "browser_environment/cross_origin.h"
+#include "js/Exception.h"
+#include "js/SourceText.h"
+#include "js/CompilationAndEvaluation.h"
 #include "web_speech/realm.h"
 #include "jsapi.h"
 #include "js/CharacterEncoding.h"
@@ -358,6 +363,69 @@ bool PageLoad::FireFrameElementLoad(BrowsingContext& target) {
   if (!parent->document->WrapNode(target.frame_element, &element)) return false;
   return !element || parent->interaction->Fire(element, "load", false, false);
 }
+// Host `document_start`: install or clear the diagnostic source.
+bool PageLoad::DocumentStartRequest(JS::HandleObject request, JS::MutableHandleValue result) {
+  std::string source;
+  if (!resource_wire::Fields(cx_, request, {"id", "op", "source"}) ||
+      !StringProperty(cx_, request, "source", &source)) return false;
+  // Bounded like any other host-supplied script, so a runaway caller cannot
+  // make every later document carry an unbounded body.
+  if (source.size() > (1u << 20)) {
+    JS_ReportErrorASCII(cx_, "document-start script must be at most 1 MiB");
+    return false;
+  }
+  SetDocumentStartScript(std::move(source));
+  JS::RootedObject summary(cx_, JS_NewPlainObject(cx_));
+  if (!summary ||
+      !JS_DefineProperty(cx_, summary, "length", double(documentStart_.size()), JSPROP_ENUMERATE))
+    return false;
+  result.setObject(*summary);
+  return true;
+}
+// Host diagnostic source run in each new document before its own scripts
+// (SetDocumentStartScript). It is host code: its failure goes to that
+// document's console, never to the page, and never fails the load.
+void PageLoad::RunDocumentStart(Owners& owners) {
+  if (documentStart_.empty() || inDocumentStart_) return;
+  JSContext* cx = owners.cx;
+  inDocumentStart_ = true;
+  bool ok = false;
+  std::string failure;
+  {
+    JSAutoRealm realm(cx, owners.page);
+    // Compiled and run here rather than through Evaluate: Evaluate hands a
+    // failure to ExceptionCapture, which makes it the host request's (the
+    // load's) result. This script's failure belongs to nobody but the log.
+    JS::CompileOptions options(cx);
+    options.setFileAndLine("<document-start>", 1);
+    JS::SourceText<mozilla::Utf8Unit> source;
+    JS::RootedValue value(cx);
+    if (source.init(cx, documentStart_.data(), documentStart_.size(), JS::SourceOwnership::Borrowed)) {
+      JS::RootedScript script(cx, JS::Compile(cx, options, source));
+      if (script) browser_environment::MarkHostScript(script);
+      ok = script && JS_ExecuteScript(cx, script, &value);
+    }
+    if (!ok && JS_IsExceptionPending(cx)) {
+      JS::ExceptionStack exception(cx);
+      if (JS::StealPendingExceptionStack(cx, &exception)) {
+        const ExceptionReport report = DescribeException(cx, exception.exception(), exception.stack());
+        failure = report.name + ": " + report.message;
+      }
+    }
+    JS_ClearPendingException(cx);
+  }
+  if (!ok) {
+    // Recorded where the page's own console records go, so the host reads it
+    // back with console_log(); the page never sees it.
+    web_console::Record record;
+    record.method = "documentStart";
+    record.level = "error";
+    record.text = failure.empty() ? "document-start script failed" : failure;
+    if (BrowsingContext* context = Find(owners.document); context && context->console)
+      context->console->Report(std::move(record));
+  }
+  inDocumentStart_ = false;
+}
 bool PageLoad::Produce(Owners& owners, JS::HandleString html, JS::MutableHandleValue result,
                        uint32_t* executed, bool frame, JS::MutableHandleObject completion,
                        const ReplayScriptOrder* order) {
@@ -397,6 +465,10 @@ bool PageLoad::Produce(Owners& owners, JS::HandleString html, JS::MutableHandleV
       context->moduleSession = std::make_unique<ModuleSession>(cx, owners.resources);
     }
     if (security) security->BeginParse();
+    // Host diagnostic source, before this document's first script, so it can
+    // observe a page that replaces an API in its own first script and can
+    // reach a realm a navigation creates later (issue #53).
+    RunDocumentStart(owners);
     const uint64_t generation = owners.document.ScriptGeneration();
     const uint64_t ticket = ticket_;
     *executed = 0;

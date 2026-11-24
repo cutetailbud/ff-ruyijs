@@ -3,6 +3,21 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- `Context.set_document_start_script(source)`: runs `source` in every document the Context builds — the
+  `load_page`/`navigate` document, each document a later navigation or reload creates, and every frame —
+  before that document's first script. A page that replaces an API in its own first script, or whose error
+  only appears in a document a navigation replaced, can now be observed; before this a host could only reach
+  a document after its scripts had run (#53). It is host code: its own failure is recorded in the console log
+  (method `documentStart`) and the page loads normally. `""` removes it.
+- A logged Error now reads `TypeError: bad thing` in `console_log()`, where it read `[object Error]`, and its
+  record carries the stack of where the Error was constructed — the only trace of an Error a page logs
+  without throwing (#53). Both are read from the engine's Error object, so logging still runs no page code: a
+  replaced `name`, a `message` getter or a `toString` is never called. `ci/diagnostics_check.py` checks both.
+
 ## [0.4.3] - 2026-11-22
 
 ### Fixed

@@ -130,7 +130,10 @@ bool Perform(State& state, const MethodDef& def, const JS::CallArgs& args) {
     case kTrace:
       return Emit(state, def, indent, Join(cx, args, 0), Capture(cx));
     default:
-      return Emit(state, def, indent, Join(cx, args, 0));
+      // A logged Error carries the stack of where it was constructed. Firefox's
+      // console shows it, and it is the only way to see where an Error a page
+      // only logs came from, so it is recorded alongside the text (issue #53).
+      return Emit(state, def, indent, Join(cx, args, 0), ArgumentStack(cx, args));
   }
 }
 

@@ -107,6 +107,18 @@ class PageLoad final {
   // about:blank document; this completes it by firing the frame element's
   // `load`, as Firefox does during insertion.
   bool CompleteBlankFrame(BrowsingContext& target);
+  // Diagnostic: source the runtime runs in every document this Context builds,
+  // before any of that document's own scripts, including the documents a
+  // navigation or a frame creates later. A page whose first script replaces an
+  // API, or whose error only surfaces in a realm the host never gets to touch,
+  // can be observed this way; an empty string removes it. The script is host
+  // code and its own failure is reported to the console, never to the page
+  // (issue #53).
+  void SetDocumentStartScript(std::string source) { documentStart_ = std::move(source); }
+  const std::string& DocumentStartScript() const { return documentStart_; }
+  // The host `document_start` operation: {"source": "..."} installs or, with an
+  // empty string, removes it; the reply reports the installed length.
+  bool DocumentStartRequest(JS::HandleObject request, JS::MutableHandleValue result);
  private:
   bool IsolateCrossSiteFrame(BrowsingContext& target, const std::string& url);
   bool RecordFrameNavigation(BrowsingContext& target, const std::string& url,
@@ -123,6 +135,9 @@ class PageLoad final {
     resource_network::Model& resources;
     web_platform::Realm& platform;
   };
+  // Runs the document-start script in `owners`' realm, after the document
+  // exists and before its first script. A failure never fails the load.
+  void RunDocumentStart(Owners& owners);
   // The context a document belongs to: a frame, or the active top-level one.
   BrowsingContext* Find(const document_model::Realm& document) const;
   // The resource model view of a context; the first document's realm owns it.
@@ -229,6 +244,11 @@ class PageLoad final {
   // navigate again, so the product bounds that recursion. Frame loads share the
   // same budget: they run re-entrantly from the parent's own parse.
   uint32_t depth_ = 0;
+  // SetDocumentStartScript's source; empty when nothing is installed.
+  std::string documentStart_;
+  // Reentrancy guard: the document-start script's own document.write or
+  // navigation must not run it again inside itself.
+  bool inDocumentStart_ = false;
 };
 }
 #endif

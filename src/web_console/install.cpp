@@ -31,6 +31,11 @@ State::State(JSContext* cx, JS::HandleObject page, PageHelpers& helpers, Log* sh
 Realm::Realm(JSContext* cx, JS::HandleObject page, PageHelpers& helpers, Log* shared)
     : state_(std::make_unique<State>(cx, page, helpers, shared)), log_(state_->log) {}
 Realm::~Realm() = default;
+void Realm::Report(Record record) {
+  record.realm = state_->realm;
+  record.indent = static_cast<int>(state_->groups.size());
+  log_->Append(std::move(record));
+}
 
 void Realm::SetClockPort(ClockPort clock, void* context) {
   state_->clock = clock;

@@ -24,5 +24,9 @@ std::string TimerMissing(const std::string& label);
 std::string Timed(const std::string& label, double duration, bool ended);
 // The `trace()` stack, innermost frame first, at most Log::kStackLimit frames.
 std::vector<std::string> Capture(JSContext* cx);
+// The saved stack of the first Error among `args`: where that Error was
+// constructed, read from the engine's Error object, so no page code runs.
+// Empty when nothing logged is an Error or it carries no stack.
+std::vector<std::string> ArgumentStack(JSContext* cx, const JS::CallArgs& args);
 }
 #endif

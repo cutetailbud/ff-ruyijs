@@ -64,6 +64,10 @@ class Realm final {
   void SetClockPort(ClockPort clock, void* context);
   void CopyClockFrom(const Realm& other);
   Log& log() { return *log_; }
+  // Appends a record the runtime itself reports for this Window (the
+  // document-start script's failure, issue #53), stamped with this realm's id
+  // so it reads like the page's own records; no page code runs.
+  void Report(Record record);
 
  private:
   std::unique_ptr<State> state_;

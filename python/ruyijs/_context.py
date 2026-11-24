@@ -422,6 +422,29 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
             fields = {} if replay_async_scripts is None else {"replay_async_scripts": replay_async_scripts}
             return self._request("page", action="load", url=url, html=html, **fields)
 
+    def set_document_start_script(self, source):
+        """Run `source` in every document this Context builds, before its own scripts.
+
+        The script runs in each new document — the one load_page/navigate
+        builds, every document a later navigation or reload creates, and each
+        frame — ahead of that document's first script, so it can observe a page
+        that replaces an API in its own first script and can reach a realm the
+        host never gets a chance to touch. Pass "" to remove it.
+
+        It is host code: it is not visible to the page as a script element, its
+        own failure is recorded in the console log (method "documentStart")
+        rather than raised at the page, and it never fails the load. Intended
+        for diagnosing a page whose error only appears in a replaced document;
+        a session that does not need it should leave it unset.
+
+        Returns {"length"}: the installed source's length in bytes.
+        """
+        if not isinstance(source, str):
+            raise TypeError("source must be a string")
+        self._callbacks.guard()
+        with self._lock:
+            return self._request("document_start", source=source)
+
     def navigate(self, url):
         """Start a top-level navigation the browser itself makes (address bar).
 

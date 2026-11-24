@@ -131,6 +131,9 @@ bool Serve(JSContext* cx, TopLevel& top,
     } else if (success && operation == "crypto_replay_status") {
       success = pages.CryptoStatus(&value);
       if (!success && !Failure(cx, &value)) return false;
+    } else if (success && operation == "document_start") {
+      success = pages.DocumentStartRequest(request, &value);
+      if (!success && !Failure(cx, &value)) return false;
     } else if (success && operation == "event_loop") {
       success = scheduling.Request(request, &value);
       if (!success && !Failure(cx, &value)) return false;
