@@ -25,6 +25,7 @@
 !/tools/build.py
 !/tools/build_linux.py
 !/tools/build_necko_linux.py
+!/tools/necko_connect_patch.py
 !/tools/build_necko_darwin.py
 !/tools/build_neqo_linux.py
 !/tools/bundle_linux.py

@@ -26,6 +26,7 @@ import venv
 import zipfile
 
 import compression_native
+import necko_connect_patch
 
 DEPENDENCIES = ["requests==2.34.2", "urllib3==2.7.0", "h2==4.4.1",
                 "hpack==4.2.0", "hyperframe==6.1.0", "brotli==1.2.0",
@@ -62,6 +63,8 @@ PATCHES = {
          '                firefox=self.firefox,\n'),
     ],
 }
+# Staggered connection attempts in the adapter's open_socket (tools/necko_connect_patch.py).
+PATCHES[necko_connect_patch.TARGET] = necko_connect_patch.PATCH
 
 
 def run(args, **kwargs):
@@ -115,10 +118,12 @@ def install_packages(root, build, site):
         raise ValueError(f"Pinned runtime lacks {missing}")
     oneshot = site / "ruyijs_necko/oneshot.py"
     oneshot.write_bytes((root / "src/resource_network/necko_oneshot.py").read_bytes())
+    (site / necko_connect_patch.MODULE).write_bytes((root / necko_connect_patch.SOURCE).read_bytes())
     (build / "upstream.json").write_text(json.dumps({
         "archive": manifest["url"], "sha256": manifest["sha256"], "files": inventory,
         "patched": sorted(PATCHES), "replaced": {"ruyijs_necko/oneshot.py":
-                                                 "src/resource_network/necko_oneshot.py"}},
+                                                 "src/resource_network/necko_oneshot.py",
+                                                 necko_connect_patch.MODULE: necko_connect_patch.SOURCE}},
         indent=2) + "\n", encoding="utf-8")
 
 

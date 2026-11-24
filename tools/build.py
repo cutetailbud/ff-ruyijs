@@ -19,6 +19,7 @@ import geometry_fonts
 import binding_order
 import sanitizer_data
 import compression_native
+import necko_connect_patch
 import urlpattern_native
 import image_native
 import rust_runtime
@@ -139,6 +140,29 @@ def build_necko_core(root, necko_obj, nss_dir=None):
     return output
 
 
+def refresh_bytecode(venv, sources):
+    """Recompile helper sources just replaced, with the helper's own Python.
+
+    The pinned runtime's helper bytecode is unchecked-hash .pyc
+    (ci/package/compile_embedded.py), which Python never compares with the
+    source, so a replaced .py would keep running its old bytecode; compiling it
+    again the same way keeps the helper starting from bytecode (ci/helper_check.py).
+    Without that Python the stale copies are removed and the source is imported.
+    """
+    python = next((path for path in (venv / "python.exe", venv / "bin/python3") if path.is_file()), None)
+    if python is None:
+        for source in sources:
+            cache = Path(source).parent / "__pycache__"
+            for compiled in cache.glob(Path(source).stem + ".*.pyc") if cache.is_dir() else ():
+                compiled.unlink()
+        return
+    script = ("import py_compile, sys\n"
+              "for name in sys.argv[1:]:\n"
+              "    py_compile.compile(name, doraise=True,\n"
+              "                       invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)\n")
+    subprocess.run([str(python), "-I", "-c", script, *map(str, sources)], check=True)
+
+
 def install_network_helper(root, deployed):
     """Copy owned Necko helper sources into an existing venv.
 
@@ -170,6 +194,18 @@ def install_network_helper(root, deployed):
         oneshot = package / "oneshot.py"
         oneshot.write_bytes(oneshot_source.read_bytes())
         deployed.append(oneshot)
+        written = [oneshot]
+        # Staggered connection attempts: connection_control.py gets the edit
+        # where the pinned runtime supplies it (Windows, Linux); macOS uses the
+        # module from necko/core_client.py (tools/necko_connect_patch.py).
+        if (package / "connection_control.py").is_file():
+            written += necko_connect_patch.install(package, root)
+        else:
+            module = package / "connection_attempts.py"
+            module.write_bytes((root / necko_connect_patch.SOURCE).read_bytes())
+            written.append(module)
+        deployed += written[1:]
+        refresh_bytecode(venv, written)
         deployed_oneshot = oneshot
     report = {"source": str(oneshot_source),
               "deployed": str(deployed_oneshot) if deployed_oneshot else None}

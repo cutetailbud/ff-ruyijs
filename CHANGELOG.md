@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A host whose DNS answer leads with an unreachable address no longer costs a connect timeout per dead
+  address. The Necko helper tried the resolved addresses strictly one after another, each with the whole
+  remaining request budget, so on a network without a working IPv6 route a host with two AAAA records took
+  42 s to reach — a page `curl` fetches in 0.3 s — and a request whose `http_timeout` was shorter failed
+  outright. The attempts now start 250 ms apart and alternate between address families, the first
+  established connection wins and the others are cancelled: the same page loads in 0.9 s, and a slow but
+  working address still wins on its own. The request budget bounds every attempt as before, and each
+  in-flight attempt holds its own transport reservation. This covers the Windows and Linux helper
+  (`connection_control.open_socket`) and the macOS direct HTTPS client (`necko/core_client.py`).
+  `RUYIJS_CONNECT_STAGGER` and `RUYIJS_CONNECT_CONCURRENCY` tune the delay and the number of attempts at
+  once. `ci/connect_fallback_check.py` checks the module the runtime ships with a black-holed address and a
+  loopback listener, so it does not depend on the host's own IPv6.
+
 ### Added
 
 - `Context.set_document_start_script(source)`: runs `source` in every document the Context builds — the

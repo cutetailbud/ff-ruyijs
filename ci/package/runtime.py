@@ -26,6 +26,7 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 from wheel_runtime import download_url, validate  # noqa: E402
+import necko_connect_patch  # noqa: E402
 
 REPLACED = ("dist/js.exe", "dist/mozglue.dll")
 LICENSE_FILES = ("LICENSE", "NOTICE", "COMMERCIAL-LICENSE.md")
@@ -91,6 +92,8 @@ def main():
     # (tools/build_necko_linux.py, tools/build_necko_darwin.py).
     for name, source in ONESHOT.items():
         shutil.copy2(ROOT / source, embedded / name)
+    # Staggered connection attempts (tools/necko_connect_patch.py).
+    necko_connect_patch.install(embedded / "Lib/site-packages/ruyijs_necko", ROOT)
     # The helpers start from bytecode whichever Python installs the wheel.
     subprocess.run([str(embedded / "python.exe"), "-I", "-B", str(Path(__file__).with_name("compile_embedded.py"))],
                    check=True)
@@ -113,6 +116,8 @@ def main():
         "The Necko transport and the embedded Python under vendor/ are carried over from the\n"
         f"previously pinned runtime {manifest['archive']} (sha256 {manifest['sha256']}),\n"
         "with ruyijs_necko/oneshot.py from src/resource_network/necko_oneshot.py of this release,\n"
+        "ruyijs_necko/connection_attempts.py from src/resource_network/necko_connection_attempts.py\n"
+        "with its open_socket edit to ruyijs_necko/connection_control.py (tools/necko_connect_patch.py),\n"
         "without the embedded Python's Tk, SQLite and winsound modules, and with its bytecode\n"
         "compiled by that Python (ci/package/compile_embedded.py).\n"
         "Component license texts are in licenses/ and the embedded Python packages.\n"

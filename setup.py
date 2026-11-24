@@ -100,6 +100,7 @@ def _install_darwin_helper(build_lib, project):
         build_lib / "ruyijs_necko/__init__.py": source / "necko_ruyi_init.py",
         build_lib / "ruyijs_necko/timing.py": source / "necko_timing.py",
         build_lib / "ruyijs_necko/oneshot.py": source / "necko_oneshot.py",
+        build_lib / "ruyijs_necko/connection_attempts.py": source / "necko_connection_attempts.py",
         build_lib / "necko/client.py": source / "necko_client.py",
         build_lib / "necko/adapters.py": source / "necko_adapters.py",
         build_lib / "necko/__init__.py": source / "necko_pkg_init.py",

@@ -377,7 +377,10 @@ class CoreClient:
         sock = None
         pending = b""
         try:
-            sock = socket.create_connection(proxy or (host, port), timeout=budget_s)
+            # The resolved addresses are attempted together, staggered, so one
+            # unreachable address (a dead IPv6 route) does not use up the budget.
+            from ruyijs_necko.connection_attempts import create_connection
+            sock = create_connection(proxy or (host, port), budget_s)
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             if proxy is not None:
                 pending = _proxy_connect(sock, host, port)
