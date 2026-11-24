@@ -21,7 +21,7 @@ Uses offline pages only (put_resource). Exit status is non-zero on failure.
 """
 import sys
 
-from ruyijs import Context, JSError
+from ruyijs import Context
 
 FAILURES = []
 
