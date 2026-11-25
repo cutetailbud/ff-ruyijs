@@ -179,7 +179,7 @@ bool ToUTF8(JSContext* cx, JS::HandleString input, std::string* output) {
 bool Evaluate(JSContext* cx, JS::HandleObject page, JS::HandleString code,
               const char* filename, Checkpoint checkpoint,
               JS::MutableHandleValue value, bool* success, const EvalOptions& evalOptions,
-              const char* introduction, bool host) {
+              const char* introduction, bool host, bool fullParse) {
   execution_scheduling::BeginPageOperation(cx, page);
   JS::AutoStableStringChars characters(cx);
   if (!characters.initTwoByte(cx, code)) return false;
@@ -192,6 +192,11 @@ bool Evaluate(JSContext* cx, JS::HandleObject page, JS::HandleString code,
     JS::RootedScript introducer(cx);
     if (introduction) options.setIntroductionInfoToCaller(cx, introduction, &introducer);
     options.setFileAndLine(filename, 1);
+    // A page script the document's ScriptLoader compiles in full
+    // (ScriptLoader::ApplyDelazifyStrategy): every inner function is parsed
+    // with the top level, which is also what names them (Error.stack reads
+    // "639/OD/<", a lazily parsed one only "OD/<").
+    if (fullParse) options.setEagerDelazificationStrategy(JS::DelazificationOption::ParseEverythingEagerly);
     // Public ruyijs applies offsets only when BOTH values are nonnegative.
     if (evalOptions.line() >= 0 && evalOptions.col() >= 0) {
       options.setFileAndLine(filename, uint32_t(evalOptions.line()) + 1);

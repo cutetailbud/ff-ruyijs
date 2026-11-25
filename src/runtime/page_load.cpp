@@ -96,6 +96,14 @@ bool PageLoad::Request(JS::HandleObject request, JS::MutableHandleValue result) 
       !ConfigureSecureExposure(active)) return false;
   return Load(owners, url, markup, result, &order);
 }
+bool PageLoad::ClaimFullParse(Owners& owners, size_t length) {
+  constexpr size_t kFullParseBudget = 10485760;  // dom.script_loader.delazification.max_size
+  BrowsingContext* context = Find(owners.document);
+  size_t& used = context ? context->parseBudget : rootParseBudget_;
+  if (used + length >= kFullParseBudget) return false;  // mTotalFullParseSize + size < max_size
+  used += length;
+  return true;
+}
 BrowsingContext* PageLoad::Find(const document_model::Realm& document) const {
   if (auto* frame = frames_.FindDocument(document)) return frame;
   return top_.IsActive(document) ? &top_.Active() : nullptr;
@@ -448,6 +456,9 @@ bool PageLoad::Produce(Owners& owners, JS::HandleString html, JS::MutableHandleV
     resource_network::Realm* frame = nullptr;
     if (context && context->resources && &context->resources->Resources() != &resources_)
       frame = context->resources.get();
+    // A new document, a new ScriptLoader: its full-parse budget starts at 0.
+    if (context) context->parseBudget = 0;
+    else rootParseBudget_ = 0;
     StartPreloads(source, base, frame);
     JS::RootedObject closeManager(cx);
     if (!owners.events.PrepareCloseWatcherDocument(&closeManager)) return false;

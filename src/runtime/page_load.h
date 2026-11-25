@@ -140,6 +140,11 @@ class PageLoad final {
   void RunDocumentStart(Owners& owners);
   // The context a document belongs to: a frame, or the active top-level one.
   BrowsingContext* Find(const document_model::Realm& document) const;
+  // Firefox's ScriptLoader::ShouldApplyDelazifyStrategy for the document `owners`
+  // load: true, and `length` is charged to that document, while it stays below
+  // dom.script_loader.delazification.max_size (10 MB) of fully parsed script
+  // text. An inline script has no fetched text and asks with 0.
+  bool ClaimFullParse(Owners& owners, size_t length);
   // The resource model view of a context; the first document's realm owns it.
   resource_network::Model& Network(BrowsingContext& target) const;
   Owners OwnersOf(BrowsingContext& target, JS::HandleObject page);
@@ -229,6 +234,7 @@ class PageLoad final {
   Checkpoint checkpoint_;
   resource_network::AsyncHttp* transport_ = nullptr;
   std::map<std::string, std::shared_ptr<Preload>> preloads_;
+  size_t rootParseBudget_ = 0;  // a document without a browsing context
   TopLevel& top_;
   resource_network::Model& resources_;
   execution_scheduling::Realm& scheduling_;

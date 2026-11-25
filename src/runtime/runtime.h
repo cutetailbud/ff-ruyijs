@@ -70,7 +70,7 @@ JSObject* CreatePage(JSContext* cx, JS::HandleObject sameOrigin = nullptr);
 bool Evaluate(JSContext* cx, JS::HandleObject page, JS::HandleString code,
               const char* filename, Checkpoint checkpoint,
               JS::MutableHandleValue value, bool* success, const EvalOptions& options = {},
-              const char* introduction = nullptr, bool host = false);
+              const char* introduction = nullptr, bool host = false, bool fullParse = false);
 // Compiles and runs a host target expression in the current realm, marked as host code.
 bool EvaluateHostExpression(JSContext* cx, const char* filename, const char16_t* chars, size_t length,
                             JS::MutableHandleValue value);

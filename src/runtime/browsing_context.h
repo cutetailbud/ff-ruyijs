@@ -68,6 +68,9 @@ struct BrowsingContext {
   JS::PersistentRootedObject page;
   // The current PageLoad operation itself; no copy of Document readyState.
   JS::PersistentRootedObject loadCompletion;
+  // Script text the current document has compiled in full (PageLoad::ClaimFullParse);
+  // a new document in this context starts again at 0.
+  size_t parseBudget = 0;
   std::unique_ptr<PageHelpers> helpers;
   std::unique_ptr<interaction::Realm> interaction;
   // The Console namespace: one object per realm over the Context's one bounded

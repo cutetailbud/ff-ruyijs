@@ -199,9 +199,15 @@ bool PageLoad::Execute(Owners& owners, JS::HandleObject script, JS::HandleString
     if (owners.document.ScriptGeneration() != generation || Started(ticket) ||
         scheduling_.Retired(owners.page)) return true;
   }
+  // Every classic page script is parsed in full while its document's budget
+  // lasts (ScriptLoader::ShouldApplyDelazifyStrategy): an external one is
+  // charged its length, an inline one asks with 0.
+  JS::RootedValue sourceAttribute(cx);
+  if (!owners.document.ScriptAttribute(script, u"src", &sourceAttribute)) return false;
+  const bool fullParse = ClaimFullParse(owners, sourceAttribute.isNull() ? 0 : JS_GetStringLength(code));
   if (!owners.document.CurrentScript(&previous) || !owners.document.SetCurrentScript(script) ||
       !Evaluate(cx, owners.page, code, filename.c_str(), NoCheckpoint, &value, &ok, position,
-                introduction))
+                introduction, false, fullParse))
     return false;
   if(phase==2)checkpoint_(cx);
   if(JS_IsExceptionPending(cx))CaptureOperationFailure(cx);
