@@ -75,7 +75,9 @@ bool GetImageData(JSContext* cx, unsigned argc, JS::Value* vp) {
           }
           const uint32_t reciprocal = 0xFF00FFu / alpha;
           for (int channel = 0; channel < 3; ++channel) {
-            out[channel] = uint8_t((uint32_t(pixel[channel]) * reciprocal) >> 16);
+            // UnpremultiplyChunkFallback: the 8.16 product is rounded, so every
+            // valid channel reads (c * 255 + alpha / 2) / alpha.
+            out[channel] = uint8_t((uint32_t(pixel[channel]) * reciprocal + 0x8000u) >> 16);
           }
           out[3] = uint8_t(alpha);
         }
