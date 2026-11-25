@@ -6,6 +6,12 @@
 #include "js/Object.h"
 #include "js/PropertyAndElement.h"
 #include "js/Realm.h"
+#include "js/CallAndConstruct.h"
+#include "js/Conversions.h"
+#include "js/Exception.h"
+#include "js/String.h"
+#include "js/ValueArray.h"
+#include <string>
 
 namespace ruyijs::web_media {
 // The four MediaDeviceInfo strings are the object data: deviceId, kind, label
@@ -14,8 +20,12 @@ const JSClass kMediaDeviceInfoClass = {
     "MediaDeviceInfo", JSCLASS_HAS_RESERVED_SLOTS(4)};
 namespace {
 const JSClass kMediaError = {"MediaError", 0};
+// ruyijs decodes no media, so every TimeRanges an element hands out (buffered,
+// played, seekable) is an empty list; a VideoPlaybackQuality carries the
+// creationTime/totalVideoFrames/droppedVideoFrames HTMLVideoElement measured.
 const JSClass kTimeRanges = {"TimeRanges", 0};
-const JSClass kPlaybackQuality = {"VideoPlaybackQuality", 0};
+const JSClass kPlaybackQuality = {"VideoPlaybackQuality", JSCLASS_HAS_RESERVED_SLOTS(3)};
+constexpr int kPlaybackFirstSlot = 9;  // creationTime's accessor slot below
 
 bool Illegal(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
@@ -36,7 +46,40 @@ bool Getter(JSContext* cx, unsigned argc, JS::Value* vp) {
     args.rval().set(JS::GetReservedSlot(object, slot));
     return JS_WrapValue(cx, args.rval());
   }
+  if (clasp == &kTimeRanges) {  // TimeRanges.length of an empty list
+    args.rval().setInt32(0);
+    return true;
+  }
+  if (clasp == &kPlaybackQuality) {
+    args.rval().set(JS::GetReservedSlot(object, slot - kPlaybackFirstSlot));
+    return true;
+  }
   return WebKit::Fail(cx, "Media value has no script-visible backing data");
+}
+
+// TimeRanges::Start/End: any index is at or past the end of an empty list,
+// NS_ERROR_DOM_INDEX_SIZE_ERR after the WebIDL unsigned long conversion.
+bool IndexSizeError(JSContext* cx, const char* method, const JS::CallArgs& args) {
+  if (!args.length())
+    return WebKit::FailKind(cx, (std::string("TimeRanges.") + method +
+                                 ": At least 1 argument required, but only 0 passed").c_str(), JSEXN_TYPEERR);
+  uint32_t index = 0;
+  if (!JS::ToUint32(cx, args[0], &index)) return false;
+  JS::RootedObject global(cx, JS::CurrentGlobalOrNull(cx));
+  JS::RootedValue constructor(cx), error(cx);
+  if (!JS_GetProperty(cx, global, "DOMException", &constructor)) return false;
+  JSString* message = JS_NewStringCopyZ(cx, "Index or size is negative or greater than the allowed amount");
+  if (!message) return false;
+  JS::RootedValueArray<2> values(cx);
+  values[0].setString(message);
+  JSString* name = JS_NewStringCopyZ(cx, "IndexSizeError");
+  if (!name) return false;
+  values[1].setString(name);
+  JS::RootedObject exception(cx);
+  if (!JS::Construct(cx, constructor, values, &exception)) return false;
+  error.setObject(*exception);
+  JS_SetPendingException(cx, error);
+  return false;
 }
 
 bool Method(JSContext* cx, unsigned argc, JS::Value* vp) {
@@ -45,6 +88,7 @@ bool Method(JSContext* cx, unsigned argc, JS::Value* vp) {
   const JSClass* clasp = slot == 0 ? &kMediaDeviceInfoClass : &kTimeRanges;
   JS::RootedObject object(cx);
   if (!MediaReceiver(cx, args.thisv(), clasp, &object)) return false;
+  if (clasp == &kTimeRanges) return IndexSizeError(cx, slot == 2 ? "start" : "end", args);
   return WebKit::Fail(cx, "Media value has no script-visible backing data");
 }
 
@@ -75,9 +119,11 @@ bool InstallLegacyValues(State& s) {
       !s.kit.Method(timeRanges, "TimeRanges", "start", Method, 1, 2) ||
       !s.kit.Method(timeRanges, "TimeRanges", "end", Method, 1, 1) ||
       !MediaConstructorLast(s, timeRanges) ||
-      !DefineValue(s, "VideoPlaybackQuality", &kPlaybackQuality, playback, quality, 3, 9))
+      !DefineValue(s, "VideoPlaybackQuality", &kPlaybackQuality, playback, quality, 3, kPlaybackFirstSlot))
     return false;
   if (!MediaConstructorLast(s, playback)) return false;
+  s.timeRangesPrototype = timeRanges.prototype;
+  s.playbackQualityPrototype = playback.prototype;
   const struct Constant { WebFace* face; const char* name; int value; } constants[] = {
       {&mediaError, "MEDIA_ERR_ABORTED", 1}, {&mediaError, "MEDIA_ERR_NETWORK", 2},
       {&mediaError, "MEDIA_ERR_DECODE", 3}, {&mediaError, "MEDIA_ERR_SRC_NOT_SUPPORTED", 4}};
@@ -88,6 +134,30 @@ bool InstallLegacyValues(State& s) {
         !JS_DefineProperty(s.cx, item.face->constructor, item.name, value, flags)) return false;
   }
   return MediaConstructorLast(s, mediaError);
+}
+
+// HTMLMediaElement buffered/played/seekable (document_model::MediaValuePorts):
+// a new empty TimeRanges in the current realm on every read (Firefox's
+// getters are not [SameObject]: v.buffered !== v.buffered).
+bool NewEmptyTimeRanges(JSContext* cx, JS::MutableHandleObject out) {
+  State* state = StateForGlobal(JS::CurrentGlobalOrNull(cx));
+  if (!state || !state->timeRangesPrototype) return WebKit::Fail(cx, "TimeRanges has no media realm");
+  out.set(state->kit.New(&kTimeRanges, state->timeRangesPrototype));
+  return out != nullptr;
+}
+// HTMLVideoElement.getVideoPlaybackQuality(): the values the element measured.
+bool NewVideoPlaybackQuality(JSContext* cx, double creationTime, uint32_t totalFrames,
+                             uint32_t droppedFrames, JS::MutableHandleObject out) {
+  State* state = StateForGlobal(JS::CurrentGlobalOrNull(cx));
+  if (!state || !state->playbackQualityPrototype)
+    return WebKit::Fail(cx, "VideoPlaybackQuality has no media realm");
+  JS::RootedObject quality(cx, state->kit.New(&kPlaybackQuality, state->playbackQualityPrototype));
+  if (!quality) return false;
+  JS::SetReservedSlot(quality, 0, JS::DoubleValue(creationTime));
+  JS::SetReservedSlot(quality, 1, JS::NumberValue(totalFrames));
+  JS::SetReservedSlot(quality, 2, JS::NumberValue(droppedFrames));
+  out.set(quality);
+  return true;
 }
 
 // The one MediaDeviceInfo factory: an enumerated device is a plain value

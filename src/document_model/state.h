@@ -246,6 +246,7 @@ struct State {
   // TextTrackList/TextTrack objects belong to web_media; which list belongs to
   // which element stays in this wrapper's media map.
   TextTrackPorts textTracks;
+  MediaValuePorts mediaValues;
   // Declaration blocks Styling stores (rule and computed style) behind the
   // one CSSStyleDeclaration/CSSStyleProperties prototype of this owner.
   StyleDeclarationPort styleDeclarations;

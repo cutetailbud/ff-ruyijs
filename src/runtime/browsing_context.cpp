@@ -181,6 +181,7 @@ BrowsingContext::~BrowsingContext() {
     document->SetElementScrollPort({});
     document->SetMediaKeysCheckPort(nullptr, nullptr);
     document->SetTextTrackPorts({});
+    document->SetMediaValuePorts({});
     document->SetStyleDeclarationPort({});
     document->SetGeometryFactory(nullptr);
     document->SetStyleNotifyPort(nullptr, nullptr);
@@ -480,6 +481,20 @@ bool BrowsingContext::Finish(Frames& owner) {
   }, nullptr);
   document->SetTextTrackPorts({web_media::NewElementTextTrackList,
                                web_media::AppendElementTextTrack});
+  {
+    document_model::MediaValuePorts values;
+    values.timeRanges = web_media::NewEmptyTimeRanges;
+    values.playbackQuality = web_media::NewVideoPlaybackQuality;
+    values.newStream = web_media::NewEmptyMediaStream;
+    values.isStream = web_media::IsMediaStream;
+    values.now = [](void* context) {
+      auto& owner = *static_cast<BrowsingContext*>(context);
+      JS::RootedObject page(owner.cx, owner.page);
+      return owner.scheduling->ReduceRelative(page, owner.scheduling->OriginRelative(page, -1));
+    };
+    values.nowContext = this;
+    document->SetMediaValuePorts(values);
+  }
   indexeddb = std::make_unique<web_indexeddb::Realm>(cx, page, *helpers, *interaction,
       *environment, origin ? origin->indexeddb.get() : nullptr);
   if (!indexeddb->Install()) return false;

@@ -13,6 +13,16 @@ struct State;
 bool IsObjectUrlSource(JSObject* object);
 // Read-only brand port for the MediaStreamTrack factory (event init dictionaries).
 bool IsMediaStreamTrack(JSObject* object);
+// HTMLMediaElement/HTMLVideoElement value ports (document_model::MediaValuePorts):
+// a new empty TimeRanges, and a VideoPlaybackQuality over the given values,
+// both in the current realm.
+bool NewEmptyTimeRanges(JSContext*, JS::MutableHandleObject out);
+bool NewVideoPlaybackQuality(JSContext*, double creationTime, uint32_t totalFrames,
+                             uint32_t droppedFrames, JS::MutableHandleObject out);
+// A new MediaStream with no tracks (HTMLMediaElement.captureStream of an element
+// that plays nothing), and the MediaStream brand (HTMLMediaElement.srcObject).
+bool NewEmptyMediaStream(JSContext*, JS::MutableHandleObject out);
+bool IsMediaStream(JSObject* object);
 // HTMLMediaElement text-track ports (document_model::TextTrackPorts).
 bool NewElementTextTrackList(JSContext*, JS::MutableHandleObject list);
 bool AppendElementTextTrack(JSContext*, JS::HandleObject list, const char* kind,

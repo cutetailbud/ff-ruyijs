@@ -39,7 +39,7 @@ struct State {
   std::vector<MediaDevice> devices{{"audioinput", "", "", ""}};
   std::map<std::string, domain::web_media::Capability> decoding;
   JS::PersistentRootedObject navigator, device, capabilitiesObject, mediaSession, imageRectPrototype,
-      mediaStreamErrorPrototype;
+      mediaStreamErrorPrototype, timeRangesPrototype, playbackQualityPrototype;
   // [SecureContext] members (Navigator.mozGetUserMedia/mediaDevices,
   // MediaDevices, MediaDeviceInfo), applied by Realm::ConfigureExposure.
   SecureSlots secure;
@@ -58,7 +58,7 @@ struct State {
      keySession(c),keyStatusMap(c),keySystemAccess(c),keys(c),keyError(c),videoColorSpace(c),
      imageDecoder(c),imageTrackList(c),imageTrack(c),videoFrame(c),vttRegion(c),audioData(c),canvasCapture(c),
      audioDecoder(c),audioEncoder(c),videoDecoder(c),videoEncoder(c),encodedAudioChunk(c),encodedVideoChunk(c),
-     events(e),environment(b),navigator(c),device(c),capabilitiesObject(c),mediaSession(c),imageRectPrototype(c),mediaStreamErrorPrototype(c),secure(c),
+     events(e),environment(b),navigator(c),device(c),capabilitiesObject(c),mediaSession(c),imageRectPrototype(c),mediaStreamErrorPrototype(c),timeRangesPrototype(c),playbackQualityPrototype(c),secure(c),
      addListener(c),removeListener(c),streamPreventDefault(c),exceptionConstructor(c),arrayValues(c){ RegisterState(*this); }
   ~State(){ UnregisterState(*this); }
 };

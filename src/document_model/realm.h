@@ -58,6 +58,18 @@ bool IsDocumentValue(JS::HandleValue value);
 // WebMedia's TextTrack factories for HTMLMediaElement: |list| creates an empty
 // TextTrackList in the current realm; |append| creates a TextTrack in that
 // list's realm and appends it. Both are bound after WebMedia installs.
+// TimeRanges, VideoPlaybackQuality and MediaStream objects belong to
+// web_media; `now` is the document's performance.now() (the Scheduling
+// owner's clock, reduced like performance.now()). Bound after WebMedia installs.
+struct MediaValuePorts {
+  bool (*timeRanges)(JSContext*, JS::MutableHandleObject) = nullptr;
+  bool (*playbackQuality)(JSContext*, double creationTime, uint32_t total, uint32_t dropped,
+                          JS::MutableHandleObject) = nullptr;
+  bool (*newStream)(JSContext*, JS::MutableHandleObject) = nullptr;
+  bool (*isStream)(JSObject*) = nullptr;
+  double (*now)(void*) = nullptr;
+  void* nowContext = nullptr;
+};
 struct TextTrackPorts {
   bool (*list)(JSContext*, JS::MutableHandleObject) = nullptr;
   bool (*append)(JSContext*, JS::HandleObject list, const char* kind, JS::HandleString label,
@@ -147,6 +159,7 @@ class Realm final {
   using FileListPort = bool (*)(void*, JS::HandleObject files, JS::MutableHandleObject result);
   void SetFileListPort(FileListPort port, void* context);
   void SetTextTrackPorts(TextTrackPorts ports);
+  void SetMediaValuePorts(MediaValuePorts ports);
   // Rule and computed declarations (Styling) answer the CSSStyleDeclaration
   // and CSSStyleProperties members this owner installs once (style_port.h).
   void SetStyleDeclarationPort(StyleDeclarationPort port);

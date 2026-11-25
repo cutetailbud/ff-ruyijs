@@ -94,6 +94,16 @@ JSObject* NewStream(State& s, JS::HandleObject prototype) {
   JS::RootedObject object(s.cx, s.kit.New(&kStreamClass, prototype));
   return object && InitStream(s, object) ? object.get() : nullptr;
 }
+bool NewEmptyMediaStream(JSContext* cx, JS::MutableHandleObject out) {
+  State* state = StateForGlobal(JS::CurrentGlobalOrNull(cx));
+  if (!state) return WebKit::Fail(cx, "MediaStream has no media realm");
+  out.set(NewStream(*state, state->stream.prototype));
+  return out != nullptr;
+}
+bool IsMediaStream(JSObject* object) {
+  object = object ? js::CheckedUnwrapStatic(object) : nullptr;
+  return object && JS::GetClass(object) == &kStreamClass;
+}
 bool DesiredStreamPrototype(JSContext* cx, const JS::CallArgs& args,
                             JS::MutableHandleObject out) {
   JS::RootedObject target(cx, &args.newTarget().toObject());
