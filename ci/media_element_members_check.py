@@ -1,11 +1,11 @@
-"""HTMLMediaElement / HTMLVideoElement members and the window compat shims, as Firefox 161 has them.
+"""HTMLMediaElement / HTMLVideoElement members and the window compat shims, as Firefox has them (160 and 161 agree).
 
 usage: python ci/media_element_members_check.py      (RUYIJS_SHELL picks js.exe)
 
 DataDome's device check (issue #54) reads `HTMLVideoElement.prototype.getVideoPlaybackQuality`
 and `"Controllers" in window`; both were missing, together with most of Firefox's media
 element surface (videoWidth, buffered, duration, captureStream, the NETWORK_/HAVE_ constants,
-...). Every expectation below is Firefox 161's own answer for a <video> with no source,
+...). Every expectation below is Firefox 160 and 161's own answer for a <video> with no source,
 recorded with the same expressions; ruyijs plays no media, so an element stays at
 HAVE_NOTHING exactly like that one.
 """
@@ -95,7 +95,7 @@ def main():
             ok = got == want
             failures += not ok
             print(("ok  " if ok else "FAIL") + f"  {name}" + ("" if ok else f"\n      got  {got!r}\n      want {want!r}"))
-    print("media element members:", "all match Firefox 161" if not failures else f"{failures} rows differ")
+    print("media element members:", "all match Firefox" if not failures else f"{failures} rows differ")
     return 1 if failures else 0
 
 

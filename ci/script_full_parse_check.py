@@ -1,4 +1,4 @@
-"""Page scripts are parsed in full, as Firefox 161's ScriptLoader does, so inner functions get Firefox's names.
+"""Page scripts are parsed in full, as Firefox's ScriptLoader does, so inner functions get Firefox's names.
 
 usage: python ci/script_full_parse_check.py      (RUYIJS_SHELL picks js.exe)
 
@@ -8,7 +8,7 @@ any size (off the main thread or not), inline scripts, scripts inserted at run t
 eval and new Function stay lazily parsed. Parsing a function with its enclosing script is
 also what names it: an anonymous callback inside `OD` inside module `639` reads
 "639/OD/<" in Error.stack when parsed eagerly and only "OD/<" when delazified on its own.
-DataDome's device check (issue #54) hashes such stacks. The expectations are Firefox 161's
+DataDome's device check (issue #54) hashes such stacks. The expectations are Firefox 160 and 161's
 own names for the same sources.
 """
 import json
@@ -57,7 +57,7 @@ def main():
         ok = got.get(name) == want
         failures += not ok
         print(("ok  " if ok else "FAIL") + f"  {name:13} {got.get(name)!r}" + ("" if ok else f" (Firefox: {want!r})"))
-    print("script full parse:", "all match Firefox 161" if not failures else f"{failures} rows differ")
+    print("script full parse:", "all match Firefox" if not failures else f"{failures} rows differ")
     return 1 if failures else 0
 
 

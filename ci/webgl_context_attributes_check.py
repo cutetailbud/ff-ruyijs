@@ -1,11 +1,11 @@
-"""WebGL getContextAttributes() follows the creating getContext options, as Firefox 161.
+"""WebGL getContextAttributes() follows the creating getContext options, as Firefox.
 
 usage: python ci/webgl_context_attributes_check.py      (RUYIJS_SHELL picks js.exe)
 
 The engine reported the profile's attributes whatever the page asked for, so
 `getContext('webgl', {powerPreference: 'low-power'}).getContextAttributes().powerPreference`
 was "default" where Firefox says "low-power" -- DataDome's device check (issue #54) does
-exactly that from an OffscreenCanvas in a Worker. Every expectation is Firefox 161's own
+exactly that from an OffscreenCanvas in a Worker. Every expectation is Firefox 160 and 161's own
 answer to the same call.
 """
 import json
@@ -83,7 +83,7 @@ def main():
             if context.eval("globalThis.__w !== undefined"):
                 break
         report("worker offscreen low-power", context.eval("globalThis.__w"), attrs(powerPreference="low-power"))
-    print("webgl context attributes:", "all match Firefox 161" if not failures else f"{failures} rows differ")
+    print("webgl context attributes:", "all match Firefox" if not failures else f"{failures} rows differ")
     return 1 if failures else 0
 
 
