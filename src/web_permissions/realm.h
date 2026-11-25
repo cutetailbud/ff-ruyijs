@@ -32,6 +32,14 @@ class Realm final {
   // macrotask queue. Bound by the runtime coordinator with the window message ports.
   using TaskPort = bool (*)(void* context, JS::HandleObject task);
   void SetTaskPort(TaskPort port, void* context);
+  // Frame port (bound by the runtime frame owner for an iframe document): the
+  // inputs Firefox's PermissionDelegateHandler takes from the document's
+  // position, namely whether it is cross-origin to the top-level document and
+  // whether a Permissions Policy feature is allowed in it. Unbound, the realm
+  // answers as a top-level document.
+  using FramePolicyPort = bool (*)(void* context, const char* feature, bool* crossOriginToTop,
+                                   bool* featureAllowed);
+  void SetFramePolicyPort(FramePolicyPort port, void* context);
  private:
   std::unique_ptr<State> state_;
 };

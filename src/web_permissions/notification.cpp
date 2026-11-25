@@ -89,7 +89,7 @@ bool QueueNotificationEvent(State& state, JS::HandleObject note, const char* typ
 }
 const char* NotificationPermission(State& state) {
   static const char* const names[3] = {"granted", "denied", "default"};
-  return names[state.table->states[NotificationsIndex()]];
+  return names[EffectiveState(state, NotificationsIndex())];
 }
 bool NotificationCtor(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);

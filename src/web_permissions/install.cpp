@@ -34,6 +34,30 @@ void Realm::SetTaskPort(TaskPort port, void* context) {
   state_->taskPort = port;
   state_->taskContext = context;
 }
+void Realm::SetFramePolicyPort(FramePolicyPort port, void* context) {
+  state_->framePolicy = port;
+  state_->frameContext = context;
+}
+uint8_t EffectiveState(State& state, size_t index) {
+  // kNames order. sPermissionsMap: geo, camera, microphone, screen-wake-lock,
+  // loopback-network and local-network follow the Permissions Policy feature
+  // of that name; desktop-notification (notifications and push) and
+  // persistent-storage are ePersistDeniedCrossOrigin.
+  static const char* const kFeatures[kNameCount] = {"geolocation", nullptr, nullptr, nullptr,
+      nullptr, nullptr, "screen-wake-lock", "camera", "microphone", "loopback-network",
+      "local-network"};
+  static const bool kDeniedCrossOrigin[kNameCount] = {false, true, true, true, false, false,
+      false, false, false, false, false};
+  const uint8_t stored = state.table->states[index];
+  bool crossOrigin = false, allowed = true;
+  if (!state.framePolicy || (!kFeatures[index] && !kDeniedCrossOrigin[index])) return stored;
+  if (!state.framePolicy(state.frameContext, kFeatures[index], &crossOrigin, &allowed)) {
+    JS_ClearPendingException(state.cx);
+    return stored;
+  }
+  if ((kDeniedCrossOrigin[index] && crossOrigin) || (kFeatures[index] && !allowed)) return 1;
+  return stored;
+}
 bool Realm::Install(JS::HandleObject navigatorPrototype) {
   State& s = *state_;
   JSContext* cx = s.cx;
@@ -74,7 +98,7 @@ bool Realm::Configure(JS::HandleObject group) {
 }
 int Realm::StateOf(const char* name) const {
   for (size_t index = 0; index < kNameCount; ++index)
-    if (!std::strcmp(kNames[index], name)) return state_->table->states[index];
+    if (!std::strcmp(kNames[index], name)) return EffectiveState(*state_, index);
   return -1;
 }
 bool Realm::Describe(JS::MutableHandleValue result) {

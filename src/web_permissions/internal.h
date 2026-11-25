@@ -38,7 +38,16 @@ struct State {
   // Scheduling port for Notification events, bound with the window message ports.
   Realm::TaskPort taskPort = nullptr;
   void* taskContext = nullptr;
+  Realm::FramePolicyPort framePolicy = nullptr;
+  void* frameContext = nullptr;
 };
+// PermissionDelegateHandler::GetPermission for this realm's document: the
+// table entry (0 granted, 1 denied, 2 prompt), except that the
+// desktop-notification and persistent-storage types (ePersistDeniedCrossOrigin)
+// are denied in a document cross-origin to the top-level one, and the types
+// gated by a Permissions Policy feature (eDelegateUsePermissionsPolicy) are
+// denied where that feature is not allowed.
+uint8_t EffectiveState(State& state, size_t index);
 bool Query(JSContext* cx, unsigned argc, JS::Value* vp);
 bool NotificationCtor(JSContext* cx, unsigned argc, JS::Value* vp);
 const char* NotificationPermission(State& state);

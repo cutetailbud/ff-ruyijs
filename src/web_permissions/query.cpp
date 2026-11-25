@@ -93,7 +93,7 @@ bool StatusGet(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (!Receiver(cx, args.thisv(), &kStatusClass, names[which], &self)) return false;
   if (which == 1) {
     const int32_t index = JS::GetReservedSlot(self, StatusIndex).toInt32();
-    JS::RootedString text(cx, JS_NewStringCopyZ(cx, kStates[state.table->states[index]]));
+    JS::RootedString text(cx, JS_NewStringCopyZ(cx, kStates[EffectiveState(state, size_t(index))]));
     if (!text) return false;
     args.rval().setString(text);
     return true;

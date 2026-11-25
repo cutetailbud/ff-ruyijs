@@ -112,7 +112,12 @@ failures = []
 for realm in realms:
     value = results.get(realm)
     keys = ["webgl", "webgpu", "permissions"] + ([] if realm.endswith("/worker") else ["media", "audio"])
-    bad = [f"{key}={value.get(key)!r}" for key in keys if value.get(key) != EXPECT[key]] \
+    # A document cross-origin to the top-level one is denied notifications whatever the
+    # profile says (Firefox's PermissionDelegateHandler, third-party desktop-notification).
+    expect = dict(EXPECT)
+    if realm in ("cross-origin iframe", "nested cross-origin iframe", "next document's iframe"):
+        expect["permissions"] = "denied"
+    bad = [f"{key}={value.get(key)!r}" for key in keys if value.get(key) != expect[key]] \
         if isinstance(value, dict) else [f"no report ({value!r})"]
     print(f"{'ok  ' if not bad else 'FAIL'} {realm:34} {' '.join(bad)}", flush=True)
     if bad:
