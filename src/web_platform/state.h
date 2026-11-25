@@ -85,6 +85,8 @@ struct State {
   WebFace url, params, textEncoder, textDecoder, textDecoderStream,
       compressionStream, decompressionStream, blob, file, reader, readerSync, formData, urlPattern, textEncoderStream, fileList;
   JS::PersistentRootedObject paramsIteratorPrototype, formDataIteratorPrototype;
+  bool (*lineBreak)(void*) = nullptr;  // true: CR LF (Realm::SetLineBreakPort)
+  void* lineBreakContext = nullptr;
   JS::PersistentRootedObject objectUrlReferences;
   uint32_t nextObjectUrlReference = 0;
   ObjectUrlExchange objectUrlExchange = nullptr;
@@ -169,7 +171,10 @@ bool CollectBlobParts(JSContext* cx, JS::HandleValue parts, std::string* bytes,
 // for the Windows Firefox this engine is (BlobSet::AppendString). An unknown
 // value throws Firefox's TypeError; `bytes` is rewritten in place.
 bool ApplyBlobEndings(JSContext* cx, JS::HandleValue options, std::string* bytes,
-                      const std::vector<std::pair<size_t, size_t>>& strings);
+                      const std::vector<std::pair<size_t, size_t>>& strings, bool crlf);
+// Whether the platform this realm presents writes CR LF line breaks (Windows,
+// the default profile) or LF; read through the Browser Environment port.
+bool NativeCrlf(const State& state);
 bool BlobBytes(JSContext* cx, JS::HandleObject self, const uint8_t** data,
                size_t* length);
 JSObject* MakeBlob(State& state, const std::string& bytes, const std::string& type,

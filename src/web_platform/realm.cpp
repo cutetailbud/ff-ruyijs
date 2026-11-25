@@ -53,6 +53,10 @@ Realm::Realm(JSContext* cx, JS::HandleObject page, PageHelpers& helpers,
   if (source) state_->objectUrls = source->state_->objectUrls;
   if (state_->objectUrls) state_->objectUrlOwner = state_->objectUrls->NewOwner();
 }
+void Realm::SetLineBreakPort(bool (*crlf)(void*), void* context) {
+  state_->lineBreak = crlf;
+  state_->lineBreakContext = context;
+}
 void Realm::SetFormFieldsPort(FormFieldsPort port, void* context) {
   state_->formFieldsPort = port;
   state_->formFieldsContext = context;

@@ -308,6 +308,13 @@ bool BrowsingContext::Finish(Frames& owner) {
   environment->SetOwnerPort("audio", &web_audio::ConfigureProfileGroup, cx);
   platform = std::make_unique<web_platform::Realm>(cx, page, *helpers, *interaction,
                                                  origin ? origin->platform.get() : nullptr);
+  platform->SetLineBreakPort([](void* context) {
+    // navigator.platform "Win32" (and an unset one: the default profile is
+    // Windows) writes CR LF; "MacIntel", "Linux x86_64"... write LF.
+    std::string platform;
+    return !static_cast<browser_environment::Environment*>(context)->ReadPlatform(&platform) ||
+           platform.empty() || platform.rfind("Win", 0) == 0;
+  }, environment.get());
   platform->SetFormFieldsPort([](void* context, JS::HandleObject form,
                                  JS::HandleValue submitter,
                                  std::vector<web_platform::FormField>* result) {

@@ -117,6 +117,15 @@ bool RunWorker(JSContext* cx, js::cli::OptionParser* options, Checkpoint checkpo
   web_platform::Realm platform(cx, page, helpers, events);
   BindBlobStreams(platform, resources);
   browser_environment::Environment environment(cx, page);
+  platform.SetLineBreakPort([](void* context) {
+    // navigator.platform "Win32" (and an unset one: the default profile is
+    // Windows) writes CR LF; "MacIntel", "Linux x86_64"... write LF.
+    std::string platform;
+    return !static_cast<browser_environment::Environment*>(context)->ReadPlatform(&platform) ||
+           platform.empty() || platform.rfind("Win", 0) == 0;
+  }, &environment);
+  struct LineBreakBinding { web_platform::Realm& platform; ~LineBreakBinding() { platform.SetLineBreakPort(nullptr, nullptr); } }
+      lineBreakBinding{platform};
   // DOMException errors of Environment members (atob's InvalidCharacterError)
   // use this Worker realm's one DOMException prototype.
   struct ExceptionBinding {

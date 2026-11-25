@@ -54,7 +54,7 @@ bool FileConstructor(JSContext* cx, unsigned argc, JS::Value* vp) {
   std::string name;
   if (argc >= 2 && !args.get(1).isUndefined() && !Convert(cx, args.get(1), &name))
     return false;
-  if (!ApplyBlobEndings(cx, args.get(2), &bytes, strings)) return false;
+  if (!ApplyBlobEndings(cx, args.get(2), &bytes, strings, NativeCrlf(state))) return false;
   std::string type;
   if (!NormalizeTypeOption(cx, args.get(2), &type)) return false;
   double last_modified = NowMilliseconds();

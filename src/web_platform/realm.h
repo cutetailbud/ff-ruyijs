@@ -28,6 +28,8 @@ class Realm final {
   void SetObjectUrlExchange(ObjectUrlExchange, void* context);
   std::shared_ptr<ObjectUrlSession> OpenObjectUrlSession();
   void SetFormFieldsPort(FormFieldsPort, void* context);
+  // Blob/File endings: "native": true when the presented platform writes CR LF.
+  void SetLineBreakPort(bool (*crlf)(void*), void* context);
   void SetByteStreamPort(bool (*)(void*, std::string_view, JS::MutableHandleObject), void* context);
   void SetObjectUrlPorts(bool (*origin)(void*, std::string*), void* context,
                          bool (*mediaBrand)(JSObject*));

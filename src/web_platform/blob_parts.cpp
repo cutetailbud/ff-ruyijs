@@ -149,8 +149,12 @@ bool CollectBlobParts(JSContext* cx, JS::HandleValue parts, std::string* bytes,
   return true;
 }
 
+bool NativeCrlf(const State& state) {
+  return !state.lineBreak || state.lineBreak(state.lineBreakContext);
+}
+
 bool ApplyBlobEndings(JSContext* cx, JS::HandleValue options, std::string* bytes,
-                      const std::vector<std::pair<size_t, size_t>>& strings) {
+                      const std::vector<std::pair<size_t, size_t>>& strings, bool crlf) {
   if (options.isUndefined() || options.isNull()) return true;
   JS::RootedObject object(cx, JS::ToObject(cx, options));
   JS::RootedValue value(cx);
@@ -169,8 +173,10 @@ bool ApplyBlobEndings(JSContext* cx, JS::HandleValue options, std::string* bytes
                             JSEXN_TYPEERR);
   }
   if (!native || strings.empty()) return true;
-  // CR LF stays, a lone CR or LF becomes CR LF; only inside string parts
-  // (UTF-8 never encodes CR or LF inside a multi-byte sequence).
+  // CR LF, a lone CR and a lone LF all become the native line break (CR LF on
+  // Windows, LF elsewhere); only inside string parts (UTF-8 never encodes CR
+  // or LF inside a multi-byte sequence).
+  const char* const native_break = crlf ? "\r\n" : "\n";
   std::string out;
   out.reserve(bytes->size() + bytes->size() / 8);
   size_t at = 0;
@@ -178,8 +184,8 @@ bool ApplyBlobEndings(JSContext* cx, JS::HandleValue options, std::string* bytes
     out.append(*bytes, at, begin - at);
     for (size_t i = begin; i < end; ++i) {
       const char c = (*bytes)[i];
-      if (c == '\r') { out += "\r\n"; if (i + 1 < end && (*bytes)[i + 1] == '\n') ++i; }
-      else if (c == '\n') out += "\r\n";
+      if (c == '\r') { out += native_break; if (i + 1 < end && (*bytes)[i + 1] == '\n') ++i; }
+      else if (c == '\n') out += native_break;
       else out += c;
     }
     at = end;
