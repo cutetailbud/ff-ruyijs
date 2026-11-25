@@ -157,7 +157,7 @@ bool BindGeometryPorts(BrowsingContext& context) {
     auto& owner = *static_cast<BrowsingContext*>(raw);
     web_geometry::Realm::UsedBox used;
     if (!owner.geometry->MeasureUsed(element, &used, present)) return false;
-    out->width = used.width; out->height = used.height;
+    out->width = used.width + used.scrollbar[0]; out->height = used.height + used.scrollbar[1];
     out->padding = used.padding; out->margin = used.margin;
     out->border = used.border; out->inset = used.inset;
     return true;

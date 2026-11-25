@@ -461,6 +461,14 @@ bool Realm::MeasureUsed(JS::HandleObject element, UsedBox* out, bool* present) {
   const auto& b=layout->layout[found];
   out->width=b.content[2]; out->height=b.content[3];
   out->padding=b.padding; out->margin=b.margin; out->border=b.edge;
+  // A scrollbar takes its room from the padding box, never more than there is:
+  // in a box narrower than the 17px bar the content box is empty and the bar
+  // spans what is left. content + scrollbar is nsIFrame::GetContentRect(),
+  // the resolved width/height (a 15px overflow:scroll box reads 15px).
+  const double inner_w=b.border[2]-b.edge[1]-b.edge[3]-b.padding[1]-b.padding[3];
+  const double inner_h=b.border[3]-b.edge[0]-b.edge[2]-b.padding[0]-b.padding[2];
+  out->scrollbar[0]=std::max(0.0,std::min(b.scrollbar[0],inner_w-b.content[2]));
+  out->scrollbar[1]=std::max(0.0,std::min(b.scrollbar[1],inner_h-b.content[3]));
   // Insets: the box's offset from its containing block, as Firefox resolves
   // a positioned box's top/right/bottom/left.
   const auto& position=node.style.Slot(box::BoxKnown::Position);

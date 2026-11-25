@@ -102,6 +102,9 @@ class Realm final {
   // an element without a box (not rendered, display:none, inline).
   struct UsedBox {
     double width = 0, height = 0;
+    // A scroll container's scrollbar room (vertical bar's width, horizontal
+    // bar's height) inside the padding box, never more than the box has.
+    std::array<double, 2> scrollbar{};
     std::array<double, 4> padding{}, margin{}, border{};
     std::array<double, 4> inset{};
   };
