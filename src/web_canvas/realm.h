@@ -25,7 +25,7 @@ class Realm final {
   // The port HTMLCanvasElement.getContext uses for every kind Canvas does not
   // implement; the WebGL owner answers "webgl"/"experimental-webgl" through it.
   void SetContextPort(bool (*port)(void*, JS::HandleObject, JS::HandleString,
-                                   JS::MutableHandleValue), void* context);
+                                   JS::HandleValue, JS::MutableHandleValue), void* context);
   void SetElementCheck(bool (*port)(void*, JS::HandleObject, bool*), void* context);
   // HTMLCanvasElement.captureStream() asks the Media owner for its
   // CanvasCaptureMediaStream (web_media::Realm::CaptureCanvas).

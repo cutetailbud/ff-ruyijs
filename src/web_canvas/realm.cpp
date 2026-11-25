@@ -34,7 +34,7 @@ Realm::Realm(JSContext* cx, JS::HandleObject page, PageHelpers& helpers,
 Realm::~Realm() = default;
 
 void Realm::SetContextPort(bool (*port)(void*, JS::HandleObject, JS::HandleString,
-                                        JS::MutableHandleValue), void* context) {
+                                        JS::HandleValue, JS::MutableHandleValue), void* context) {
   state_->contextPort = port;
   state_->contextPortContext = context;
 }

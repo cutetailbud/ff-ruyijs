@@ -110,7 +110,7 @@ bool OffscreenGetContext(JSContext* cx, unsigned argc, JS::Value* vp) {
     if (!detail::StringEqualsAscii(cx, text, "bitmaprenderer", &bitmap)) return false;
     if (bitmap) return BitmapContext(state, self, args.rval());
     // webgl/webgl2 go to the same WebGL owner port HTMLCanvasElement uses.
-    if (state.contextPort) return state.contextPort(state.contextPortContext, self, text, args.rval());
+    if (state.contextPort) return state.contextPort(state.contextPortContext, self, text, args.get(1), args.rval());
     args.rval().setNull();
     return true;
   }

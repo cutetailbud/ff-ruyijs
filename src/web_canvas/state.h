@@ -89,8 +89,10 @@ struct State {
   // Context port for the context kinds the Canvas owner does not implement.
   // Bound by the runtime coordinator after both owners are installed; while it
   // is unbound getContext keeps returning null for those kinds.
+  // The getContext options value is handed over as given (the port owner
+  // converts it to its own dictionary, so a conversion error throws there).
   bool (*contextPort)(void*, JS::HandleObject, JS::HandleString,
-                      JS::MutableHandleValue) = nullptr;
+                      JS::HandleValue, JS::MutableHandleValue) = nullptr;
   void* contextPortContext = nullptr;
   // captureStream(): the Media owner's CanvasCaptureMediaStream factory.
   bool (*capturePort)(void*, JS::HandleObject, JS::MutableHandleObject) = nullptr;

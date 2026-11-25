@@ -4,6 +4,10 @@
 
 #include "js/PropertyAndElement.h"
 #include "js/Realm.h"
+#include "js/Conversions.h"
+#include "js/String.h"
+#include "runtime/runtime.h"
+#include <string>
 #include "runtime/native_constructor_trace.h"
 #include "runtime/page_helpers.h"
 
@@ -64,8 +68,61 @@ bool ContextCtor(JSContext* cx, unsigned argc, JS::Value* vp) {
   return trace.Finish(WebKit::Fail(cx, "Illegal constructor."));
 }
 
+// HTML getContext step 1 and the WebGLContextAttributes dictionary init the
+// donor's CanvasRenderingContextOptions::Init runs on every getContext call:
+// a non-object is null (all defaults); members are read in WebIDL (sorted)
+// order, booleans by ToBoolean, powerPreference against its enumeration.
+// forceSoftwareRendering ([Func] system principal) and xrCompatible
+// (dom.vr.webxr.enabled off) are not members for a content page.
+namespace {
+constexpr const char* kRequestNames[kAttributeCount] = {
+    "alpha", "antialias", "depth", "failIfMajorPerformanceCaveat",
+    "powerPreference", "premultipliedAlpha", "preserveDrawingBuffer", "stencil"};
+struct RequestedAttributes {
+  bool passed[kAttributeCount] = {};
+  bool flags[kAttributeCount] = {};
+  std::string powerPreference;
+};
+bool ReadAttributes(JSContext* cx, JS::HandleValue options, RequestedAttributes* out) {
+  if (!options.isObject()) return true;
+  JS::RootedObject object(cx, &options.toObject());
+  JS::RootedValue field(cx);
+  for (int32_t index = 0; index < kAttributeCount; ++index) {
+    if (!JS_GetProperty(cx, object, kRequestNames[index], &field)) return false;
+    if (field.isUndefined()) continue;
+    out->passed[index] = true;
+    if (index != kPowerPreference) { out->flags[index] = JS::ToBoolean(field); continue; }
+    JS::RootedString text(cx, JS::ToString(cx, field));
+    if (!text || !ToUTF8(cx, text, &out->powerPreference)) return false;
+    if (out->powerPreference != "default" && out->powerPreference != "low-power" &&
+        out->powerPreference != "high-performance")
+      return WebKit::FailKind(cx, ("'" + out->powerPreference + "' (value of 'powerPreference' member of "
+                                   "WebGLContextAttributes) is not a valid value for enumeration "
+                                   "WebGLPowerPreference.").c_str(), JSEXN_TYPEERR);
+  }
+  return true;
+}
+// The attributes a new context reports: the requested members over the
+// profile's answer for a context created without options. A requested
+// failIfMajorPerformanceCaveat reads back false: Firefox clears it before
+// creating the context (webgl.disable-fail-if-major-performance-caveat).
+Attributes Effective(const Attributes& profile, const RequestedAttributes& requested) {
+  Attributes result = profile;
+  bool* members[] = {&result.alpha, &result.antialias, &result.depth,
+                     &result.fail_if_major_performance_caveat, nullptr, &result.premultiplied_alpha,
+                     &result.preserve_drawing_buffer, &result.stencil};
+  for (int32_t index = 0; index < kAttributeCount; ++index) {
+    if (!requested.passed[index]) continue;
+    if (index == kPowerPreference) result.power_preference = requested.powerPreference;
+    else *members[index] = requested.flags[index];
+  }
+  if (requested.passed[kFailIfMajorPerformanceCaveat]) result.fail_if_major_performance_caveat = false;
+  return result;
+}
+}  // namespace
+
 bool ContextPort(void* context, JS::HandleObject canvas, JS::HandleString kind,
-                 JS::MutableHandleValue out) {
+                 JS::HandleValue options, JS::MutableHandleValue out) {
   State& s = *static_cast<State*>(context);
   bool webgl = false, experimental = false, webgl2 = false;
   if (!detail::AsciiEquals(s.cx, kind, "webgl", &webgl) ||
@@ -77,8 +134,11 @@ bool ContextPort(void* context, JS::HandleObject canvas, JS::HandleString kind,
     out.setNull();
     return true;
   }
+  RequestedAttributes requested;
+  if (!ReadAttributes(s.cx, options, &requested)) return false;
   Context* entry = s.FindOrCreate(canvas, webgl2 ? 2 : 1);
   if (!entry->wrapper) {
+    entry->attributes = Effective(s.model.values().attributes, requested);
     JS::RootedObject wrapper(s.cx);
     if (!NewContext(s, *entry, &wrapper)) return false;
     entry->wrapper = wrapper;

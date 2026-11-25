@@ -38,6 +38,6 @@ class Realm final {
 // are installed: getContext("webgl")/("experimental-webgl") reach this realm
 // through it, and every other kind stays with the Canvas owner.
 bool ContextPort(void* context, JS::HandleObject canvas, JS::HandleString kind,
-                 JS::MutableHandleValue out);
+                 JS::HandleValue options, JS::MutableHandleValue out);
 }  // namespace ruyijs::web_graphics
 #endif

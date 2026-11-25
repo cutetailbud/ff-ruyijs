@@ -28,9 +28,9 @@ bool PublicCall(JSContext* cx, unsigned argc, JS::Value* vp) {
       args.rval().setObject(*result); return true;
     }
     case kAttributes: {
-      // WebGLContextAttributes dictionary members in WebIDL order, from the
-      // one model value the "webgl" profile group configures.
-      const Attributes& attributes = s.model.values().attributes;
+      // WebGLContextAttributes dictionary members in WebIDL order: what the
+      // creating getContext call asked for over the "webgl" profile group.
+      const Attributes& attributes = detail::ContextOf(self)->attributes;
       JS::RootedObject result(cx, JS_NewPlainObject(cx));
       if (!result) return false;
       const char* names[] = {"alpha","antialias","depth","failIfMajorPerformanceCaveat",

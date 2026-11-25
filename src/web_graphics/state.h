@@ -71,6 +71,9 @@ struct Context final {
   // The canvas pixel store the drawing buffer is handed to (see surface.cpp).
   JS::PersistentRootedObject surfaceContext, surfaceImage, surfacePixels;
   int32_t surfaceWidth = 0, surfaceHeight = 0;
+  // getContextAttributes(): fixed by the options of the getContext call that
+  // created the context (CanvasRenderingContextHelper::GetOrCreateContext).
+  Attributes attributes;
   explicit Context(JSContext* cx, int32_t v)
       : canvas(cx), wrapper(cx), arrayBinding(cx), elementBinding(cx), extensions(cx),
         drawFramebuffer(cx), readFramebuffer(cx), currentProgram(cx), surfaceContext(cx),

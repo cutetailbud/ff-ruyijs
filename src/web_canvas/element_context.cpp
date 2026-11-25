@@ -63,7 +63,7 @@ bool CanvasGetContext(JSContext* cx, unsigned argc, JS::Value* vp) {
     // Every other kind goes to the context port; an unbound port, or a kind the
     // port does not own, still answers null.
     if (state.contextPort)
-      return state.contextPort(state.contextPortContext, self, text, args.rval());
+      return state.contextPort(state.contextPortContext, self, text, args.get(1), args.rval());
     args.rval().setNull();
     return true;
   }
