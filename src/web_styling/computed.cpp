@@ -12,6 +12,7 @@
 #include "domain/styling/css_page_value.h"
 #include "domain/styling/css_components.h"
 #include "domain/styling/stylesheet.h"
+#include "domain/styling/css_transform_matrix.h"
 #include "document_model/style_port.h"
 #include "document_model/state.h"
 #include "js/Realm.h"
@@ -114,6 +115,14 @@ void ResolveUsed(State& state, JS::HandleObject element, ComputedStyle* computed
     JS_ClearPendingException(state.cx);
     return;
   }
+  // transform resolves to the matrix Firefox folds the list into, translation
+  // percentages against the border box (an empty box without one).
+  for (auto& entry : computed->values)
+    if (entry.first == "transform") {
+      const double width = present ? used.width + used.padding[1] + used.padding[3] + used.border[1] + used.border[3] : 0;
+      const double height = present ? used.height + used.padding[0] + used.padding[2] + used.border[0] + used.border[2] : 0;
+      entry.second = ruyijs::domain::styling::CssComputedTransformMatrix(entry.second, width, height);
+    }
   if (!present) return;
   static const char* const sides[] = {"top", "right", "bottom", "left"};
   std::vector<std::pair<std::string, std::string>> resolved = {
@@ -150,7 +159,7 @@ bool NeedsUsedLayout(std::string_view canonicalName) {
          canonicalName == "margin-left" ||
          canonicalName == "inset" || canonicalName == "top" ||
          canonicalName == "right" || canonicalName == "bottom" ||
-         canonicalName == "left";
+         canonicalName == "left" || canonicalName == "transform";
 }
 
 uint64_t ViewportFingerprint(State& state) {
