@@ -160,7 +160,16 @@ bool NormalizeType(JSContext* cx, JS::HandleValue value, std::string* type);
 // Reads the `type` member of a BlobPropertyBag; a missing bag or member
 // leaves the type empty.
 bool NormalizeTypeOption(JSContext* cx, JS::HandleValue options, std::string* type);
-bool CollectBlobParts(JSContext* cx, JS::HandleValue parts, std::string* bytes);
+// Collects the parts' bytes; `strings` (when given) receives the byte range
+// of each string part, the only parts `endings: "native"` converts.
+bool CollectBlobParts(JSContext* cx, JS::HandleValue parts, std::string* bytes,
+                      std::vector<std::pair<size_t, size_t>>* strings = nullptr);
+// BlobPropertyBag.endings, read before `type` (WebIDL members are sorted):
+// "native" converts the string parts' line endings to the platform's, CRLF
+// for the Windows Firefox this engine is (BlobSet::AppendString). An unknown
+// value throws Firefox's TypeError; `bytes` is rewritten in place.
+bool ApplyBlobEndings(JSContext* cx, JS::HandleValue options, std::string* bytes,
+                      const std::vector<std::pair<size_t, size_t>>& strings);
 bool BlobBytes(JSContext* cx, JS::HandleObject self, const uint8_t** data,
                size_t* length);
 JSObject* MakeBlob(State& state, const std::string& bytes, const std::string& type,

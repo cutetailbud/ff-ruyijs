@@ -65,7 +65,9 @@ bool BlobConstructor(JSContext* cx, unsigned argc, JS::Value* vp) {
   State& state = *static_cast<State*>(WebKit::Owner(args));
   NativeConstructorTrace trace(cx, args);
   std::string bytes;
-  if (!CollectBlobParts(cx, args.get(0), &bytes)) return false;
+  std::vector<std::pair<size_t, size_t>> strings;
+  if (!CollectBlobParts(cx, args.get(0), &bytes, &strings)) return false;
+  if (!ApplyBlobEndings(cx, args.get(1), &bytes, strings)) return false;
   std::string type;
   if (!NormalizeTypeOption(cx, args.get(1), &type)) return false;
   JS::RootedObject prototype(cx);

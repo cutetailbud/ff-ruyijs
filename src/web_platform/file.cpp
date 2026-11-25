@@ -49,10 +49,12 @@ bool FileConstructor(JSContext* cx, unsigned argc, JS::Value* vp) {
   State& state = *static_cast<State*>(WebKit::Owner(args));
   NativeConstructorTrace trace(cx, args);
   std::string bytes;
-  if (!CollectBlobParts(cx, args.get(0), &bytes)) return false;
+  std::vector<std::pair<size_t, size_t>> strings;
+  if (!CollectBlobParts(cx, args.get(0), &bytes, &strings)) return false;
   std::string name;
   if (argc >= 2 && !args.get(1).isUndefined() && !Convert(cx, args.get(1), &name))
     return false;
+  if (!ApplyBlobEndings(cx, args.get(2), &bytes, strings)) return false;
   std::string type;
   if (!NormalizeTypeOption(cx, args.get(2), &type)) return false;
   double last_modified = NowMilliseconds();
