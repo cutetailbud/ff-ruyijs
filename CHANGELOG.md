@@ -3,6 +3,36 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.5] - 2026-11-26
+
+### Fixed
+
+- DataDome's device check (#54: rendezvousparis.hermes.com re-challenged with `t=bv` after the slider passed,
+  so `/client/register` stayed 403 with a valid `datadome` cookie) reads values computed from random inputs
+  and compares them with what Firefox computes. These now match Firefox 160:
+  - a math function in a colour channel computes to its value: `color: rgb(calc(var(--a) + var(--b) * 2), …)`
+    reads `rgb(…)` numbers instead of failing;
+  - getComputedStyle's `transform` is Firefox's matrix: `perspective()`/`rotate3d()`/`scale3d()`/`rotateX()`
+    are composed in Gecko's float arithmetic and printed with its 6 significant digits;
+  - a scroll container's resolved `height`/`width` includes its scrollbar (`overflow: scroll` on a 15 px box);
+  - `new Blob([...], {endings: "native"})` writes CRLF when the presented platform is Windows, LF elsewhere.
+- Every page script is parsed in full, with a budget per document, as Firefox's ScriptLoader does; lazy
+  parsing reported a syntax error in an inner function only when that function first ran.
+- `window.controllers`, `Controllers` and `Components` resolve as in a Firefox release build.
+- `HTMLMediaElement` and `HTMLVideoElement` carry Firefox's members and values
+  (`ci/media_element_members_check.py`).
+- WebGL `getContextAttributes()` reports what the creating `getContext()` asked for
+  (`ci/webgl_context_attributes_check.py`).
+- An iframe's permission states follow Permissions Policy: a cross-origin frame answers `denied` for
+  `microphone`/`camera`/`geolocation`/… unless its container allows the feature, and `denied` for
+  notifications and persistent storage, as Firefox's PermissionDelegateHandler.
+- `getImageData` rounds the un-premultiplied channels as Firefox (Swizzle.cpp), where it truncated: a
+  semi-transparent pixel read one less (`ci/canvas_unpremultiply_check.py`).
+- MouseEvent `pageX`/`offsetX`/`layerX` come from the target's layout (scroll position, padding edge,
+  closest layer) instead of copying the client point; a script-made event follows Firefox (page point before
+  dispatch, `layerX` 0, 0 for a target that is not a node). PointerEvent tilt/angle defaults and
+  `getCoalescedEvents()` follow Firefox (`ci/mouse_event_coordinates_check.py`).
+
 ## [0.4.4] - 2026-11-24
 
 ### Fixed
