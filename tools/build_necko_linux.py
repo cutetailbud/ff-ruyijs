@@ -63,8 +63,9 @@ PATCHES = {
          '                firefox=self.firefox,\n'),
     ],
 }
-# Staggered connection attempts in the adapter's open_socket (tools/necko_connect_patch.py).
-PATCHES[necko_connect_patch.TARGET] = necko_connect_patch.PATCH
+# Staggered connection attempts in the adapter's open_socket (tools/necko_connect_patch.py) are made by
+# necko_connect_patch.apply in install_packages, which leaves a file that already carries the edit as it
+# is: the runtime runtime.json pins from 0.4.4 on ships the edited connection_control.py.
 
 
 def run(args, **kwargs):
@@ -103,6 +104,9 @@ def install_packages(root, build, site):
             content = source.read(entry)
             inventory[relative.as_posix()] = digest(content)
             text_name = relative.as_posix()
+            if text_name == necko_connect_patch.TARGET:
+                text = content.decode("utf-8").replace("\r\n", "\n")
+                content = necko_connect_patch.apply(text).encode("utf-8")
             if text_name in PATCHES:
                 text = content.decode("utf-8").replace("\r\n", "\n")
                 for old, new in PATCHES[text_name]:
@@ -113,7 +117,7 @@ def install_packages(root, build, site):
             target = site / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
-    missing = sorted(set(PATCHES) - set(inventory))
+    missing = sorted({*PATCHES, necko_connect_patch.TARGET} - set(inventory))
     if missing:
         raise ValueError(f"Pinned runtime lacks {missing}")
     oneshot = site / "ruyijs_necko/oneshot.py"
@@ -121,7 +125,7 @@ def install_packages(root, build, site):
     (site / necko_connect_patch.MODULE).write_bytes((root / necko_connect_patch.SOURCE).read_bytes())
     (build / "upstream.json").write_text(json.dumps({
         "archive": manifest["url"], "sha256": manifest["sha256"], "files": inventory,
-        "patched": sorted(PATCHES), "replaced": {"ruyijs_necko/oneshot.py":
+        "patched": sorted({*PATCHES, necko_connect_patch.TARGET}), "replaced": {"ruyijs_necko/oneshot.py":
                                                  "src/resource_network/necko_oneshot.py",
                                                  necko_connect_patch.MODULE: necko_connect_patch.SOURCE}},
         indent=2) + "\n", encoding="utf-8")
