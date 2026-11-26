@@ -261,6 +261,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\connect_fallback_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\canvas_unpremultiply_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\media_element_members_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\script_full_parse_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\webgl_context_attributes_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\mouse_event_coordinates_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\network_smoke.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\proxy_smoke.py"

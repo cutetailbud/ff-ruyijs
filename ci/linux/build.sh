@@ -125,6 +125,11 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/http_timeout_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/diagnostics_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/connect_fallback_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/canvas_unpremultiply_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/media_element_members_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/script_full_parse_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/webgl_context_attributes_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/mouse_event_coordinates_check.py"
     # One real page load through the bundled Necko helper, direct and through
     # a local CONNECT proxy.
     "${clean[@]}" "$venv/bin/python" "$root/ci/network_smoke.py"
