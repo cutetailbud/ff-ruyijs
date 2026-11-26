@@ -1,5 +1,6 @@
 #ifndef RUYIJS_INTERACTION_INTERNAL_H
 #define RUYIJS_INTERACTION_INTERNAL_H
+#include "interaction/geometry_port.h"
 #include "runtime/secure_slot.h"
 #include "runtime/weak_object.h"
 #include "interaction/realm.h"
@@ -267,6 +268,9 @@ struct State {
   void (*microtaskCheckpoint)(void*) = nullptr;
   void* microtaskContext = nullptr;
   void* brandContext = nullptr;
+  // The layout owner's MouseEvent coordinates (Realm::SetGeometryPort).
+  GeometryPort geometry = nullptr;
+  void* geometryContext = nullptr;
   void cleanup();
 };
 bool NotifyInputActivation(State&, JS::HandleObject target, JS::HandleObject event, const char* type);
@@ -409,6 +413,14 @@ bool PublicEventRead(JSContext*, JS::HandleObject, const char*, JS::MutableHandl
 bool ReadPublicEventBase(JSContext*, Iface, JS::HandleValue, bool*, bool*, bool*);
 bool InitPublicEventFields(JSContext*, Iface, JS::HandleObject, JS::HandleObject);
 bool InstallEventCoordinates(State&, Iface, JS::HandleObject);
+// A PointerEvent other than click/auxclick/contextmenu keeps fractional
+// coordinates; any other mouse event reports integers (event_coordinates.cpp).
+bool FractionalCoordinates(const Event& event);
+// Whether an event's type key (the UTF-16 listener key, conversion.cpp Text)
+// is the ASCII name `name`.
+bool EventTypeIs(const Event& event, const char* name);
+// clientX/clientY/screenX/screenY with that rounding.
+bool ClientCoordinate(JSContext*, unsigned, JS::Value*, const char* name, bool horizontal, unsigned slot);
 extern const JSFunctionSpec kCustomMethods[];
 extern const JSFunctionSpec kDragMethods[];
 extern const JSFunctionSpec kCompositionMethods[];

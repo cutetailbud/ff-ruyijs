@@ -167,10 +167,12 @@ EVENT_SLOT_GETTER(GetView, "view", Iface::UI, kEventView)
 EVENT_SLOT_GETTER(GetUiDetail, "detail", Iface::UI, kEventUiDetail)
 
 // MouseEvent
-EVENT_SLOT_GETTER(GetScreenX, "screenX", Iface::Mouse, kEventScreenX)
-EVENT_SLOT_GETTER(GetScreenY, "screenY", Iface::Mouse, kEventScreenY)
-EVENT_SLOT_GETTER(GetClientX, "clientX", Iface::Mouse, kEventClientX)
-EVENT_SLOT_GETTER(GetClientY, "clientY", Iface::Mouse, kEventClientY)
+// MouseEvent screen/client coordinates: integers except on a fractional
+// PointerEvent (DOMEventShouldUseFractionalCoords).
+bool GetScreenX(JSContext* cx, unsigned argc, JS::Value* vp) { return ClientCoordinate(cx, argc, vp, "screenX", true, kEventScreenX); }
+bool GetScreenY(JSContext* cx, unsigned argc, JS::Value* vp) { return ClientCoordinate(cx, argc, vp, "screenY", false, kEventScreenY); }
+bool GetClientX(JSContext* cx, unsigned argc, JS::Value* vp) { return ClientCoordinate(cx, argc, vp, "clientX", true, kEventClientX); }
+bool GetClientY(JSContext* cx, unsigned argc, JS::Value* vp) { return ClientCoordinate(cx, argc, vp, "clientY", false, kEventClientY); }
 EVENT_SLOT_GETTER(GetMovementX, "movementX", Iface::Mouse, kEventMovementX)
 EVENT_SLOT_GETTER(GetMovementY, "movementY", Iface::Mouse, kEventMovementY)
 EVENT_SLOT_GETTER(GetMozPressure, "mozPressure", Iface::Mouse, kEventPressure)
@@ -282,8 +284,13 @@ bool GetCoalescedEvents(JSContext* cx, unsigned argc, JS::Value* vp) {
                     int(ApiAccess::Call));
   JS::RootedObject array(cx, JS::NewArrayObject(cx, 0));
   if (!array) return false;
-  JS::RootedValue self(cx, JS::ObjectValue(*Self(args)));
-  if (!JS_DefineElement(cx, array, 0, self, JSPROP_ENUMERATE)) return false;
+  // Firefox coalesces only trusted pointermove/pointerrawupdate events; every
+  // other pointer event (and a constructed one) has an empty list.
+  if (event->value.is_trusted() &&
+      (EventTypeIs(*event, "pointermove") || EventTypeIs(*event, "pointerrawupdate"))) {
+    JS::RootedValue self(cx, JS::ObjectValue(*Self(args)));
+    if (!JS_DefineElement(cx, array, 0, self, JSPROP_ENUMERATE)) return false;
+  }
   args.rval().setObject(*array);
   return true;
 }

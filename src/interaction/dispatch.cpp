@@ -43,6 +43,10 @@ void Realm::SetMicrotaskCheckpointPort(void (*port)(void*), void* context) {
   state_->microtaskCheckpoint = port;
   state_->microtaskContext = context;
 }
+void Realm::SetGeometryPort(GeometryPort port, void* context) {
+  state_->geometry = port;
+  state_->geometryContext = context;
+}
 void Realm::SetEventClockPort(double (*now)(void*, double), double (*reduce)(void*, double),
                               void* context) {
   state_->eventClock = now; state_->eventReduce = reduce; state_->eventClockContext = context;

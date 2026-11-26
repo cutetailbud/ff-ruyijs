@@ -3,6 +3,7 @@
 // spec defaults and modifier semantics live in domain/interaction/dom_event.h;
 // this adapter only moves values, and JavaScript values stay JavaScript values.
 #include "interaction/internal.h"
+#include "domain/interaction/pointer_angles.h"
 #include "interaction/event_keyboard.h"
 #include "interaction/touch.h"
 #include "domain/interaction/dom_event.h"
@@ -141,8 +142,21 @@ bool InitCustom(JSContext* cx, JS::HandleObject dict, JS::HandleObject object) {
   JS::SetReservedSlot(object, kEventCustomDetail, detail);
   return true;
 }
+// Whether `name` is present (not undefined) in the init dictionary.
+bool InitPresent(JSContext* cx, JS::HandleObject dict, const char* name, bool* present) {
+  *present = false;
+  if (!dict) return true;
+  JS::RootedValue value(cx);
+  if (!JS_GetProperty(cx, dict, name, &value)) return false;
+  *present = !value.isUndefined();
+  return true;
+}
 bool InitPointer(JSContext* cx, JS::HandleObject dict, JS::HandleObject object) {
   domain::PointerEventInit init;
+  bool hasTiltX = false, hasTiltY = false, hasAltitude = false, hasAzimuth = false;
+  if (!InitPresent(cx, dict, "tiltX", &hasTiltX) || !InitPresent(cx, dict, "tiltY", &hasTiltY) ||
+      !InitPresent(cx, dict, "altitudeAngle", &hasAltitude) ||
+      !InitPresent(cx, dict, "azimuthAngle", &hasAzimuth)) return false;
   if (dict && (!ReadInitInt(cx, dict, "pointerId", &init.pointer_id) ||
                !ReadInitNumber(cx, dict, "width", &init.width) ||
                !ReadInitNumber(cx, dict, "height", &init.height) ||
@@ -160,11 +174,19 @@ bool InitPointer(JSContext* cx, JS::HandleObject dict, JS::HandleObject object) 
   SetSlotNumber(object, kEventHeight, init.height);
   SetSlotNumber(object, kEventPressure, init.pressure);
   SetSlotNumber(object, kEventTangentialPressure, init.tangential_pressure);
-  SetSlotInt(object, kEventTiltX, init.tilt_x);
-  SetSlotInt(object, kEventTiltY, init.tilt_y);
+  // The missing tilt or angle values derive from the given ones
+  // (WidgetPointerHelper); with none given a pointer reads altitude pi/2.
+  ::ruyijs::domain::interaction::PointerAngles angles;
+  if (hasTiltX) angles.x = init.tilt_x;
+  if (hasTiltY) angles.y = init.tilt_y;
+  if (hasAltitude) angles.altitude = init.altitude_angle;
+  if (hasAzimuth) angles.azimuth = init.azimuth_angle;
+  angles.Complete();
+  SetSlotInt(object, kEventTiltX, *angles.x);
+  SetSlotInt(object, kEventTiltY, *angles.y);
   SetSlotInt(object, kEventTwist, init.twist);
-  SetSlotNumber(object, kEventAltitudeAngle, init.altitude_angle);
-  SetSlotNumber(object, kEventAzimuthAngle, init.azimuth_angle);
+  SetSlotNumber(object, kEventAltitudeAngle, *angles.altitude);
+  SetSlotNumber(object, kEventAzimuthAngle, *angles.azimuth);
   SetSlotBool(object, kEventIsPrimary, init.is_primary);
   int32_t input_source = 0;
   if (init.pointer_type == "mouse") input_source = 1;

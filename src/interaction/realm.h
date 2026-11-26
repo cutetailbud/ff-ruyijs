@@ -1,5 +1,6 @@
 #ifndef RUYIJS_INTERACTION_REALM_H
 #define RUYIJS_INTERACTION_REALM_H
+#include "interaction/geometry_port.h"
 #include <cstdint>
 #include <memory>
 #include <string_view>
@@ -176,6 +177,9 @@ class Realm {
   void SetBrandPort(bool (*port)(void*, int brand, JS::HandleValue, bool* matches), void* context);
   // The document clock for Event.timeStamp: creation time relative to the
   // document's time origin, and its content precision reduction.
+  // MouseEvent pageX/offsetX/layerX and their Y counterparts read the target
+  // document's layout through this port (bound by the runtime coordinator).
+  void SetGeometryPort(GeometryPort port, void* context);
   void SetEventClockPort(double (*now)(void*, double clock_ms), double (*reduce)(void*, double),
                          void* context);
   // The Scheduling owner's microtask checkpoint. HTML "clean up after running

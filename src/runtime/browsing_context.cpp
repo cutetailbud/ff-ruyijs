@@ -153,6 +153,7 @@ BrowsingContext::~BrowsingContext() {
   if (security) security->Unbind();
   if(resources)resources->Resources().SetHttpObservation(nullptr,nullptr,nullptr,nullptr);
   if (interaction) interaction->SetInputActivationPort(nullptr, nullptr);
+  if (interaction) interaction->SetGeometryPort(nullptr, nullptr);
   if (interaction) interaction->SetCloseWatcherPorts({}, nullptr);
   if (environment) environment->SetActivationClock(nullptr, nullptr);
   scheduling=nullptr;

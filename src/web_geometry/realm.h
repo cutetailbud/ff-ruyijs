@@ -94,6 +94,13 @@ class Realm final {
   void SetBoxPorts(const BoxPorts&);
   bool MeasureElement(JS::HandleObject, std::array<double, 4>*, bool* present, bool content = false);
   bool MeasureOffset(JS::HandleObject, document_model::OffsetGeometry*);
+  // MouseEvent coordinates of a client point (x, y) for `target`:
+  // query 0 page (plus the document scroll), 1 offset (from the target's
+  // padding edge, in app units rounded as nsLayoutUtils does), 2 layer (from
+  // the closest positioned or scrolled box, else the scrolled root). An
+  // element without a box leaves *out untouched.
+  bool EventCoordinates(JS::HandleObject target, int query, double x, double y,
+                        std::array<double, 2>* out);
   bool HitTestPoint(JS::HandleObject root_element, double x, double y, bool all,
                     std::vector<document_model::NodeKey>* out);
   // The used box of an element for getComputedStyle resolved values (#42):

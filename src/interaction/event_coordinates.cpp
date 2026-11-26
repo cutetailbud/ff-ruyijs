@@ -1,47 +1,119 @@
-// Event coordinate projections. The event's existing slots remain the only
-// data source; no layout, scrolling, pointer state or secondary factory.
+// MouseEvent/UIEvent coordinates as Firefox's MouseEvent and UIEvent report
+// them. A PointerEvent keeps fractional coordinates (except click, auxclick
+// and contextmenu, which stay MouseEvent-compatible); every other mouse event
+// floors its input point and rounds what it reports
+// (DOMEventShouldUseFractionalCoords). pageX/offsetX/layerX need the target
+// document's layout, which the layout owner answers through the geometry port.
 #include "interaction/internal.h"
 #include "runtime/page_helpers.h"
 #include "js/Conversions.h"
 #include "js/Object.h"
 #include "js/PropertyAndElement.h"
+#include "js/Realm.h"
+#include <cmath>
+#include <cstring>
 
 namespace ruyijs::interaction {
-namespace {
-bool Coordinate(JSContext* cx, const JS::CallArgs& args, Iface iface,
-                 const char* name, uint32_t slot, bool integer, bool negative) {
-  Event* event = Receiver(cx, args, iface);
-  if (!event) return false;
-  ReportEventAccess(cx, event, InterfaceName(iface), name, int(ApiAccess::Read));
-  JS::RootedValue value(cx, JS::Int32Value(0));
-  if (iface != Iface::UI || IsA(event->kind, Iface::Mouse))
-    value.set(JS::GetReservedSlot(event->object, slot));
-  if (negative) value.setDouble(-value.toNumber());
-  if (integer) {
-    int32_t number;
-    if (!JS::ToInt32(cx, value, &number)) return false;
-    value.setInt32(number);
+bool EventTypeIs(const Event& event, const char* name) {
+  const std::string& key = event.value.type().value();
+  const size_t length = std::strlen(name);
+  if (key.size() != length * sizeof(char16_t)) return false;
+  for (size_t i = 0; i < length; ++i) {
+    char16_t unit;
+    std::memcpy(&unit, key.data() + i * sizeof(char16_t), sizeof unit);
+    if (unit != char16_t(static_cast<unsigned char>(name[i]))) return false;
   }
-  args.rval().set(value);
   return true;
 }
-#define COORDINATE(fn, iface, name, slot, integer, negative) \
-  bool fn(JSContext* cx, unsigned argc, JS::Value* vp) { \
-    return Coordinate(cx, JS::CallArgsFromVp(argc, vp), Iface::iface, \
-                       name, slot, integer, negative); \
+bool FractionalCoordinates(const Event& event) {
+  if (event.kind != Kind::Pointer) return false;
+  return !EventTypeIs(event, "click") && !EventTypeIs(event, "auxclick") &&
+         !EventTypeIs(event, "contextmenu");
+}
+namespace {
+double Client(const Event& event, unsigned slot) {
+  const double value = JS::GetReservedSlot(event.object, slot).toNumber();
+  return FractionalCoordinates(event) ? value : std::floor(value);
+}
+enum Query { kClient = -1, kPage = int(GeometryQuery::Page), kOffset = int(GeometryQuery::Offset),
+             kLayer = int(GeometryQuery::Layer) };
+bool Coordinate(JSContext* cx, const JS::CallArgs& args, Iface iface, const char* name, int query,
+                bool horizontal) {
+  Event* event = Receiver(cx, args, iface, iface == Iface::UI);
+  if (!event) return false;
+  ReportEventAccess(cx, event, InterfaceName(iface), name, int(ApiAccess::Read));
+  if (!IsA(event->kind, Iface::Mouse)) { args.rval().setInt32(0); return true; }
+  double x = Client(*event, kEventClientX), y = Client(*event, kEventClientY);
+  // A script-made event's layer point is never computed (UIEvent::GetLayerPoint
+  // returns the stored zero for an internal event).
+  if (query == kLayer && !event->value.is_trusted()) { args.rval().setInt32(0); return true; }
+  if (query != kClient) {
+    State* state = Owner(cx, event->object, true);
+    if (!state) return false;
+    JSObject* raw = event->value.target_id() ? state->targetObject(event->value.target_id()) : nullptr;
+    // An event without a target (not dispatched yet): Event::GetOffsetCoords
+    // answers the page coordinates.
+    if (!event->value.target_id() && query == kOffset) query = kPage;
+    if (state->geometry && (raw || query == kPage)) {
+      JS::RootedObject target(cx, raw);
+      double outX = query == kOffset ? 0 : x, outY = query == kOffset ? 0 : y;
+      {
+        JSAutoRealm realm(cx, state->page);
+        if (!state->geometry(state->geometryContext, GeometryQuery(query), target, x, y, &outX, &outY))
+          return false;
+      }
+      x = outX; y = outY;
+    } else if (query == kOffset) {
+      x = 0; y = 0;  // a target that is gone: no padding edge
+    }
   }
-COORDINATE(X, Mouse, "x", kEventClientX, false, false)
-COORDINATE(Y, Mouse, "y", kEventClientY, false, false)
-COORDINATE(PageX, Mouse, "pageX", kEventClientX, false, false)
-COORDINATE(PageY, Mouse, "pageY", kEventClientY, false, false)
-COORDINATE(OffsetX, Mouse, "offsetX", kEventClientX, false, false)
-COORDINATE(OffsetY, Mouse, "offsetY", kEventClientY, false, false)
-COORDINATE(LayerX, UI, "layerX", kEventClientX, true, false)
-COORDINATE(LayerY, UI, "layerY", kEventClientY, true, false)
-COORDINATE(WheelDelta, Wheel, "wheelDelta", kEventDeltaY, true, true)
-COORDINATE(WheelDeltaX, Wheel, "wheelDeltaX", kEventDeltaX, true, true)
-COORDINATE(WheelDeltaY, Wheel, "wheelDeltaY", kEventDeltaY, true, true)
+  double value = horizontal ? x : y;
+  if (query == kLayer || !FractionalCoordinates(*event)) value = std::floor(value + 0.5);
+  args.rval().setDouble(value);
+  if (query == kLayer) args.rval().setInt32(int32_t(value));
+  return true;
+}
+}
+bool ClientCoordinate(JSContext* cx, unsigned argc, JS::Value* vp, const char* name, bool horizontal,
+                      unsigned slot) {
+  auto args = JS::CallArgsFromVp(argc, vp);
+  Event* event = Receiver(cx, args, Iface::Mouse);
+  if (!event) return false;
+  ReportEventAccess(cx, event, "MouseEvent", name, int(ApiAccess::Read));
+  double value = Client(*event, slot);
+  if (!FractionalCoordinates(*event)) value = std::floor(value + 0.5);
+  args.rval().setDouble(value);
+  (void)horizontal;
+  return true;
+}
+namespace {
+#define COORDINATE(fn, iface, name, query, horizontal) \
+  bool fn(JSContext* cx, unsigned argc, JS::Value* vp) { \
+    return Coordinate(cx, JS::CallArgsFromVp(argc, vp), Iface::iface, name, query, horizontal); \
+  }
+COORDINATE(X, Mouse, "x", kClient, true)
+COORDINATE(Y, Mouse, "y", kClient, false)
+COORDINATE(PageX, Mouse, "pageX", kPage, true)
+COORDINATE(PageY, Mouse, "pageY", kPage, false)
+COORDINATE(OffsetX, Mouse, "offsetX", kOffset, true)
+COORDINATE(OffsetY, Mouse, "offsetY", kOffset, false)
+COORDINATE(LayerX, UI, "layerX", kLayer, true)
+COORDINATE(LayerY, UI, "layerY", kLayer, false)
 #undef COORDINATE
+bool WheelValue(JSContext* cx, unsigned argc, JS::Value* vp, unsigned slot, const char* name) {
+  auto args = JS::CallArgsFromVp(argc, vp);
+  Event* event = Receiver(cx, args, Iface::Wheel);
+  if (!event) return false;
+  ReportEventAccess(cx, event, "WheelEvent", name, int(ApiAccess::Read));
+  JS::RootedValue value(cx, JS::DoubleValue(-JS::GetReservedSlot(event->object, slot).toNumber()));
+  int32_t number;
+  if (!JS::ToInt32(cx, value, &number)) return false;
+  args.rval().setInt32(number);
+  return true;
+}
+bool WheelDelta(JSContext* cx, unsigned argc, JS::Value* vp) { return WheelValue(cx, argc, vp, kEventDeltaY, "wheelDelta"); }
+bool WheelDeltaX(JSContext* cx, unsigned argc, JS::Value* vp) { return WheelValue(cx, argc, vp, kEventDeltaX, "wheelDeltaX"); }
+bool WheelDeltaY(JSContext* cx, unsigned argc, JS::Value* vp) { return WheelValue(cx, argc, vp, kEventDeltaY, "wheelDeltaY"); }
 const JSPropertySpec mouse[] = {
   JS_PSG("x", X, JSPROP_ENUMERATE), JS_PSG("y", Y, JSPROP_ENUMERATE),
   JS_PSG("pageX", PageX, JSPROP_ENUMERATE), JS_PSG("pageY", PageY, JSPROP_ENUMERATE),
